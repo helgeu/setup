@@ -1,0 +1,33 @@
+winget install -e --id Microsoft.PowerShell.Preview
+
+winget install -e --id Microsoft.WindowsTerminal
+
+winget install -e --id Microsoft.Azure.FunctionsCoreTools
+
+winget install --id=Microsoft.VisualStudio.2022.Professional -e
+
+winget install -e --id Microsoft.SQLServerManagementStudio
+
+winget install JanDeDobbeleer.OhMyPosh -s winget
+oh-my-posh font install meslo
+oh-my-posh font install firacode
+
+winget install git.git
+
+winget install -e --id Mozilla.Firefox
+winget install -e --id Docker.DockerDesktop
+winget install Bruno.Bruno
+winget install Microsoft.PowerToys
+winget install -e --id Microsoft.AzureCLI
+# install some provider for stuff: https://github.com/microsoft/artifacts-credprovider#setup
+iex "& { $(irm https://aka.ms/install-artifacts-credprovider.ps1) }"
+
+
+winget install OpenJS.NodeJS.LTS
+
+winget install --id ShiningLight.OpenSSL.dev
+
+
+winget install --source winget --exact --id JohnMacFarlane.Pandoc
+
+## no winget for miktex!!111111one
