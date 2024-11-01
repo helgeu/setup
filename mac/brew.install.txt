@@ -1,0 +1,23 @@
+brew update
+brew tap homebrew/cask-fonts 
+brew install --cask visual-studio-code
+brew install --cask firefox
+brew install --cask dotnet-sdk
+brew install --cask homebrew/cask-fonts/font-meslo-lg-nerd-font
+brew install mono-libgdiplus
+brew install git
+brew install --cask git-credential-manager
+brew install --cask alt-tab
+brew install azure-cli
+brew install powershell/tap/powershell
+brew install jandedobbeleer/oh-my-posh/oh-my-posh
+
+code --install-extension ms-dotnettools.csdevkit
+code --install-extension Ionide.Ionide-fsharp
+code --install-extension ms-dotnettools.dotnet-maui
+
+
+# dev stuff
+## install MAUI
+sudo dotnet workload install maui --source https://api.nuget.org/v3/index.json
+
