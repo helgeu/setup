@@ -11,3 +11,4 @@ code --install-extension ms-vscode.powershell
 code --install-extension hediet.vscode-drawio
 code --install-extension devcycles.contextive
 code --install-extension ChrisChinchilla.vscode-pandoc
+code --install-extension bierner.markdown-mermaid
