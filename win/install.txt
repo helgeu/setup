@@ -4,6 +4,8 @@ winget install -e --id Microsoft.WindowsTerminal
 
 winget install -e --id Microsoft.Azure.FunctionsCoreTools
 
+winget install -e --id Microsoft.VisualStudioCode
+
 winget install --id=Microsoft.VisualStudio.2022.Professional -e
 
 winget install -e --id Microsoft.SQLServerManagementStudio
