@@ -11,6 +11,13 @@ brew install --cask alt-tab
 brew install azure-cli
 brew install powershell/tap/powershell
 brew install jandedobbeleer/oh-my-posh/oh-my-posh
+brew install Bruno
+
+brew install neovim
+brew install jesseduffield/lazygit/lazygit
+brew install fzf
+$ brew install ripgrep
+brew install fd
 
 code --install-extension ms-dotnettools.csdevkit
 code --install-extension Ionide.Ionide-fsharp

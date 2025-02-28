@@ -32,4 +32,18 @@ winget install --id ShiningLight.OpenSSL.dev
 
 winget install --source winget --exact --id JohnMacFarlane.Pandoc
 
+winget install --source msstore mitmproxy
+
 ## no winget for miktex!!111111one
+
+winget install -e --id Spotify.Spotify
+
+winget install -e --id WiresharkFoundation.Wireshark
+
+winget install Neovim.Neovim
+winget install -e --id=JesseDuffield.lazygit
+winget install fzf
+winget install BurntSushi.ripgrep.MSVC
+winget install sharkdp.fd
+
+winget install -e --id SmartBear.SoapUI

@@ -6,7 +6,7 @@ code --install-extension ms-azuretools.vscode-azureresourcegroups
 code --install-extension ms-azuretools.vscode-azurestorage
 code --install-extension ms-azuretools.vscode-bicep
 code --install-extension ms-azuretools.vscode-docker
-code --install-extension ms-dotnettools.cdevkit
+code --install-extension ms-dotnettools.csdevkit
 code --install-extension ms-vscode.powershell
 code --install-extension hediet.vscode-drawio
 code --install-extension devcycles.contextive
