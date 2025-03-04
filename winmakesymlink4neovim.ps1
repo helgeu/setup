@@ -4,8 +4,8 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
    }
 
 $userprofile = $env:USERPROFILE
-$target = $userprofile+"/AppData/Local/nvim/"
-$link = $PSScriptRoot+"\nvim"
+$link = $userprofile+"/AppData/Local/nvim/"
+$target = $PSScriptRoot+"\nvim"
 
 Write-Output "Make a symlink from: $link to $target"
 
