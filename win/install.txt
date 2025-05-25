@@ -45,5 +45,5 @@ winget install -e --id=JesseDuffield.lazygit
 winget install fzf
 winget install BurntSushi.ripgrep.MSVC
 winget install sharkdp.fd
-
-winget install -e --id SmartBear.SoapUI
+winget install "Sysinternals Suite"
+#winget install -e --id SmartBear.SoapUI
