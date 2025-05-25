@@ -16,7 +16,7 @@
         fi
 
         # Dotnet tools
-        path+=('$HOME/.dotnet/tools')
+        path+=('/home/nixos/.dotnet/tools')
 
         # fnm
         export PATH=$HOME/.fnm:$PATH

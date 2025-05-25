@@ -5,6 +5,7 @@ let
     sdk_6_0
     sdk_8_0
     sdk_9_0
+	runtime_8_0
   ];
 in
 {
@@ -53,6 +54,7 @@ in
 
 	home.sessionVariables = {
 		EDITOR="nvim";
+		DOTNET_ROOT = "${combinedDotnet}/share/dotnet";
 	};
 	
 	programs.zsh = {
