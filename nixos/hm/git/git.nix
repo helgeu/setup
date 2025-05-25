@@ -9,8 +9,8 @@
       # This line may need tweaking but should be somewhat standard given windows and WSL
       # I do not trust this 100% yet since I need to log in continously
       extraConfig.credential.helper = "/mnt/c/Program\\ Files/Git/mingw64/bin/git-credential-manager.exe";
-      extraConfig.credential."https://github.com".username = "helge@urholm.no";
-      extraConfig.credential.credentialStore = "cache";
+      #extraConfig.credential."https://github.com".username = "helge@urholm.no";
+      #extraConfig.credential.credentialStore = "cache";
       
       extraConfig = {      
         core = {
