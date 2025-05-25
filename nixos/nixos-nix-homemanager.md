@@ -55,9 +55,7 @@ If having some repo of files wanting to be used then do:
 ```bash
 git clone https://github.com/helgeu/setup.git
 ```
-Go to folder containing relevant setup and run the following.
-
-Now we can build the setup given config files:
+Go to folder containing relevant setup and now we can build the setup given config files:
 
 ```bash
 sudo nixos-rebuild switch --flake .#nixos
