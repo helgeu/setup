@@ -1,42 +1,42 @@
-# Nixos, nix, home manager
+# 🌐 Nixos, nix, home manager
 
 General setup for nix and home manager
 
-## Nixos on WSL
+## 🖥️ Nixos on WSL
 
-### Install Nixos
+### 🛠️ Install Nixos
 
 [Nixos|WSL](https://nix-community.github.io/NixOS-WSL/)
 
 See [installation](https://nix-community.github.io/NixOS-WSL/install.html).
 
-#### Download nixos.wls
+#### 📥 Download nixos.wls
 
 ```powershell
 mkdir c:\temp\nixos\
 iwr https://github.com/nix-community/NixOS-WSL/releases/download/2411.6.0/nixos.wsl -outfile c:\temp\nixos\nixos.wsl
 ```
 
-#### Setup Nixos
+#### ⚙️ Setup Nixos
 
 ```powershell
 wsl --install --from-file c:\temp\nixos\nixos.wsl
 ```
 
-#### Update Nixos
+#### 🔄 Update Nixos
 
 ```bash
 sudo nix-channel --update
 sudo nixos-rebuild switch
 ```
 
-#### Nuke Nixos
+#### 💣 Nuke Nixos
 
 ```powershell
 wsl --unregister Nixos
 ```
 
-## Home manager on Nixos (in WSL)
+## 🏠 Home manager on Nixos (in WSL)
 
 Now we have some variant of a Nixos in WSL and can start setting up the different configs.
 
