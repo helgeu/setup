@@ -1,4 +1,4 @@
-# nix, home managed
+# Nixos, nix, home manager
 
 General setup for nix and home manager
 
@@ -63,7 +63,7 @@ Now we can build the setup given config files:
 sudo nixos-rebuild switch --flake .#nixos
 ```
 
-And then the home manager can be built:
+And then the home manager can be built. For each change just repeat this command
 
 ```bash
 home-manager switch --flake .#nixos@nixos

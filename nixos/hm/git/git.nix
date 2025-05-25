@@ -3,6 +3,10 @@
     git = {
       enable = true;
       
+      userName = "Helge Rene Urholm";
+      userEmail = "helge@urholm.no";
+
+
       extraConfig.credential.helper = "manager";
       extraConfig.credential."https://github.com".username = "helge@urholm.no";
       extraConfig.credential.credentialStore = "cache";
