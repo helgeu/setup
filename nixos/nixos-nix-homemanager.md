@@ -61,7 +61,7 @@ Go to folder containing relevant setup and now we can build the setup given conf
 sudo nixos-rebuild switch --flake .#nixos
 ```
 
-And then the home manager can be built. For each change just repeat this command
+And then the home manager can be built. For each change just repeat this command.
 
 ```bash
 home-manager switch --flake .#nixos@nixos
