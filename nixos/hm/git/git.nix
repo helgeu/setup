@@ -7,7 +7,7 @@
       userEmail = "helge@urholm.no";
 
 
-      extraConfig.credential.helper = "manager";
+      extraConfig.credential.helper = "/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe";
       extraConfig.credential."https://github.com".username = "helge@urholm.no";
       extraConfig.credential.credentialStore = "cache";
       
