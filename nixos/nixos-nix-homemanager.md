@@ -66,3 +66,15 @@ And then the home manager can be built. For each change just repeat this command
 ```bash
 home-manager switch --flake .#nixos@nixos
 ```
+
+## Neovim setup
+
+A pretty much basic setup for lazyvim is "included". To use this one, use the script:
+
+```bash
+linuxmakesymlink4neovim.sh
+```
+
+and it will create a symlink with basic setup.
+
+Then start nvim and it will initialize, install and update on its own.
