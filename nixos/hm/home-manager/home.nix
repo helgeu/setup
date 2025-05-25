@@ -39,6 +39,8 @@ in
     oh-my-posh
     direnv
     bruno
+	git
+	git-credential-manager
   ];
 
   # Still needed in NCP unfortunately
