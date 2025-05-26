@@ -11,7 +11,7 @@ in
 {
   home.username = "nixos";
   home.homeDirectory = "/home/nixos";
-  home.stateVersion = "24.11";
+  home.stateVersion = "25.05";
   nixpkgs = {
 		config = {
 			allowUnfree = true;
@@ -22,7 +22,7 @@ in
   # Let Home Manager install and manage itself.
   programs.home-manager.enable = true;
   home.packages = with pkgs; [
-	zsh
+  	zsh
     unzip
     zip
     gccgo
@@ -39,8 +39,12 @@ in
     oh-my-posh
     direnv
     bruno
-	git
-	git-credential-manager
+	  git
+    git-credential-manager
+    lua-language-server
+    marksman
+    fd
+    python314
   ];
 
   # Still needed in NCP unfortunately
@@ -51,7 +55,7 @@ in
   programs.neovim = {
   	enable = true;
   	viAlias = true;
-	vimAlias = true;
+	  vimAlias = true;
   	};
 
 	home.sessionVariables = {

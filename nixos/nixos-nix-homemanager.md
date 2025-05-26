@@ -23,6 +23,12 @@ iwr https://github.com/nix-community/NixOS-WSL/releases/download/2411.6.0/nixos.
 wsl --install --from-file c:\temp\nixos\nixos.wsl
 ```
 
+#### 🚀 Start Nixos
+
+```powershell
+wsl -d Nixos
+```
+
 #### 🔄 Update Nixos
 
 ```bash
@@ -55,7 +61,7 @@ If having some repo of files wanting to be used then do:
 ```bash
 git clone https://github.com/helgeu/setup.git
 ```
-Go to folder containing relevant setup and now we can build the setup given config files:
+Go to folder containing relevant setup, with the above repo in ```./setup/nixos/hm```, and now we can build the setup with the given config files:
 
 ```bash
 sudo nixos-rebuild switch --flake .#nixos
@@ -66,6 +72,8 @@ And then the home manager can be built. For each change just repeat this command
 ```bash
 home-manager switch --flake .#nixos@nixos
 ```
+
+At this point starting a new terminal and logging back in will show the actual new prompt (oh-my-posh setup) and all configured programs should be working.
 
 ## Neovim setup
 
