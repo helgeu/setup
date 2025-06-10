@@ -23,7 +23,7 @@
 
   # Enable Flakes
   nix.package = pkgs.nixVersions.stable;
-  nix.extraOptions = ''
+  nix.extraOptions = '';
     experimental-features = nix-command flakes
     '';
 
@@ -37,4 +37,17 @@
   programs.zsh.enable = true;
   nix.settings.download-buffer-size = 102410231022;
   services.tzupdate.enable = true;
+
+  programs.nvf = {
+      enable = true;
+      settings = {
+          vim.theme.enable=true;
+          #vim.languages.nix.enable = true;
+          #vim.languages.enableLSP = true;
+          #vim.languages.enableTreeSitter = true;
+          #nix.enable = true;
+          #csharp.enable=true;
+          #fsharp.enable=true;
+        };
+    };
 }

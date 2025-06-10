@@ -45,6 +45,7 @@ in
     marksman
     fd
     python314
+    delta
   ];
 
   # Still needed in NCP unfortunately
