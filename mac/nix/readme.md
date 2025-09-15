@@ -33,8 +33,6 @@ Make sure to edit $USER in the script file.
   outputs = inputs@{ self, nix-darwin, nixpkgs }:
   let
     configuration = {pkgs, ... }: {
-
-        services.nix-daemon.enable = true;
         # Necessary for using flakes on this system.
         nix.settings.experimental-features = "nix-command flakes";
 
