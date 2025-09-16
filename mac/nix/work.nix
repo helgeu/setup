@@ -8,7 +8,7 @@
     combinePackages [
       sdk_8_0
       sdk_9_0
-      runtime_8_0
+      runtime_8_0	
     ];
 in {
   home.username = "helgereneurholm";
@@ -32,6 +32,8 @@ in {
     pkgs.oh-my-posh
     pkgs.zip
     pkgs.bruno
+    pkgs.git-credential-manager
+    pkgs.powershell
   ];
 
   home.sessionVariables = {
