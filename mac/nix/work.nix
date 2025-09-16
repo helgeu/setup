@@ -51,14 +51,14 @@ in {
 
   programs.home-manager.enable = true;
 
-  programs.chromium = {
-    enable = true;
-    package = pkgs.brave;
-    extensions = [
-      # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
-      { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; } # ublock origin
-    ];
-    commandLineArgs = [
-    ];
-  };
+  #programs.chromium = {
+  #  enable = true;
+  #  package = pkgs.brave;
+  #  extensions = [
+  #    # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
+  #    { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; } # ublock origin
+  #  ];
+  #  commandLineArgs = [
+  #  ];
+  #};
 }
