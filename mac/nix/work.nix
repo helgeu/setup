@@ -34,6 +34,10 @@ in {
     pkgs.bruno
     pkgs.git-credential-manager
     pkgs.powershell
+    pkgs.oh-my-posh
+    # pkgs.brave
+    pkgs.vscode
+    pkgs.telegram-desktop
   ];
 
   home.sessionVariables = {
@@ -42,5 +46,19 @@ in {
     MANPAGER = "nvim +Man!";
   };
 
+  home.file.".vimrc".source = ./vim_configuration;
+
+
   programs.home-manager.enable = true;
+
+  programs.chromium = {
+    enable = true;
+    package = pkgs.brave;
+    extensions = [
+      # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
+      { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; } # ublock origin
+    ];
+    commandLineArgs = [
+    ];
+  };
 }
