@@ -19,7 +19,7 @@ in {
   home.packages = [
     pkgs.git
     pkgs.neovim
-    pkgs.zsh
+    #pkgs.zsh
     pkgs.unzip # Unzip for Mason LSPs and stuff
     pkgs.tmux
     pkgs.tmuxinator
@@ -33,8 +33,7 @@ in {
     pkgs.zip
     pkgs.bruno
     pkgs.git-credential-manager
-    pkgs.powershell
-    pkgs.oh-my-posh
+  #  pkgs.powershell
     # pkgs.brave
     pkgs.vscode
     pkgs.telegram-desktop
@@ -46,20 +45,28 @@ in {
     MANPAGER = "nvim +Man!";
   };
 
-  programs.powershell = {
-        enable = true;
-        profile = ''
-          # Your PowerShell profile content here
-	  oh-my-posh init pwsh --config 'https://github.com/jandedobbeleer/oh-my-posh/main/themes/lambdageneration.omp.json' | Invoke-Expression
-        '';
-      };
+  #programs.powershell = {
+  #      enable = true;
+  #      profile = ''
+  #        # Your PowerShell profile content here
+  #	oh-my-posh init pwsh --config 'https://github.com/jandedobbeleer/oh-my-posh/main/themes/lambdageneration.omp.json' | Invoke-Expression
+  #      '';
+  #};
 
   programs.zsh = {
     enable = true;
     shellAliases = {
         switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
 	dir = "ls -al";
+	sudo = "sudo ";
     };
+
+    enableCompletion = true;
+    syntaxHighlighting.enable = true;
+
+    initExtra= ''
+		eval "$(oh-my-posh init zsh)"
+    '';
   };
 
   home.file.".vimrc".source = ./vim_configuration;
@@ -77,4 +84,5 @@ in {
   #  commandLineArgs = [
   #  ];
   #};
+
 }
