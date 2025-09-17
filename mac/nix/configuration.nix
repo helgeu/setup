@@ -24,7 +24,8 @@
           # Create /etc/zshrc that loads the nix-darwin environment.
           programs.zsh.enable = true;
   
-          environment.systemPackages = with pkgs; [ brave ];
+          environment.systemPackages = with pkgs; [ #brave 
+	  ];
 	  system.primaryUser = "helgereneurholm";
 	  system.defaults = {
 		finder.AppleShowAllFiles = true;
