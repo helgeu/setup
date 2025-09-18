@@ -13,9 +13,20 @@
         url = "github:nix-community/home-manager";
         inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+
+    # Optional: Declarative tap management
+    homebrew-core = {
+      url = "github:homebrew/homebrew-core";
+      flake = false;
+    };
+    homebrew-cask = {
+      url = "github:homebrew/homebrew-cask";
+      flake = false;
+    };
   };
 
-  outputs = inputs@{ self, nixpkgs, nix-darwin, home-manager, ... }:
+  outputs = inputs@{ self, nixpkgs, nix-darwin, home-manager, nix-homebrew, homebrew-core, homebrew-cask, ... }:
   let
     system = "aarch-darwin";
     username = "helgereneurholm";
@@ -34,6 +45,15 @@
 	    EDITOR = "vim";
         };
 	home.file.".vimrc".source = ./vim_configuration;
+
+	homebrew = {
+    enable = true;
+    # onActivation.cleanup = "uninstall";
+
+    taps = [];
+    brews = [ "cowsay" ];
+    casks = [];
+};
      };
   in
   {
@@ -48,10 +68,5 @@
          }
       ];
     };
-   nix-darwin.lib.homebrew.enable = true;
-   # nix-darwin.lib.homebrew.brews = []
-   nix-darwin.lib.homebrew.brews = [
-     "rancher"
-   ];
   };
 }

@@ -61,13 +61,14 @@ in {
   programs.vscode = {
     enable = true;
     # programs.vscode.profiles.default.extensions
-    profiles.default.extensions = with pkgs.vscode-extensions; [
-      #42crunch.vscode-openapi
-      ionide.ionide-fsharp
-      hediet.vscode-drawio
-      #ChrisChinchilla.vscode-pandoc
-      bierner.markdown-mermaid
-      ms-dotnettools.csdevkit
+    profiles.default.extensions = with pkgs; [
+      vscode-extensions."42crunch".vscode-openapi
+      vscode-extensions.ionide.ionide-fsharp
+      vscode-extensions.hediet.vscode-drawio
+      vscode-extensions.chrischinchilla.vscode-pandoc
+      vscode-extensions.bierner.markdown-mermaid
+      vscode-extensions.ms-dotnettools.csdevkit
+      vscode-extensions.jnoortheen.nix-ide
     ];
   };
 
