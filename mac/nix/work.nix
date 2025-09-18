@@ -33,11 +33,11 @@ in {
     pkgs.zip
     pkgs.bruno
     pkgs.git-credential-manager
-  #  pkgs.powershell
-    # pkgs.brave
-    pkgs.vscode
-    pkgs.telegram-desktop
-  ];
+  #  pkgs.powershell 
+    # pkgs.brave 
+    pkgs.vscode 
+    pkgs.telegram-desktop 
+    ];
 
   home.sessionVariables = {
     EDITOR = "nvim";
