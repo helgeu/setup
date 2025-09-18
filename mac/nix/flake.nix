@@ -48,5 +48,10 @@
          }
       ];
     };
+   nix-darwin.lib.homebrew.enable = true;
+   # nix-darwin.lib.homebrew.brews = []
+   nix-darwin.lib.homebrew.brews = [
+     "rancher"
+   ];
   };
 }

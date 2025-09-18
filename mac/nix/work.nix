@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  vscode-marketplace,
   ...
 }: let
   combinedDotnet = with pkgs.dotnetCorePackages;
@@ -11,6 +12,11 @@
       runtime_8_0	
     ];
 in {
+
+	imports = [
+		./git.nix
+		./zsh.nix
+	];
   home.username = "helgereneurholm";
   home.homeDirectory = "/Users/helgereneurholm";
 
@@ -32,6 +38,11 @@ in {
     bruno
     git-credential-manager
   #  pkgs.powershell 
+    pandoc
+    fnm
+    direnv
+    eza
+    delta
     ];
 
   home.sessionVariables = {
@@ -47,41 +58,19 @@ in {
   #	oh-my-posh init pwsh --config 'https://github.com/jandedobbeleer/oh-my-posh/main/themes/lambdageneration.omp.json' | Invoke-Expression
   #      '';
   #};
-
-  programs.zsh = {
-    enable = true;
-    shellAliases = {
-        switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
-	dir = "ls -al";
-	sudo = "sudo ";
-    };
-
-    enableCompletion = true;
-    syntaxHighlighting.enable = true;
-
-    initContent = ''
-		eval "$(oh-my-posh init zsh)"
-    '';
-  };
   programs.vscode = {
+    enable = true;
     # programs.vscode.profiles.default.extensions
-    profiles.default.extensions = with pkgs; [
-      42crunch.vscode-openapi
+    profiles.default.extensions = with pkgs.vscode-extensions; [
+      #42crunch.vscode-openapi
       ionide.ionide-fsharp
-      ms-azure-devops.azure-pipelines
-      ms-azuretools.vscode-azurefunctions
-      ms-azuretools.vscode-azureresourcegro
-      ms-azuretools.vscode-azurestorage
-      ms-azuretools.vscode-bicep
-      ms-azuretools.vscode-docker
-      ms-dotnettools.csdevkit
-      ms-vscode.powershell
       hediet.vscode-drawio
-      devcycles.contextive
-      ChrisChinchilla.vscode-pandoc
+      #ChrisChinchilla.vscode-pandoc
       bierner.markdown-mermaid
+      ms-dotnettools.csdevkit
     ];
   };
+
   home.file.".vimrc".source = ./vim_configuration;
 
 
@@ -89,6 +78,7 @@ in {
 
   programs.chromium = {
     enable = true;
+    #package = pkgs.chromium;
     package = pkgs.brave;
     extensions = [
       # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb

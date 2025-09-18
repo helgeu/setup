@@ -41,4 +41,5 @@
 	  	pkgs.nerd-fonts.meslo-lg
 		pkgs.nerd-fonts.fira-code
           ];
+
 }
