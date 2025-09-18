@@ -21,7 +21,7 @@ in {
     neovim
     tmux
     tmuxinator
-    azure-cli
+  #  azure-cli
     fzf
     lazygit
     combinedDotnet
@@ -63,21 +63,39 @@ in {
 		eval "$(oh-my-posh init zsh)"
     '';
   };
-
+  programs.vscode = {
+    # programs.vscode.profiles.default.extensions
+    profiles.default.extensions = with pkgs; [
+      42crunch.vscode-openapi
+      ionide.ionide-fsharp
+      ms-azure-devops.azure-pipelines
+      ms-azuretools.vscode-azurefunctions
+      ms-azuretools.vscode-azureresourcegro
+      ms-azuretools.vscode-azurestorage
+      ms-azuretools.vscode-bicep
+      ms-azuretools.vscode-docker
+      ms-dotnettools.csdevkit
+      ms-vscode.powershell
+      hediet.vscode-drawio
+      devcycles.contextive
+      ChrisChinchilla.vscode-pandoc
+      bierner.markdown-mermaid
+    ];
+  };
   home.file.".vimrc".source = ./vim_configuration;
 
 
   programs.home-manager.enable = true;
 
-  #programs.chromium = {
-  #  enable = true;
-  #  package = pkgs.brave;
-  #  extensions = [
-  #    # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
-  #    { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; } # ublock origin
-  #  ];
-  #  commandLineArgs = [
-  #  ];
-  #};
+  programs.chromium = {
+    enable = true;
+    package = pkgs.brave;
+    extensions = [
+      # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
+      { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; } # ublock origin
+    ];
+    commandLineArgs = [
+    ];
+  };
 
 }
