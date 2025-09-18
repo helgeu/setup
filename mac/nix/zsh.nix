@@ -21,7 +21,9 @@
 
         # Dotnet tools
         #path+=('/home/nixos/.dotnet/tools')
-
+        
+        # Rancher
+        path+=('/Users/helgereneurholm/.rd/bin')
         # fnm
         export PATH=$HOME/.fnm:$PATH
         eval \"$(fnm env --use-on-cd)\"

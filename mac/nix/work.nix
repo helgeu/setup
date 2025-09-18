@@ -43,6 +43,7 @@ in {
     direnv
     eza
     delta
+    pkgs.nixfmt-rfc-style
     ];
 
   home.sessionVariables = {
