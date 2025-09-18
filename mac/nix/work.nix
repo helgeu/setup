@@ -16,27 +16,22 @@ in {
 
   home.stateVersion = "25.05";
 
-  home.packages = [
-    pkgs.git
-    pkgs.neovim
-    #pkgs.zsh
-    pkgs.unzip # Unzip for Mason LSPs and stuff
-    pkgs.tmux
-    pkgs.tmuxinator
-  #  pkgs.azure-cli
-    pkgs.fzf
-    pkgs.lazygit
+  home.packages = with pkgs; [
+    git
+    neovim
+    tmux
+    tmuxinator
+    azure-cli
+    fzf
+    lazygit
     combinedDotnet
-    pkgs.azure-functions-core-tools
-    pkgs.bicep
-    pkgs.oh-my-posh
-    pkgs.zip
-    pkgs.bruno
-    pkgs.git-credential-manager
+    azure-functions-core-tools
+    bicep
+    oh-my-posh
+    zip
+    bruno
+    git-credential-manager
   #  pkgs.powershell 
-    # pkgs.brave 
-    pkgs.vscode 
-    pkgs.telegram-desktop 
     ];
 
   home.sessionVariables = {
