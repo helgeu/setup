@@ -26,7 +26,6 @@
   
           environment.systemPackages = with pkgs; [ 
 	  	#brave 
-		pkgs.nerd-fonts.caskaydia-cove
 	  ];
 	  system.primaryUser = "helgereneurholm";
 	  system.defaults = {
@@ -38,4 +37,8 @@
 
 		controlcenter.Bluetooth = true; 
 	  };
+	  fonts.packages = with pkgs; [
+	  	pkgs.nerd-fonts.meslo-lg
+		pkgs.nerd-fonts.fira-code
+          ];
 }

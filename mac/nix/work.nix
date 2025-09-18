@@ -64,7 +64,7 @@ in {
     enableCompletion = true;
     syntaxHighlighting.enable = true;
 
-    initExtra= ''
+    initContent = ''
 		eval "$(oh-my-posh init zsh)"
     '';
   };
