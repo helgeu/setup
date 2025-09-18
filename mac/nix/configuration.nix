@@ -37,7 +37,10 @@
 
     taps = [ ];
     brews = [ ];
-    casks = [ "rancher" ];
+    casks = [
+      "rancher"
+      "bruno"
+    ];
   };
   system.primaryUser = "helgereneurholm";
   system.defaults = {

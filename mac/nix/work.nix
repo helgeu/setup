@@ -35,7 +35,6 @@ in {
     bicep
     oh-my-posh
     zip
-    bruno
     git-credential-manager
   #  pkgs.powershell 
     pandoc
