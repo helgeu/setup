@@ -19,18 +19,87 @@
         termguicolors = true;
       };
 
+      autoCmd = [
+        {
+          event = "FileType";
+          pattern = "nix";
+          command = "setlocal tabstop=2 shiftwidth=2";  # Nix files typically use 2 spaces
+        }
+        {
+          event = "BufWritePre";
+          pattern = "*.nix";
+          command = "lua vim.lsp.buf.format()";  # Format Nix files on save
+        }
+      ];
+
+      # Global Neovim settings for diagnostics
+      extraConfigLua = ''
+        -- Configure diagnostics
+        vim.diagnostic.config({
+          virtual_text = {
+            format = function(diagnostic)
+              if diagnostic.message:find("git%-blame") then
+                return nil
+              end
+              return diagnostic.message
+            end,
+          },
+          signs = true,
+          underline = true,
+          update_in_insert = false,
+          severity_sort = true,
+        })
+
+        -- Override LSP handlers
+        local old_handler = vim.lsp.handlers["textDocument/publishDiagnostics"]
+        vim.lsp.handlers["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
+          local filtered = {}
+          for _, diagnostic in ipairs(result.diagnostics) do
+            if not diagnostic.message:find("git%-blame") then
+              table.insert(filtered, diagnostic)
+            end
+          end
+          result.diagnostics = filtered
+          return old_handler(err, result, ctx, config)
+        end
+      '';
+
       plugins = {
         lsp = {
           enable = true;
-          servers.omnisharp = {
-            enable = true;
-            filetypes = [ "cs" "csx" "omnisharp" ];
+          servers = {
+            omnisharp = {
+              enable = true;
+              filetypes = [ "cs" "csx" "omnisharp" ];
+            };
+            nil_ls = {
+              enable = true;
+              extraOptions = {
+                command = [ "nil" ];
+                settings = {
+                  nil = {
+                    formatting = {
+                      command = [ "nixpkgs-fmt" ];
+                    };
+                    nix = {
+                      maxMemoryMB = 2048;
+                      flake = {
+                        autoEvalInputs = true;
+                      };
+                    };
+                  };
+                };
+              };
+            };
           };
         };
 
         treesitter = {
           enable = true;
-          grammarPackages = with pkgs.vimPlugins.nvim-treesitter.builtGrammars; [ c-sharp ];
+          grammarPackages = with pkgs.vimPlugins.nvim-treesitter.builtGrammars; [ 
+            c-sharp 
+            nix
+          ];
         };
 
         telescope = {
@@ -161,16 +230,98 @@
           enable = true;
         };
 
+        # Modern UI components
+        noice = {
+          enable = true;
+          settings = {
+            cmdline = {
+              enabled = true;
+              view = "cmdline_popup";  # classic | cmdline_popup | cmdline
+              opts = {
+                border = {
+                  style = "rounded";
+                };
+              };
+            };
+            messages = {
+              enabled = true;
+              view = "notify";
+              view_error = "notify";
+              view_warn = "notify";
+              view_history = "messages";
+              view_search = "virtualtext";
+            };
+            popupmenu = {
+              enabled = true;
+              backend = "nui";  # nui | cmp
+            };
+            notify = {
+              enabled = true;
+              view = "notify";
+            };
+            lsp = {
+              progress = {
+                enabled = true;
+                view = "mini";
+              };
+              hover = {
+                enabled = true;
+                view = "hover";
+              };
+              signature = {
+                enabled = true;
+                view = "hover";
+              };
+              message = {
+                enabled = true;
+                view = "notify";
+              };
+            };
+          };
+        };
+
+        # Required by noice.nvim
+        nui = {
+          enable = true;
+        };
+
         indent-blankline = {
           enable = true;
           settings = {
-            show_current_context = true;
-            show_current_context_start = true;
+            scope = {
+              enabled = true;
+              show_start = true;
+              show_end = true;
+              highlight = "Function";  # Use existing highlight group
+            };
+            indent = {
+              highlight = "LineNr";    # Use existing highlight group
+            };
           };
         };
       };
 
       keymaps = [
+        # Nix-specific keymaps
+        {
+          key = "<leader>nf";
+          action = ":lua vim.lsp.buf.format()<CR>";
+          mode = "n";
+          options.desc = "Format Nix file";
+        }
+        {
+          key = "<leader>na";
+          action = ":lua vim.lsp.buf.code_action()<CR>";
+          mode = "n";
+          options.desc = "Nix code actions";
+        }
+        {
+          key = "<leader>nr";
+          action = ":!nix run<CR>";
+          mode = "n";
+          options.desc = "Run nix project";
+        }
+        # General keymaps
         {
           key = "<C-n>";
           action = ":Neotree toggle<CR>";
@@ -211,6 +362,25 @@
           action = ":Gitsigns prev_hunk<CR>";
           mode = "n";
           options.desc = "Previous git change";
+        }
+        # UI/Messages keymaps
+        {
+          key = "<leader>un";
+          action = ":NoiceDismiss<CR>";
+          mode = "n";
+          options.desc = "Dismiss all messages";
+        }
+        {
+          key = "<leader>ul";
+          action = ":Noice last<CR>";
+          mode = "n";
+          options.desc = "Show last message";
+        }
+        {
+          key = "<leader>uh";
+          action = ":Noice history<CR>";
+          mode = "n";
+          options.desc = "Show message history";
         }
         # Debugging keymaps
         {
