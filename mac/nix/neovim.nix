@@ -140,6 +140,34 @@
 
         # Snippet completion source
         cmp_luasnip.enable = true;
+
+        # Debugging support
+        dap = {
+          enable = true;
+        };
+        dap-ui = {
+          enable = true;
+        };
+
+        # Quality of life improvements
+        nvim-autopairs = {
+          enable = true;
+          settings = {
+            check_ts = true;  # Use treesitter for better pairing
+          };
+        };
+
+        comment = {
+          enable = true;
+        };
+
+        indent-blankline = {
+          enable = true;
+          settings = {
+            show_current_context = true;
+            show_current_context_start = true;
+          };
+        };
       };
 
       keymaps = [
@@ -183,6 +211,43 @@
           action = ":Gitsigns prev_hunk<CR>";
           mode = "n";
           options.desc = "Previous git change";
+        }
+        # Debugging keymaps
+        {
+          key = "<leader>db";
+          action = ":DapToggleBreakpoint<CR>";
+          mode = "n";
+          options.desc = "Toggle breakpoint";
+        }
+        {
+          key = "<leader>dc";
+          action = ":DapContinue<CR>";
+          mode = "n";
+          options.desc = "Start/Continue debugging";
+        }
+        {
+          key = "<leader>di";
+          action = ":DapStepInto<CR>";
+          mode = "n";
+          options.desc = "Step into";
+        }
+        {
+          key = "<leader>do";
+          action = ":DapStepOver<CR>";
+          mode = "n";
+          options.desc = "Step over";
+        }
+        {
+          key = "<leader>dO";
+          action = ":DapStepOut<CR>";
+          mode = "n";
+          options.desc = "Step out";
+        }
+        {
+          key = "<leader>dt";
+          action = ":DapTerminate<CR>";
+          mode = "n";
+          options.desc = "Terminate debug session";
         }
       ];
 
