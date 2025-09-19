@@ -48,7 +48,7 @@ in
     delta
     pkgs.nixfmt-rfc-style
     fd
-    rg
+    ripgrep
   ];
 
   home.sessionVariables = {
