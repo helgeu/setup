@@ -18,6 +18,7 @@ in
  
   imports = [
     ./git.nix
+    ./iterm2.nix
     ./zsh.nix
     ./neovim.nix
   ];
@@ -46,6 +47,7 @@ in
     eza
     delta
     pkgs.nixfmt-rfc-style
+    fd
   ];
 
   home.sessionVariables = {

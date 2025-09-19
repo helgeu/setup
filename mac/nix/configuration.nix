@@ -25,7 +25,7 @@
   };
 
   environment.systemPackages = with pkgs; [
-    nixfmt-rfc-style
+    iterm2
   ];
 
   homebrew = {
