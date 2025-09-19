@@ -24,7 +24,6 @@ in {
 
   home.packages = with pkgs; [
     git
-    neovim
     tmux
     tmuxinator
   #  azure-cli
@@ -71,6 +70,8 @@ in {
       vscode-extensions.jnoortheen.nix-ide
     ];
   };
+
+  
 
   home.file.".vimrc".source = ./vim_configuration;
 
