@@ -24,9 +24,10 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
-    # add LazyVim-module
-    LazyVim = {
-      url = "github:matadaniel/LazyVim-module";
+    
+    # Nixvim configuration
+    nixvim = {
+      url = "github:nix-community/nixvim/nixos-25.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -40,7 +41,7 @@
       nix-homebrew,
       homebrew-core,
       homebrew-cask,
-      LazyVim,
+      nixvim,
       ...
     }:
     let
@@ -49,6 +50,7 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowunfree = true;
+        overlays = [ nixvim.overlays.default ];
       };
 
     in
@@ -63,8 +65,8 @@
             home-manager.verbose = true;
             home-manager.users.helgereneurholm = { ... }: {
               imports = [ 
+                nixvim.homeModules.nixvim
                 ./work.nix
-                LazyVim.homeManagerModules.default
               ];
             };
           }

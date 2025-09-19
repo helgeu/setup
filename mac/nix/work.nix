@@ -2,7 +2,8 @@
   config,
   pkgs,
   lib,
-  vscode-marketplace,
+  nixvim,
+  #vscode-marketplace,
   ...
 }:
 let
@@ -22,6 +23,7 @@ in
     ./zsh.nix
     ./neovim.nix
   ];
+  
   home.username = "helgereneurholm";
   home.homeDirectory = "/Users/helgereneurholm";
 
