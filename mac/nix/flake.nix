@@ -61,7 +61,12 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.verbose = true;
-            home-manager.users.helgereneurholm = import ./work.nix;
+            home-manager.users.helgereneurholm = { ... }: {
+              imports = [ 
+                ./work.nix
+                LazyVim.homeManagerModules.default
+              ];
+            };
           }
         ];
       };

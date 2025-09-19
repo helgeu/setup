@@ -1,9 +1,6 @@
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, ... }:
 {
-  
-  programs = {
-    lazyvim = {
-      enable = true;
-    };
+  programs.lazyvim = {
+    enable = true;
   };
 }
