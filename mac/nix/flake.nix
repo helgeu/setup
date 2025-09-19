@@ -44,7 +44,7 @@
       ...
     }:
     let
-      system = "aarch-darwin";
+      system = "aarch64-darwin";
       username = "helgereneurholm";
       pkgs = import nixpkgs {
         inherit system;
