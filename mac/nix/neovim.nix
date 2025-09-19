@@ -53,8 +53,52 @@
         };
 
         which-key.enable = true;
-        lualine.enable = true;
         web-devicons.enable = true;
+
+        # Status line with code context
+        lualine = {
+          enable = true;
+          settings.sections = {
+            lualine_c = [
+              "filename"
+              "require('nvim-navic').get_location()"
+            ];
+          };
+        };
+
+        # Code context in statusline
+        navic = {
+          enable = true;
+          settings = {
+            lsp.auto_attach = true;     # Automatically attach to LSP
+            highlight = true;          # Highlight the context path
+          };
+        };
+
+        # Git integration
+        gitsigns = {
+          enable = true;
+          settings = {
+            signs = {
+              add.text = "+";
+              change.text = "~";
+              delete.text = "_";
+              topdelete.text = "‾";
+              changedelete.text = "~";
+            };
+            current_line_blame = true;  # Git blame for current line
+            current_line_blame_opts = {
+              delay = 300;
+            };
+          };
+        };
+
+        fugitive.enable = true;  # Classic git commands in vim
+
+        # Lazygit integration
+        lazygit = {
+          enable = true;
+        };
 
         # Completion
         cmp = {
@@ -108,6 +152,37 @@
           key = "<leader>e";
           action = ":Neotree focus<CR>";
           mode = "n";
+        }
+        # Git keymaps
+        {
+          key = "<leader>gg";
+          action = ":LazyGit<CR>";
+          mode = "n";
+          options.desc = "Open LazyGit";
+        }
+        {
+          key = "<leader>gb";
+          action = ":Gitsigns toggle_current_line_blame<CR>";
+          mode = "n";
+          options.desc = "Toggle git blame";
+        }
+        {
+          key = "<leader>gd";
+          action = ":Gitsigns diffthis<CR>";
+          mode = "n";
+          options.desc = "Show git diff";
+        }
+        {
+          key = "]c";
+          action = ":Gitsigns next_hunk<CR>";
+          mode = "n";
+          options.desc = "Next git change";
+        }
+        {
+          key = "[c";
+          action = ":Gitsigns prev_hunk<CR>";
+          mode = "n";
+          options.desc = "Previous git change";
         }
       ];
 
