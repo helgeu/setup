@@ -24,9 +24,6 @@
     home = "/Users/helgereneurholm";
   };
 
-  # Create /etc/zshrc that loads the nix-darwin environment.
-  programs.zsh.enable = true;
-
   environment.systemPackages = with pkgs; [
     nixfmt-rfc-style
   ];
@@ -42,6 +39,7 @@
       "bruno"
     ];
   };
+
   system.primaryUser = "helgereneurholm";
   system.defaults = {
     finder.AppleShowAllFiles = true;
@@ -51,7 +49,9 @@
     };
 
     controlcenter.Bluetooth = true;
+    controlcenter.Sound = true;
   };
+  
   fonts.packages = with pkgs; [
     pkgs.nerd-fonts.meslo-lg
     pkgs.nerd-fonts.fira-code

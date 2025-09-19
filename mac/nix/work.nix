@@ -4,19 +4,23 @@
   lib,
   vscode-marketplace,
   ...
-}: let
-  combinedDotnet = with pkgs.dotnetCorePackages;
+}:
+let
+  combinedDotnet =
+    with pkgs.dotnetCorePackages;
     combinePackages [
       sdk_8_0
       sdk_9_0
-      runtime_8_0	
+      runtime_8_0
     ];
-in {
-
-	imports = [
-		./git.nix
-		./zsh.nix
-	];
+in
+{
+ 
+  imports = [
+    ./git.nix
+    ./zsh.nix
+    ./neovim.nix
+  ];
   home.username = "helgereneurholm";
   home.homeDirectory = "/Users/helgereneurholm";
 
@@ -26,7 +30,7 @@ in {
     git
     tmux
     tmuxinator
-  #  azure-cli
+    #  azure-cli
     fzf
     lazygit
     combinedDotnet
@@ -35,14 +39,14 @@ in {
     oh-my-posh
     zip
     git-credential-manager
-  #  pkgs.powershell 
+    #  pkgs.powershell
     pandoc
     fnm
     direnv
     eza
     delta
     pkgs.nixfmt-rfc-style
-    ];
+  ];
 
   home.sessionVariables = {
     EDITOR = "nvim";
@@ -71,10 +75,7 @@ in {
     ];
   };
 
-  
-
   home.file.".vimrc".source = ./vim_configuration;
-
 
   programs.home-manager.enable = true;
 

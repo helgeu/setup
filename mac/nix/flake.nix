@@ -24,6 +24,11 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
+    # add LazyVim-module
+    LazyVim = {
+      url = "github:matadaniel/LazyVim-module";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -35,6 +40,7 @@
       nix-homebrew,
       homebrew-core,
       homebrew-cask,
+      LazyVim,
       ...
     }:
     let
@@ -45,31 +51,6 @@
         config.allowunfree = true;
       };
 
-      homeconfig =
-        { pkgs, ... }:
-        {
-          # this is internal compatibility configuration
-          # for home-manager, dont change this!
-          home.stateVersion = "25.05";
-          # let home-manager install and manage itself.
-          programs.home-manager.enable = true;
-
-          home.packages = with pkgs; [ ];
-
-          home.sessionVariables = {
-            EDITOR = "vim";
-          };
-          home.file.".vimrc".source = ./vim_configuration;
-
-          #homebrew = {
-          #    enable = true;
-          #    # onActivation.cleanup = "uninstall";
-          #
-          #    taps = [];
-          #    brews = [ "cowsay" ];
-          #    casks = [];
-          #};
-        };
     in
     {
       darwinConfigurations."X-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
