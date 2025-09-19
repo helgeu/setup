@@ -80,7 +80,7 @@ in
     ];
   };
 
-  home.file.".vimrc".source = ./vim_configuration;
+  # home.file.".vimrc".source = ./vim_configuration;
 
   programs.home-manager.enable = true;
 
