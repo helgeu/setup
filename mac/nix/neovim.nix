@@ -353,6 +353,18 @@
           enable = true;
         };
 
+        # Notification system
+        notify = {
+          enable = true;
+          settings = {
+            timeout = 3000;
+            max_width = 80;
+            max_height = 20;
+            stages = "fade";
+            background_colour = "#000000";
+          };
+        };
+
         # Quality of life improvements
         nvim-autopairs = {
           enable = true;
