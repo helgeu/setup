@@ -30,10 +30,48 @@
           pattern = "*.nix";
           command = "lua vim.lsp.buf.format()";  # Format Nix files on save
         }
+        {
+          event = "FileType";
+          pattern = [ "fsharp" "fs" "fsi" "fsx" ];
+          command = "setlocal expandtab tabstop=4 shiftwidth=4";  # F# convention
+        }
+        {
+          event = [ "BufNewFile" "BufRead" ];
+          pattern = [ "*.fs" "*.fsx" "*.fsi" ];
+          command = "setfiletype fsharp";  # Ensure proper filetype detection
+        }
+        {
+          event = "BufWritePre";
+          pattern = [ "*.fs" "*.fsx" "*.fsi" ];
+          command = "lua vim.lsp.buf.format()";  # Format F# files on save
+        }
       ];
 
       # Global Neovim settings for diagnostics
       extraConfigLua = ''
+        -- F# specific setup
+        vim.api.nvim_create_autocmd("FileType", {
+          pattern = { "fsharp", "fs", "fsi", "fsx" },
+          callback = function()
+            -- LSP mappings
+            local opts = { noremap = true, silent = true, buffer = true }
+            vim.keymap.set("n", "<leader>fs", "<cmd>lua vim.lsp.buf.signature_help()<CR>", opts)
+            vim.keymap.set("n", "<leader>fr", "<cmd>lua vim.lsp.buf.rename()<CR>", opts)
+            vim.keymap.set("n", "<leader>fa", "<cmd>lua vim.lsp.buf.code_action()<CR>", opts)
+            vim.keymap.set("n", "<leader>fd", "<cmd>lua vim.lsp.buf.definition()<CR>", opts)
+            vim.keymap.set("n", "<leader>fi", "<cmd>lua vim.lsp.buf.implementation()<CR>", opts)
+            vim.keymap.set("n", "<leader>ft", "<cmd>lua vim.lsp.buf.type_definition()<CR>", opts)
+            vim.keymap.set("n", "<leader>fh", "<cmd>lua vim.lsp.buf.hover()<CR>", opts)
+            vim.keymap.set("n", "<leader>fu", "<cmd>lua vim.lsp.buf.references()<CR>", opts)
+            vim.keymap.set("n", "<leader>ff", "<cmd>lua vim.lsp.buf.format()<CR>", opts)
+
+            -- F# Interactive (REPL) mappings
+            vim.keymap.set("n", "<leader>fsi", "<cmd>split term://dotnet fsi<CR>", opts)
+            vim.keymap.set("v", "<leader>fse", ":'<,'>w !dotnet fsi<CR>", opts)
+            vim.keymap.set("n", "<leader>fsl", "<cmd>. w !dotnet fsi<CR>", opts)
+          end
+        })
+
         -- Configure diagnostics
         vim.diagnostic.config({
           virtual_text = {
@@ -72,6 +110,53 @@
               enable = true;
               filetypes = [ "cs" "csx" "omnisharp" ];
             };
+            # LSP configuration for F# using Ionide
+            fsautocomplete = {
+              enable = true;
+              cmd = [ "${pkgs.vscode-extensions.ionide.ionide-fsharp}/share/vscode/extensions/ionide.ionide-fsharp/fsac/fsautocomplete" ];
+              filetypes = [ "fsharp" "fs" "fsi" "fsx" ];
+              extraOptions = {
+                capabilities = {
+                  definitionProvider = true;
+                  documentHighlightProvider = true;
+                  completionProvider = {
+                    resolveProvider = true;
+                    triggerCharacters = [ "." ];
+                  };
+                  signatureHelpProvider = {
+                    triggerCharacters = [ "(" " " ];
+                  };
+                  documentSymbolProvider = true;
+                  workspaceSymbolProvider = true;
+                  codeActionProvider = true;
+                  codeLensProvider = {
+                    resolveProvider = true;
+                  };
+                  documentFormattingProvider = true;
+                  hoverProvider = true;
+                  referencesProvider = true;
+                };
+                init_options = {
+                  automaticWorkspaceInit = true;
+                  workspaceModePeekDeepLevel = 4;
+                  externalAutocomplete = false;
+                  lineLens = {
+                    enabled = true;
+                    prefix = "→ ";
+                  };
+                  inlayHints = {
+                    enabled = true;
+                    typeAnnotations = true;
+                    parameterNames = true;
+                    disableLongTooltip = false;
+                  };
+                  fsac = {
+                    dotnetRoot = "${pkgs.dotnet-sdk}";
+                    fsiExtraParameters = [ "--readline-" ];
+                  };
+                };
+              };
+            };
             nil_ls = {
               enable = true;
               extraOptions = {
@@ -98,8 +183,58 @@
           enable = true;
           grammarPackages = with pkgs.vimPlugins.nvim-treesitter.builtGrammars; [ 
             c-sharp 
+            fsharp
             nix
           ];
+          moduleConfig = {
+            highlight.enable = true;
+            indent.enable = true;
+            incremental_selection = {
+              enable = true;
+              keymaps = {
+                init_selection = "<CR>";
+                node_incremental = "<CR>";
+                node_decremental = "<BS>";
+                scope_incremental = "<TAB>";
+              };
+            };
+          };
+        };
+
+        treesitter-textobjects = {
+          enable = true;
+          select = {
+            enable = true;
+            lookahead = true;
+            keymaps = {
+              "af" = "@function.outer";
+              "if" = "@function.inner";
+              "ac" = "@class.outer";
+              "ic" = "@class.inner";
+              "aa" = "@parameter.outer";
+              "ia" = "@parameter.inner";
+            };
+          };
+          move = {
+            enable = true;
+            setJumps = true;
+            gotoNextStart = {
+              "]m" = "@function.outer";
+              "]]" = "@class.outer";
+            };
+            gotoNextEnd = {
+              "]M" = "@function.outer";
+              "][" = "@class.outer";
+            };
+            gotoPreviousStart = {
+              "[m" = "@function.outer";
+              "[[" = "@class.outer";
+            };
+            gotoPreviousEnd = {
+              "[M" = "@function.outer";
+              "[]" = "@class.outer";
+            };
+          };
         };
 
         telescope = {
