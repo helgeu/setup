@@ -33,7 +33,8 @@
         eval \"$(direnv hook zsh)\"
 
         # Oh my posh
-        eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambdageneration.omp.json')\"
+        # eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambdageneration.omp.json')\"
+        eval "$(oh-my-posh init zsh)"
 
 ";
     };
