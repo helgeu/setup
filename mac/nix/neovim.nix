@@ -27,9 +27,7 @@
 
       plugins = 
         # Import all plugin configurations and merge them
-        (import ./neovim/plugins/ui/telescope.nix { inherit pkgs; }).plugins //
-        (import ./neovim/plugins/ui/neotree.nix { inherit pkgs; }).plugins //
-        (import ./neovim/plugins/ui/which-key.nix { inherit pkgs; }).plugins //
+        (import ./neovim/plugins/ui { inherit pkgs; }).plugins //
         (import ./neovim/plugins/git { inherit pkgs; }).plugins //
         (import ./neovim/plugins/debug { inherit pkgs; }).plugins //
         (import ./neovim/plugins/editor { inherit pkgs; }).plugins //
