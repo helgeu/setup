@@ -45,11 +45,6 @@
         (import ./neovim/plugins/editor { inherit pkgs; }).plugins //
         (import ./neovim/plugins/statusline { inherit pkgs; }).plugins;
 
-      #############
-      # Keymaps #
-      #############
-      keymaps = (import ./neovim/keymaps { inherit pkgs; }).keymaps;
-
       globals.mapleader = " ";
     };
   };

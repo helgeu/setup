@@ -66,27 +66,5 @@
       # Required by noice.nvim
       nui.enable = true;
     };
-
-    # UI/Messages keymaps
-    keymaps = [
-      {
-        key = "<leader>un";
-        action = ":NoiceDismiss<CR>";
-        mode = "n";
-        options.desc = "Dismiss all messages";
-      }
-      {
-        key = "<leader>ul";
-        action = ":Noice last<CR>";
-        mode = "n";
-        options.desc = "Show last message";
-      }
-      {
-        key = "<leader>uh";
-        action = ":Noice history<CR>";
-        mode = "n";
-        options.desc = "Show message history";
-      }
-    ];
   };
 }
