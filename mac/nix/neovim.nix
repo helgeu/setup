@@ -33,11 +33,7 @@
         (import ./neovim/plugins/debug { inherit pkgs; }).plugins //
         (import ./neovim/plugins/editor { inherit pkgs; }).plugins //
         (import ./neovim/plugins/statusline { inherit pkgs; }).plugins // {
-        #################
-        # UI Navigation #
-        #################
-
-
+        # Key binding menu
         which-key = {
           enable = true;
           settings.plugins.presets = {
