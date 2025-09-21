@@ -1,247 +1,34 @@
-{ pkgs, ... }: {
+# Main Neovim configuration entry point
+{pkgs, ...}: {
   programs.nixvim = {
+    # Configuration modules
+    imports = [
+      # Core configuration
+      (import ./neovim/options.nix { inherit pkgs; })
+      (import ./neovim/autocmds.nix { inherit pkgs; })
+
+      # UI and theme
+      (import ./neovim/catppuccin.nix { inherit pkgs; })
+
+      # Code intelligence
+      (import ./neovim/lsp.nix { inherit pkgs; })
+      (import ./neovim/diagnostics.nix { inherit pkgs; })
+      (import ./neovim/completion.nix { inherit pkgs; })
+      (import ./neovim/treesitter.nix { inherit pkgs; })
+
+      # Language-specific
+      (import ./neovim/languages/fsharp.nix { inherit pkgs; })
+    ];
+    
     config = {
       enable = true;
       viAlias = true;
       vimAlias = true;
 
-      colorschemes.catppuccin = {
-        enable = true;
-        settings.flavour = "mocha";
-      };
-
-      opts = {
-        number = true;
-        relativenumber = true;
-        shiftwidth = 4;
-        expandtab = true;
-        tabstop = 4;
-        termguicolors = true;
-      };
-
-      autoCmd = [
-        {
-          event = "FileType";
-          pattern = "nix";
-          command = "setlocal tabstop=2 shiftwidth=2";  # Nix files typically use 2 spaces
-        }
-        {
-          event = "BufWritePre";
-          pattern = "*.nix";
-          command = "lua vim.lsp.buf.format()";  # Format Nix files on save
-        }
-        {
-          event = "FileType";
-          pattern = [ "fsharp" "fs" "fsi" "fsx" ];
-          command = "setlocal expandtab tabstop=4 shiftwidth=4";  # F# convention
-        }
-        {
-          event = [ "BufNewFile" "BufRead" ];
-          pattern = [ "*.fs" "*.fsx" "*.fsi" ];
-          command = "setfiletype fsharp";  # Ensure proper filetype detection
-        }
-        {
-          event = "BufWritePre";
-          pattern = [ "*.fs" "*.fsx" "*.fsi" ];
-          command = "lua vim.lsp.buf.format()";  # Format F# files on save
-        }
-      ];
-
-      # Global Neovim settings for diagnostics
-      extraConfigLua = ''
-        -- F# specific setup
-        vim.api.nvim_create_autocmd("FileType", {
-          pattern = { "fsharp", "fs", "fsi", "fsx" },
-          callback = function()
-            -- LSP mappings
-            local opts = { noremap = true, silent = true, buffer = true }
-            vim.keymap.set("n", "<leader>fs", "<cmd>lua vim.lsp.buf.signature_help()<CR>", opts)
-            vim.keymap.set("n", "<leader>fr", "<cmd>lua vim.lsp.buf.rename()<CR>", opts)
-            vim.keymap.set("n", "<leader>fa", "<cmd>lua vim.lsp.buf.code_action()<CR>", opts)
-            vim.keymap.set("n", "<leader>fd", "<cmd>lua vim.lsp.buf.definition()<CR>", opts)
-            vim.keymap.set("n", "<leader>fi", "<cmd>lua vim.lsp.buf.implementation()<CR>", opts)
-            vim.keymap.set("n", "<leader>ft", "<cmd>lua vim.lsp.buf.type_definition()<CR>", opts)
-            vim.keymap.set("n", "<leader>fh", "<cmd>lua vim.lsp.buf.hover()<CR>", opts)
-            vim.keymap.set("n", "<leader>fu", "<cmd>lua vim.lsp.buf.references()<CR>", opts)
-            vim.keymap.set("n", "<leader>ff", "<cmd>lua vim.lsp.buf.format()<CR>", opts)
-
-            -- F# Interactive (REPL) mappings
-            vim.keymap.set("n", "<leader>fsi", "<cmd>split term://dotnet fsi<CR>", opts)
-            vim.keymap.set("v", "<leader>fse", ":'<,'>w !dotnet fsi<CR>", opts)
-            vim.keymap.set("n", "<leader>fsl", "<cmd>. w !dotnet fsi<CR>", opts)
-          end
-        })
-
-        -- Configure diagnostics
-        vim.diagnostic.config({
-          virtual_text = {
-            format = function(diagnostic)
-              if diagnostic.message:find("git%-blame") then
-                return nil
-              end
-              return diagnostic.message
-            end,
-          },
-          signs = true,
-          underline = true,
-          update_in_insert = false,
-          severity_sort = true,
-        })
-
-        -- Override LSP handlers
-        local old_handler = vim.lsp.handlers["textDocument/publishDiagnostics"]
-        vim.lsp.handlers["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
-          local filtered = {}
-          for _, diagnostic in ipairs(result.diagnostics) do
-            if not diagnostic.message:find("git%-blame") then
-              table.insert(filtered, diagnostic)
-            end
-          end
-          result.diagnostics = filtered
-          return old_handler(err, result, ctx, config)
-        end
-      '';
-
       plugins = {
-        lsp = {
-          enable = true;
-          servers = {
-            omnisharp = {
-              enable = true;
-              filetypes = [ "cs" "csx" "omnisharp" ];
-            };
-            # LSP configuration for F# using Ionide
-            fsautocomplete = {
-              enable = true;
-              cmd = [ "${pkgs.vscode-extensions.ionide.ionide-fsharp}/share/vscode/extensions/ionide.ionide-fsharp/fsac/fsautocomplete" ];
-              filetypes = [ "fsharp" "fs" "fsi" "fsx" ];
-              extraOptions = {
-                capabilities = {
-                  definitionProvider = true;
-                  documentHighlightProvider = true;
-                  completionProvider = {
-                    resolveProvider = true;
-                    triggerCharacters = [ "." ];
-                  };
-                  signatureHelpProvider = {
-                    triggerCharacters = [ "(" " " ];
-                  };
-                  documentSymbolProvider = true;
-                  workspaceSymbolProvider = true;
-                  codeActionProvider = true;
-                  codeLensProvider = {
-                    resolveProvider = true;
-                  };
-                  documentFormattingProvider = true;
-                  hoverProvider = true;
-                  referencesProvider = true;
-                };
-                init_options = {
-                  automaticWorkspaceInit = true;
-                  workspaceModePeekDeepLevel = 4;
-                  externalAutocomplete = false;
-                  lineLens = {
-                    enabled = true;
-                    prefix = "→ ";
-                  };
-                  inlayHints = {
-                    enabled = true;
-                    typeAnnotations = true;
-                    parameterNames = true;
-                    disableLongTooltip = false;
-                  };
-                  fsac = {
-                    dotnetRoot = "${pkgs.dotnet-sdk}";
-                    fsiExtraParameters = [ "--readline-" ];
-                  };
-                };
-              };
-            };
-            nil_ls = {
-              enable = true;
-              extraOptions = {
-                command = [ "nil" ];
-                settings = {
-                  nil = {
-                    formatting = {
-                      command = [ "nixpkgs-fmt" ];
-                    };
-                    nix = {
-                      maxMemoryMB = 2048;
-                      flake = {
-                        autoEvalInputs = true;
-                      };
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-
-        treesitter = {
-          enable = true;
-          grammarPackages = with pkgs.vimPlugins.nvim-treesitter.builtGrammars; [ 
-            c-sharp 
-            fsharp
-            nix
-          ];
-          settings = {
-            highlight = {
-              enable = true;
-              additional_vim_regex_highlighting = false;
-            };
-            indent = { 
-              enable = true;
-            };
-            incremental_selection = {
-              enable = true;
-              keymaps = {
-                init_selection = "<CR>";
-                node_incremental = "<CR>";
-                node_decremental = "<BS>";
-                scope_incremental = "<TAB>";
-              };
-            };
-          };
-        };
-
-        treesitter-textobjects = {
-          enable = true;
-          select = {
-            enable = true;
-            lookahead = true;
-            keymaps = {
-              "af" = "@function.outer";
-              "if" = "@function.inner";
-              "ac" = "@class.outer";
-              "ic" = "@class.inner";
-              "aa" = "@parameter.outer";
-              "ia" = "@parameter.inner";
-            };
-          };
-          move = {
-            enable = true;
-            setJumps = true;
-            gotoNextStart = {
-              "]m" = "@function.outer";
-              "]]" = "@class.outer";
-            };
-            gotoNextEnd = {
-              "]M" = "@function.outer";
-              "][" = "@class.outer";
-            };
-            gotoPreviousStart = {
-              "[m" = "@function.outer";
-              "[[" = "@class.outer";
-            };
-            gotoPreviousEnd = {
-              "[M" = "@function.outer";
-              "[]" = "@class.outer";
-            };
-          };
-        };
-
+        #################
+        # UI Navigation #
+        #################
         telescope = {
           enable = true;
           keymaps = {
@@ -261,7 +48,28 @@
           };
         };
 
-        which-key.enable = true;
+        which-key = {
+          enable = true;
+          # Using the new format as per which-key v3
+          settings.register = [
+            {
+              prefix = "<leader>n";
+              name = "Nix";
+            }
+            {
+              prefix = "<leader>g";
+              name = "Git";
+            }
+            {
+              prefix = "<leader>u";
+              name = "UI";
+            }
+            {
+              prefix = "<leader>d";
+              name = "Debug";
+            }
+          ];
+        };
         web-devicons.enable = true;
 
         # Status line with code context
@@ -284,7 +92,9 @@
           };
         };
 
-        # Git integration
+        ####################
+        # Git Integration #
+        ####################
         gitsigns = {
           enable = true;
           settings = {
@@ -309,48 +119,11 @@
           enable = true;
         };
 
-        # Completion
-        cmp = {
-          enable = true;
-          settings = {
-            mapping = {
-              "<C-Space>" = "cmp.mapping.complete()";
-              "<C-d>" = "cmp.mapping.scroll_docs(-4)";
-              "<C-f>" = "cmp.mapping.scroll_docs(4)";
-              "<C-n>" = "cmp.mapping.select_next_item()";
-              "<C-p>" = "cmp.mapping.select_prev_item()";
-              "<CR>" = "cmp.mapping.confirm({ select = true })";
-              "<Tab>" = "cmp.mapping.select_next_item()";
-              "<S-Tab>" = "cmp.mapping.select_prev_item()";
-            };
-            sources = [
-              { name = "nvim_lsp"; }
-              { name = "luasnip"; }
-              { name = "buffer"; }
-              { name = "path"; }
-            ];
-            snippet.expand = "luasnip";
-          };
-        };
 
-        # LSP completion source
-        cmp-nvim-lsp.enable = true;
-        
-        # Buffer completion source
-        cmp-buffer.enable = true;
-        
-        # Path completion source
-        cmp-path.enable = true;
 
-        # Snippet engine
-        luasnip = {
-          enable = true;
-        };
-
-        # Snippet completion source
-        cmp_luasnip.enable = true;
-
-        # Debugging support
+        ######################
+        # Debugging Support #
+        ######################
         dap = {
           enable = true;
         };
@@ -358,19 +131,9 @@
           enable = true;
         };
 
-        # Notification system
-        notify = {
-          enable = true;
-          settings = {
-            timeout = 3000;
-            max_width = 80;
-            max_height = 20;
-            stages = "fade";
-            background_colour = "#000000";
-          };
-        };
-
-        # Quality of life improvements
+        #########################
+        # Editor Enhancements #
+        #########################
         nvim-autopairs = {
           enable = true;
           settings = {
@@ -382,60 +145,7 @@
           enable = true;
         };
 
-        # Modern UI components
-        noice = {
-          enable = true;
-          settings = {
-            cmdline = {
-              enabled = true;
-              view = "cmdline_popup";  # classic | cmdline_popup | cmdline
-              opts = {
-                border = {
-                  style = "rounded";
-                };
-              };
-            };
-            messages = {
-              enabled = true;
-              view = "notify";
-              view_error = "notify";
-              view_warn = "notify";
-              view_history = "messages";
-              view_search = "virtualtext";
-            };
-            popupmenu = {
-              enabled = true;
-              backend = "nui";  # nui | cmp
-            };
-            notify = {
-              enabled = true;
-              view = "notify";
-            };
-            lsp = {
-              progress = {
-                enabled = true;
-                view = "mini";
-              };
-              hover = {
-                enabled = true;
-                view = "hover";
-              };
-              signature = {
-                enabled = true;
-                view = "hover";
-              };
-              message = {
-                enabled = true;
-                view = "notify";
-              };
-            };
-          };
-        };
 
-        # Required by noice.nvim
-        nui = {
-          enable = true;
-        };
 
         indent-blankline = {
           enable = true;
@@ -453,6 +163,9 @@
         };
       };
 
+      #############
+      # Keymaps #
+      #############
       keymaps = [
         # Nix-specific keymaps
         {
@@ -514,25 +227,6 @@
           action = ":Gitsigns prev_hunk<CR>";
           mode = "n";
           options.desc = "Previous git change";
-        }
-        # UI/Messages keymaps
-        {
-          key = "<leader>un";
-          action = ":NoiceDismiss<CR>";
-          mode = "n";
-          options.desc = "Dismiss all messages";
-        }
-        {
-          key = "<leader>ul";
-          action = ":Noice last<CR>";
-          mode = "n";
-          options.desc = "Show last message";
-        }
-        {
-          key = "<leader>uh";
-          action = ":Noice history<CR>";
-          mode = "n";
-          options.desc = "Show message history";
         }
         # Debugging keymaps
         {
