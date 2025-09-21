@@ -16,20 +16,22 @@
 
       cmp-nvim-lsp.enable = true;
       
-      which-key.registrations = {
-        "<leader>f" = {
+      which-key.settings.spec = [
+        {
+          mode = "n";
+          prefix = "<leader>f";
           name = "+lsp";
-          s = { action = ":lua vim.lsp.buf.signature_help()<CR>"; desc = "Signature Help"; };
-          r = { action = ":lua vim.lsp.buf.rename()<CR>"; desc = "Rename"; };
-          a = { action = ":lua vim.lsp.buf.code_action()<CR>"; desc = "Code Action"; };
-          d = { action = ":lua vim.lsp.buf.definition()<CR>"; desc = "Go to Definition"; };
-          i = { action = ":lua vim.lsp.buf.implementation()<CR>"; desc = "Go to Implementation"; };
-          t = { action = ":lua vim.lsp.buf.type_definition()<CR>"; desc = "Type Definition"; };
-          h = { action = ":lua vim.lsp.buf.hover()<CR>"; desc = "Hover"; };
-          u = { action = ":lua vim.lsp.buf.references()<CR>"; desc = "References"; };
-          f = { action = ":lua vim.lsp.buf.format()<CR>"; desc = "Format"; };
-        };
-      };
+          s = { command = "lua vim.lsp.buf.signature_help()"; desc = "Signature Help"; };
+          r = { command = "lua vim.lsp.buf.rename()"; desc = "Rename"; };
+          a = { command = "lua vim.lsp.buf.code_action()"; desc = "Code Action"; };
+          d = { command = "lua vim.lsp.buf.definition()"; desc = "Go to Definition"; };
+          i = { command = "lua vim.lsp.buf.implementation()"; desc = "Go to Implementation"; };
+          t = { command = "lua vim.lsp.buf.type_definition()"; desc = "Type Definition"; };
+          h = { command = "lua vim.lsp.buf.hover()"; desc = "Hover"; };
+          u = { command = "lua vim.lsp.buf.references()"; desc = "References"; };
+          f = { command = "lua vim.lsp.buf.format()"; desc = "Format"; };
+        }
+      ];
     };
   };
 }
