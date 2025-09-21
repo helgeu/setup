@@ -25,6 +25,18 @@
       viAlias = true;
       vimAlias = true;
 
+      extraPackages = with pkgs; [
+        # Python with updated pynvim
+        (python3.withPackages (ps: with ps; [
+          (pynvim.overridePythonAttrs (old: {
+            version = "0.6.0";
+          }))
+        ]))
+        # Node and tree-sitter CLI
+        nodejs
+        tree-sitter
+      ];
+
       plugins = 
         # Import all plugin configurations and merge them
         (import ./neovim/plugins/ui { inherit pkgs; }).plugins //

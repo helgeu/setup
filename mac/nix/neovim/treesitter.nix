@@ -7,6 +7,8 @@
           c-sharp 
           fsharp
           nix
+          regex
+          bash
         ];
         settings = {
           highlight = {
