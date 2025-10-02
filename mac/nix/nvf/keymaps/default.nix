@@ -13,6 +13,7 @@ let
   snacks = import ./snacks.nix;
   todo-comments = import ./todo-comments.nix;
   trouble = import ./trouble.nix;
+  which-key = import ./which-key.nix;
 in
-# Concatenate all keymaps - COMPLETE LazyVim keymap implementation (207 total)
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble
+# Concatenate all keymaps - Expanding LazyVim keymap implementation
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key
