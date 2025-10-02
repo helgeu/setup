@@ -6,16 +6,12 @@
     key = "<leader>gg";
     action = "<cmd>lua Snacks.gitbrowse()<cr>";
     mode = ["n"];
-    options = {
-      desc = "GitUi (Root Dir)";
-    };
+    desc = "GitUi (Root Dir)";
   }
   {
     key = "<leader>gG";
     action = "<cmd>lua Snacks.gitbrowse({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n"];
-    options = {
-      desc = "GitUi (cwd)";
-    };
+    desc = "GitUi (cwd)";
   }
 ]

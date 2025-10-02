@@ -6,8 +6,6 @@
     key = "<leader>sz";
     action = "<cmd>lua require('telescope').extensions.chezmoi.find_files()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Chezmoi";
-    };
+    desc = "Chezmoi";
   }
 ]

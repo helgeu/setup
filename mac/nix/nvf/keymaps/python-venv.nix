@@ -6,8 +6,6 @@
     key = "<leader>cv";
     action = "<cmd>VenvSelect<cr>";
     mode = ["n"];
-    options = {
-      desc = "Select VirtualEnv";
-    };
+    desc = "Select VirtualEnv";
   }
 ]

@@ -6,8 +6,6 @@
     key = "<leader>ta";
     action = "<cmd>lua require('ansible').run()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Ansible Run Playbook/Role";
-    };
+    desc = "Ansible Run Playbook/Role";
   }
 ]

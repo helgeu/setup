@@ -6,8 +6,6 @@
     key = "<leader>cp";
     action = "<cmd>MarkdownPreview<cr>";
     mode = ["n"];
-    options = {
-      desc = "Markdown Preview";
-    };
+    desc = "Markdown Preview";
   }
 ]

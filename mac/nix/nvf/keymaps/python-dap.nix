@@ -6,16 +6,12 @@
     key = "<leader>dPc";
     action = "<cmd>lua require('dap-python').test_class()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Debug Class";
-    };
+    desc = "Debug Class";
   }
   {
     key = "<leader>dPt";
     action = "<cmd>lua require('dap-python').test_method()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Debug Method";
-    };
+    desc = "Debug Method";
   }
 ]

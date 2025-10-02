@@ -6,8 +6,6 @@
     key = "<localLeader>l";
     action = "+vimtex";
     mode = ["n"];
-    options = {
-      desc = "+vimtex";
-    };
+    desc = "+vimtex";
   }
 ]

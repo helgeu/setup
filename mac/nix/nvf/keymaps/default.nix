@@ -33,6 +33,23 @@ let
   outline = import ./outline.nix;
   overseer = import ./overseer.nix;
   refactoring = import ./refactoring.nix;
+  ansible = import ./ansible.nix;
+  markdown = import ./markdown.nix;
+  python-dap = import ./python-dap.nix;
+  python-venv = import ./python-venv.nix;
+  sql = import ./sql.nix;
+  tex = import ./tex.nix;
+  snacks-explorer = import ./snacks-explorer.nix;
+  snacks-picker = import ./snacks-picker.nix;
+  todo-comments-snacks = import ./todo-comments-snacks.nix;
+  neotest = import ./neotest.nix;
+  neotest-dap = import ./neotest-dap.nix;
+  edgy = import ./edgy.nix;
+  chezmoi = import ./chezmoi.nix;
+  gitui = import ./gitui.nix;
+  octo = import ./octo.nix;
+  project = import ./project.nix;
+  kulala = import ./kulala.nix;
 in
 # Concatenate all keymaps - Systematically implementing ALL LazyVim sections
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen ++ yanky ++ dap-core ++ dap-ui ++ aerial ++ telescope-extra ++ dial ++ harpoon ++ vim-illuminate ++ leap ++ mini-surround-extra ++ mini-diff ++ mini-files ++ outline ++ overseer ++ refactoring
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen ++ yanky ++ dap-core ++ dap-ui ++ aerial ++ telescope-extra ++ dial ++ harpoon ++ vim-illuminate ++ leap ++ mini-surround-extra ++ mini-diff ++ mini-files ++ outline ++ overseer ++ refactoring ++ ansible ++ markdown ++ python-dap ++ python-venv ++ sql ++ tex ++ snacks-explorer ++ snacks-picker ++ todo-comments-snacks ++ neotest ++ neotest-dap ++ edgy ++ chezmoi ++ gitui ++ octo ++ project ++ kulala

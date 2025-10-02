@@ -6,32 +6,24 @@
     key = "<leader>e";
     action = "<cmd>lua Snacks.explorer.open({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Explorer Snacks (root dir)";
-    };
+    desc = "Explorer Snacks (root dir)";
   }
   {
     key = "<leader>E";
     action = "<cmd>lua Snacks.explorer.open()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Explorer Snacks (cwd)";
-    };
+    desc = "Explorer Snacks (cwd)";
   }
   {
     key = "<leader>fe";
     action = "<cmd>lua Snacks.explorer.open({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Explorer Snacks (root dir)";
-    };
+    desc = "Explorer Snacks (root dir)";
   }
   {
     key = "<leader>fE";
     action = "<cmd>lua Snacks.explorer.open()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Explorer Snacks (cwd)";
-    };
+    desc = "Explorer Snacks (cwd)";
   }
 ]

@@ -6,16 +6,12 @@
     key = "<leader>st";
     action = "<cmd>lua Snacks.picker.todo_comments()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Todo";
-    };
+    desc = "Todo";
   }
   {
     key = "<leader>sT";
     action = "<cmd>lua Snacks.picker.todo_comments({ keywords = { 'TODO', 'FIX', 'FIXME' } })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Todo/Fix/Fixme";
-    };
+    desc = "Todo/Fix/Fixme";
   }
 ]

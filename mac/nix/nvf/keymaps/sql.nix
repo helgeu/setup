@@ -6,8 +6,6 @@
     key = "<leader>D";
     action = "<cmd>DBUI<cr>";
     mode = ["n"];
-    options = {
-      desc = "Toggle DBUI";
-    };
+    desc = "Toggle DBUI";
   }
 ]

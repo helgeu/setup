@@ -6,344 +6,258 @@
     key = "<leader><space>";
     action = "<cmd>lua Snacks.picker.files()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Find Files (Root Dir)";
-    };
+    desc = "Find Files (Root Dir)";
   }
   {
     key = "<leader>,";
     action = "<cmd>lua Snacks.picker.buffers()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Buffers";
-    };
+    desc = "Buffers";
   }
   {
     key = "<leader>/";
     action = "<cmd>lua Snacks.picker.grep()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Grep (Root Dir)";
-    };
+    desc = "Grep (Root Dir)";
   }
   {
     key = "<leader>:";
     action = "<cmd>lua Snacks.picker.command_history()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Command History";
-    };
+    desc = "Command History";
   }
   {
     key = "<leader>fb";
     action = "<cmd>lua Snacks.picker.buffers()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Buffers";
-    };
+    desc = "Buffers";
   }
   {
     key = "<leader>fB";
     action = "<cmd>lua Snacks.picker.buffers({ show_all_buffers = true })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Buffers (all)";
-    };
+    desc = "Buffers (all)";
   }
   {
     key = "<leader>fc";
     action = "<cmd>lua Snacks.picker.files({ cwd = vim.fn.stdpath('config') })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Find Config File";
-    };
+    desc = "Find Config File";
   }
   {
     key = "<leader>ff";
     action = "<cmd>lua Snacks.picker.files()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Find Files (Root Dir)";
-    };
+    desc = "Find Files (Root Dir)";
   }
   {
     key = "<leader>fF";
     action = "<cmd>lua Snacks.picker.files({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Find Files (cwd)";
-    };
+    desc = "Find Files (cwd)";
   }
   {
     key = "<leader>fg";
     action = "<cmd>lua Snacks.picker.git_files()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Find Files (git-files)";
-    };
+    desc = "Find Files (git-files)";
   }
   {
     key = "<leader>fp";
     action = "<cmd>lua Snacks.picker.projects()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Projects";
-    };
+    desc = "Projects";
   }
   {
     key = "<leader>fr";
     action = "<cmd>lua Snacks.picker.recent()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Recent";
-    };
+    desc = "Recent";
   }
   {
     key = "<leader>fR";
     action = "<cmd>lua Snacks.picker.recent({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Recent (cwd)";
-    };
+    desc = "Recent (cwd)";
   }
   {
     key = "<leader>gd";
     action = "<cmd>lua Snacks.picker.git_diff()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Git Diff (hunks)";
-    };
+    desc = "Git Diff (hunks)";
   }
   {
     key = "<leader>gs";
     action = "<cmd>lua Snacks.picker.git_status()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Git Status";
-    };
+    desc = "Git Status";
   }
   {
     key = "<leader>gS";
     action = "<cmd>lua Snacks.picker.git_stash()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Git Stash";
-    };
+    desc = "Git Stash";
   }
   {
     key = "<leader>n";
     action = "<cmd>lua Snacks.picker.notifications()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Notification History";
-    };
+    desc = "Notification History";
   }
   {
     key = "<leader>s\"";
     action = "<cmd>lua Snacks.picker.registers()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Registers";
-    };
+    desc = "Registers";
   }
   {
     key = "<leader>s/";
     action = "<cmd>lua Snacks.picker.search_history()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Search History";
-    };
+    desc = "Search History";
   }
   {
     key = "<leader>sa";
     action = "<cmd>lua Snacks.picker.autocmds()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Autocmds";
-    };
+    desc = "Autocmds";
   }
   {
     key = "<leader>sb";
     action = "<cmd>lua Snacks.picker.lines()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Buffer Lines";
-    };
+    desc = "Buffer Lines";
   }
   {
     key = "<leader>sB";
     action = "<cmd>lua Snacks.picker.grep_buffers()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Grep Open Buffers";
-    };
+    desc = "Grep Open Buffers";
   }
   {
     key = "<leader>sc";
     action = "<cmd>lua Snacks.picker.command_history()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Command History";
-    };
+    desc = "Command History";
   }
   {
     key = "<leader>sC";
     action = "<cmd>lua Snacks.picker.commands()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Commands";
-    };
+    desc = "Commands";
   }
   {
     key = "<leader>sd";
     action = "<cmd>lua Snacks.picker.diagnostics()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Diagnostics";
-    };
+    desc = "Diagnostics";
   }
   {
     key = "<leader>sD";
     action = "<cmd>lua Snacks.picker.diagnostics({ buf = 0 })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Buffer Diagnostics";
-    };
+    desc = "Buffer Diagnostics";
   }
   {
     key = "<leader>sg";
     action = "<cmd>lua Snacks.picker.grep()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Grep (Root Dir)";
-    };
+    desc = "Grep (Root Dir)";
   }
   {
     key = "<leader>sG";
     action = "<cmd>lua Snacks.picker.grep({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n"];
-    options = {
-      desc = "Grep (cwd)";
-    };
+    desc = "Grep (cwd)";
   }
   {
     key = "<leader>sh";
     action = "<cmd>lua Snacks.picker.help()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Help Pages";
-    };
+    desc = "Help Pages";
   }
   {
     key = "<leader>sH";
     action = "<cmd>lua Snacks.picker.highlights()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Highlights";
-    };
+    desc = "Highlights";
   }
   {
     key = "<leader>si";
     action = "<cmd>lua Snacks.picker.icons()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Icons";
-    };
+    desc = "Icons";
   }
   {
     key = "<leader>sj";
     action = "<cmd>lua Snacks.picker.jumps()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Jumps";
-    };
+    desc = "Jumps";
   }
   {
     key = "<leader>sk";
     action = "<cmd>lua Snacks.picker.keymaps()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Keymaps";
-    };
+    desc = "Keymaps";
   }
   {
     key = "<leader>sl";
     action = "<cmd>lua Snacks.picker.loclist()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Location List";
-    };
+    desc = "Location List";
   }
   {
     key = "<leader>sm";
     action = "<cmd>lua Snacks.picker.marks()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Marks";
-    };
+    desc = "Marks";
   }
   {
     key = "<leader>sM";
     action = "<cmd>lua Snacks.picker.man()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Man Pages";
-    };
+    desc = "Man Pages";
   }
   {
     key = "<leader>sp";
     action = "<cmd>lua Snacks.picker.lazy()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Search for Plugin Spec";
-    };
+    desc = "Search for Plugin Spec";
   }
   {
     key = "<leader>sq";
     action = "<cmd>lua Snacks.picker.qflist()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Quickfix List";
-    };
+    desc = "Quickfix List";
   }
   {
     key = "<leader>sR";
     action = "<cmd>lua Snacks.picker.resume()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Resume";
-    };
+    desc = "Resume";
   }
   {
     key = "<leader>su";
     action = "<cmd>lua Snacks.picker.undo()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Undotree";
-    };
+    desc = "Undotree";
   }
   {
     key = "<leader>sw";
     action = "<cmd>lua Snacks.picker.grep_word()<cr>";
     mode = ["n" "x"];
-    options = {
-      desc = "Visual selection or word (Root Dir)";
-    };
+    desc = "Visual selection or word (Root Dir)";
   }
   {
     key = "<leader>sW";
     action = "<cmd>lua Snacks.picker.grep_word({ cwd = vim.uv.cwd() })<cr>";
     mode = ["n" "x"];
-    options = {
-      desc = "Visual selection or word (cwd)";
-    };
+    desc = "Visual selection or word (cwd)";
   }
   {
     key = "<leader>uC";
     action = "<cmd>lua Snacks.picker.colorschemes()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Colorschemes";
-    };
+    desc = "Colorschemes";
   }
 ]

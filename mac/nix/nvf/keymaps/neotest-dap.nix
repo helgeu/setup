@@ -6,8 +6,6 @@
     key = "<leader>td";
     action = "<cmd>lua require('neotest').run.run({strategy = 'dap'})<cr>";
     mode = ["n"];
-    options = {
-      desc = "Debug Nearest";
-    };
+    desc = "Debug Nearest";
   }
 ]

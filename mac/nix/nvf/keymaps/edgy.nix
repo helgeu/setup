@@ -6,16 +6,12 @@
     key = "<leader>ue";
     action = "<cmd>lua require('edgy').toggle()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Edgy Toggle";
-    };
+    desc = "Edgy Toggle";
   }
   {
     key = "<leader>uE";
     action = "<cmd>lua require('edgy').select_window()<cr>";
     mode = ["n"];
-    options = {
-      desc = "Edgy Select Window";
-    };
+    desc = "Edgy Select Window";
   }
 ]
