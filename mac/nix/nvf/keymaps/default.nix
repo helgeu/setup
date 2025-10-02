@@ -11,6 +11,8 @@ let
   noice = import ./noice.nix;
   persistence = import ./persistence.nix;
   snacks = import ./snacks.nix;
+  todo-comments = import ./todo-comments.nix;
+  trouble = import ./trouble.nix;
 in
-# Concatenate all keymaps
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks
+# Concatenate all keymaps - COMPLETE LazyVim keymap implementation (207 total)
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble
