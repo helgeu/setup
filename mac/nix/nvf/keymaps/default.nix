@@ -25,6 +25,14 @@ let
   telescope-extra = import ./telescope-extra.nix;
   dial = import ./dial.nix;
   harpoon = import ./harpoon.nix;
+  vim-illuminate = import ./vim-illuminate.nix;
+  leap = import ./leap.nix;
+  mini-surround-extra = import ./mini-surround-extra.nix;
+  mini-diff = import ./mini-diff.nix;
+  mini-files = import ./mini-files.nix;
+  outline = import ./outline.nix;
+  overseer = import ./overseer.nix;
+  refactoring = import ./refactoring.nix;
 in
-# Concatenate all keymaps - Rapidly expanding LazyVim keymap implementation
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen ++ yanky ++ dap-core ++ dap-ui ++ aerial ++ telescope-extra ++ dial ++ harpoon
+# Concatenate all keymaps - Systematically implementing ALL LazyVim sections
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen ++ yanky ++ dap-core ++ dap-ui ++ aerial ++ telescope-extra ++ dial ++ harpoon ++ vim-illuminate ++ leap ++ mini-surround-extra ++ mini-diff ++ mini-files ++ outline ++ overseer ++ refactoring
