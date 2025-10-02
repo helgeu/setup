@@ -56,7 +56,7 @@
   { mode = "n"; key = "<leader>K"; action = "<cmd>norm! K<cr>"; }
   { mode = "n"; key = "gco"; action = "o<esc>Vcx<esc><cmd>normal gcc<cr>fxa<bs>"; }
   { mode = "n"; key = "gcO"; action = "O<esc>Vcx<esc><cmd>normal gcc<cr>fxa<bs>"; }
-  { mode = "n"; key = "<leader>l"; action = "<cmd>Lazy<cr>"; }
+  # { mode = "n"; key = "<leader>l"; action = "<cmd>Lazy<cr>"; }
   
   # 33-37. File and quickfix
   { mode = "n"; key = "<leader>fn"; action = "<cmd>enew<cr>"; }
@@ -107,7 +107,7 @@
   { mode = "n"; key = "<leader>qq"; action = "<cmd>qa<cr>"; }
   { mode = "n"; key = "<leader>ui"; action = "<cmd>Inspect<cr>"; }
   { mode = "n"; key = "<leader>uI"; action = "<cmd>InspectTree<cr>"; }
-  { mode = "n"; key = "<leader>L"; action = "<cmd>lua print('LazyVim changelog not available in NVF')<cr>"; }
+  # { mode = "n"; key = "<leader>L"; action = "<cmd>lua print('LazyVim changelog not available in NVF')<cr>"; }
   
   # 74-78. Terminal
   { mode = "n"; key = "<leader>fT"; action = "<cmd>terminal<cr>"; }
