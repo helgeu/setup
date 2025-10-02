@@ -1,7 +1,8 @@
 # Default keymaps aggregator - collects all keymap sections
 let 
-  # Import General section only for now
+  # Import available sections
   general = import ./general.nix;
+  lsp = import ./lsp.nix;
 in
-# Return general keymaps
-  general
+# Concatenate all keymaps
+  general ++ lsp
