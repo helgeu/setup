@@ -54,6 +54,7 @@ in
     fd
     ripgrep
     jetbrains.rider
+    alt-tab-macos
   ];
 
   home.sessionVariables = {
@@ -69,7 +70,12 @@ in
   #	oh-my-posh init pwsh --config 'https://github.com/jandedobbeleer/oh-my-posh/main/themes/lambdageneration.omp.json' | Invoke-Expression
   #      '';
   #};
-  
+
+  programs.lsd = {
+    enable = true;
+    enableZshIntegration = true;
+  };
+
   programs.vscode = {
     enable = true;
     profiles.default.userSettings = {
@@ -77,6 +83,7 @@ in
         "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
       "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
       "editor.fontLigatures" = true;
+      "chat.agent.enabled" = true;
     };
     # programs.vscode.profiles.default.extensions
     profiles.default.extensions = with pkgs; [

@@ -8,9 +8,9 @@
         enable = true;
       };
       shellAliases = {
-        ls = "eza -la";
+        # ls = "eza -la";
         switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
-        dir = "ls";
+        dir = "ls -al";
         sudo = "sudo ";
 
       };
@@ -39,10 +39,13 @@
         eval \"$(direnv hook zsh)\"
 
         # Oh my posh
-        eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambdageneration.omp.json')\"
+        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambda.omp.json')\"
+        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambdageneration.omp.json')\"
         #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/catpuccin.omp.json')\"
         #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/tokyonight_storm.omp.json')\"        
         #eval \"$(oh-my-posh init zsh)\"
+
+        eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/powerlevel10k_rainbow.omp.json')\"
 
 ";
     };

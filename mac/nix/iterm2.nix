@@ -1,9 +1,9 @@
 { config, pkgs, ... }:
 {
   # Install iTerm2 and required fonts
-  home.packages = with pkgs; [ 
-    iterm2
-  ];
+  # home.packages = with pkgs; [ 
+  #   #iterm2
+  # ];
 
   # Configure iTerm2 preferences
   targets.darwin.defaults."com.googlecode.iterm2" = {
