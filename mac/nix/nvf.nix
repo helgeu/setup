@@ -7,25 +7,10 @@
     settings = {
       vim = {
 
-        utility = {
-          snacks-nvim = {
-            enable = true;
-            setupOpts = {
-              bigfile.enable = true;
-              #dashboard.enable = true;
-              explorer.enable = true;
-              indent.enable = true;
-              input.enable = true;
-              picker.enable = true;
-              notifier.enable = true;
-              project.enable = true;
-              quickfile.enable = true;
-              scope.enable = true;
-              statuscolumn.enable = true;
-              words.enable = true;
-            };
-          };
-        };
+  # snacks-nvim settings are in nvf/snacks-nvim.nix
+  utility = {
+    snacks-nvim = import ./nvf/snacks-nvim.nix;
+  };
 
         # luaConfigPost = ''
         #   vim.opt.tabstop = 2
