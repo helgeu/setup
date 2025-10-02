@@ -5,19 +5,15 @@
   nixvim,
   #vscode-marketplace,
   ...
-}:
-let
-  combinedDotnet =
-    with pkgs.dotnetCorePackages;
+}: let
+  combinedDotnet = with pkgs.dotnetCorePackages;
     combinePackages [
       sdk_8_0
       sdk_9_0
       sdk_10_0
       runtime_8_0
     ];
-in
-{
-
+in {
   imports = [
     ./git.nix
     ./iterm2.nix
@@ -79,8 +75,7 @@ in
   programs.vscode = {
     enable = true;
     profiles.default.userSettings = {
-      "editor.fontFamily" =
-        "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
+      "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
       "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
       "editor.fontLigatures" = true;
       "chat.agent.enabled" = true;
@@ -107,10 +102,9 @@ in
     package = pkgs.brave;
     extensions = [
       # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
-      { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; }
+      {id = "dbepggeogbaibhgnhhndojpepiihcmeb";}
     ];
     commandLineArgs = [
     ];
   };
-
 }

@@ -1,5 +1,8 @@
-{ config, pkgs, ... }:
 {
+  config,
+  pkgs,
+  ...
+}: {
   programs = {
     zsh = {
       enable = true;
@@ -8,11 +11,12 @@
         enable = true;
       };
       shellAliases = {
+        # eza = "eza --icons ";
         # ls = "eza -la";
+        # ls = "lsd -la ";
         switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
         dir = "ls -al";
         sudo = "sudo ";
-
       };
       # oh-my-zsh = {
       #   enable = true;
@@ -39,13 +43,8 @@
         eval \"$(direnv hook zsh)\"
 
         # Oh my posh
-        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambda.omp.json')\"
-        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambdageneration.omp.json')\"
-        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/catpuccin.omp.json')\"
-        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/tokyonight_storm.omp.json')\"        
-        #eval \"$(oh-my-posh init zsh)\"
 
-        eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/powerlevel10k_rainbow.omp.json')\"
+        eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/powerlevel10kkkk_rainbow.omp.json')\"
 
 ";
     };
