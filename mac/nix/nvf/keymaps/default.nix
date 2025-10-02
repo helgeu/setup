@@ -10,6 +10,7 @@ let
   grug-far = import ./grug-far.nix;
   noice = import ./noice.nix;
   persistence = import ./persistence.nix;
+  snacks = import ./snacks.nix;
 in
 # Concatenate all keymaps
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks
