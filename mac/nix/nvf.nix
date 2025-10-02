@@ -40,10 +40,14 @@
 
         debugger = import ./nvf/debugger.nix;
 
-        binds = {
-          whichKey.enable = true;
-          cheatsheet.enable = true;
-        };
+        binds = import ./nvf/binds.nix;
+
+        # Custom keymaps following LazyVim patterns
+        keymaps = import ./nvf/keymaps;
+
+        # Set leader key early (required for leader-based keymaps)
+        globals.mapleader = " ";
+        globals.maplocalleader = "\\";
 
         # notify = {
         #   nvim-notify.enable = false;
