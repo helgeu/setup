@@ -18,6 +18,13 @@ let
   sidekick = import ./sidekick.nix;
   mini-surround = import ./mini-surround.nix;
   neogen = import ./neogen.nix;
+  yanky = import ./yanky.nix;
+  dap-core = import ./dap-core.nix;
+  dap-ui = import ./dap-ui.nix;
+  aerial = import ./aerial.nix;
+  telescope-extra = import ./telescope-extra.nix;
+  dial = import ./dial.nix;
+  harpoon = import ./harpoon.nix;
 in
-# Concatenate all keymaps - Expanding LazyVim keymap implementation
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen
+# Concatenate all keymaps - Rapidly expanding LazyVim keymap implementation
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen ++ yanky ++ dap-core ++ dap-ui ++ aerial ++ telescope-extra ++ dial ++ harpoon
