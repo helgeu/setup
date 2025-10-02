@@ -1,24 +1,24 @@
-# Main Neovim configuration entry point
+# Main nixvim configuration entry point
 {pkgs, ...}: {
   programs.nixvim = {
     # Configuration modules
     imports = [
       # Core configuration
-      (import ./neovim/options.nix { inherit pkgs; })
-      (import ./neovim/autocmds.nix { inherit pkgs; })
-      (import ./neovim/plugins/snacks.nix { inherit pkgs; })
+      (import ./nixvim/options.nix { inherit pkgs; })
+      (import ./nixvim/autocmds.nix { inherit pkgs; })
+      (import ./nixvim/plugins/snacks.nix { inherit pkgs; })
 
       # UI and theme
-      (import ./neovim/catppuccin.nix { inherit pkgs; })
+      (import ./nixvim/catppuccin.nix { inherit pkgs; })
 
       # Code intelligence
-      (import ./neovim/lsp.nix { inherit pkgs; })
-      (import ./neovim/diagnostics.nix { inherit pkgs; })
-      (import ./neovim/completion.nix { inherit pkgs; })
-      (import ./neovim/treesitter.nix { inherit pkgs; })
+      (import ./nixvim/lsp.nix { inherit pkgs; })
+      (import ./nixvim/diagnostics.nix { inherit pkgs; })
+      (import ./nixvim/completion.nix { inherit pkgs; })
+      (import ./nixvim/treesitter.nix { inherit pkgs; })
 
       # Language-specific
-      (import ./neovim/languages/fsharp.nix { inherit pkgs; })
+      (import ./nixvim/languages/fsharp.nix { inherit pkgs; })
     ];
     
     config = {
@@ -42,11 +42,11 @@
 
       plugins = 
         # Import all plugin configurations and merge them
-        (import ./neovim/plugins/ui { inherit pkgs; }).plugins //
-        (import ./neovim/plugins/git { inherit pkgs; }).plugins //
-        (import ./neovim/plugins/debug { inherit pkgs; }).plugins //
-        (import ./neovim/plugins/editor { inherit pkgs; }).plugins //
-        (import ./neovim/plugins/statusline { inherit pkgs; }).plugins;
+        (import ./nixvim/plugins/ui { inherit pkgs; }).plugins //
+        (import ./nixvim/plugins/git { inherit pkgs; }).plugins //
+        (import ./nixvim/plugins/debug { inherit pkgs; }).plugins //
+        (import ./nixvim/plugins/editor { inherit pkgs; }).plugins //
+        (import ./nixvim/plugins/statusline { inherit pkgs; }).plugins;
 
       globals.mapleader = " ";
     };
