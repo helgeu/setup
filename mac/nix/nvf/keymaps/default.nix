@@ -14,6 +14,10 @@ let
   todo-comments = import ./todo-comments.nix;
   trouble = import ./trouble.nix;
   which-key = import ./which-key.nix;
+  copilot-chat = import ./copilot-chat.nix;
+  sidekick = import ./sidekick.nix;
+  mini-surround = import ./mini-surround.nix;
+  neogen = import ./neogen.nix;
 in
 # Concatenate all keymaps - Expanding LazyVim keymap implementation
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen
