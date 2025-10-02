@@ -36,26 +36,9 @@
 
         autocomplete.nvim-cmp.enable = true;
 
-        lsp = {
-          enable = true;
-          formatOnSave = true;
-          #inlayHints.enable = true; this does not show errors and warnings - only types?
-          lspkind.enable = true;
-          lspconfig.enable = true;
-          lightbulb.enable = false;
-          lspsaga.enable = false;
-          trouble.enable = false;
-          lspSignature.enable = true;
-          otter-nvim.enable = false;
-          nvim-docs-view.enable = false;
-        };
+        lsp = import ./nvf/lsp.nix;
 
-        debugger = {
-          nvim-dap = {
-            enable = true;
-            ui.enable = true;
-          };
-        };
+        debugger = import ./nvf/debugger.nix;
 
         binds = {
           whichKey.enable = true;
@@ -99,38 +82,7 @@
 
         autopairs.nvim-autopairs.enable = true;
 
-        languages = {
-          enableFormat = true;
-          python.enable = true;
-          lua.enable = true;
-          nix.enable = true;
-          markdown.enable = true;
-          fsharp = {
-            enable = true;
-            format = {
-              enable = true;
-              type = "fantomas";
-            };
-            lsp = {
-              enable = true;
-              server = "fsautocomplete";
-            };
-            treesitter = {
-              enable = true;
-            };
-          };
-          csharp = {
-            enable = true;
-            lsp = {
-              enable = true;
-              server = "omnisharp";
-            };
-            treesitter = {
-              enable = true;
-            };
-          };
-          enableTreesitter = true;
-        };
+        languages = import ./nvf/languages.nix;
       };
     };
   };
