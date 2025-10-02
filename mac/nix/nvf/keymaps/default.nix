@@ -8,6 +8,8 @@ let
   conform = import ./conform.nix;
   flash = import ./flash.nix;
   grug-far = import ./grug-far.nix;
+  noice = import ./noice.nix;
+  persistence = import ./persistence.nix;
 in
 # Concatenate all keymaps
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far
+  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence
