@@ -6,6 +6,7 @@
       # Core configuration
       (import ./neovim/options.nix { inherit pkgs; })
       (import ./neovim/autocmds.nix { inherit pkgs; })
+      (import ./neovim/plugins/snacks.nix { inherit pkgs; })
 
       # UI and theme
       (import ./neovim/catppuccin.nix { inherit pkgs; })
@@ -36,6 +37,8 @@
         nodejs
         tree-sitter
       ];
+
+      options.mapleader = " ";
 
       plugins = 
         # Import all plugin configurations and merge them

@@ -12,18 +12,20 @@ let
     combinePackages [
       sdk_8_0
       sdk_9_0
+      sdk_10_0
       runtime_8_0
     ];
 in
 {
- 
+
   imports = [
     ./git.nix
     ./iterm2.nix
     ./zsh.nix
-    ./neovim.nix
+    #./nixvim.nix
+    ./nvf.nix
   ];
-  
+
   home.username = "helgereneurholm";
   home.homeDirectory = "/Users/helgereneurholm";
 
@@ -51,10 +53,11 @@ in
     pkgs.nixfmt-rfc-style
     fd
     ripgrep
+    jetbrains.rider
   ];
 
   home.sessionVariables = {
-    EDITOR = "nvim";
+    #EDITOR = "nvim";
     DOTNET_ROOT = "${combinedDotnet}/share/dotnet";
     MANPAGER = "nvim +Man!";
   };
@@ -66,8 +69,15 @@ in
   #	oh-my-posh init pwsh --config 'https://github.com/jandedobbeleer/oh-my-posh/main/themes/lambdageneration.omp.json' | Invoke-Expression
   #      '';
   #};
+  
   programs.vscode = {
     enable = true;
+    profiles.default.userSettings = {
+      "editor.fontFamily" =
+        "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
+      "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
+      "editor.fontLigatures" = true;
+    };
     # programs.vscode.profiles.default.extensions
     profiles.default.extensions = with pkgs; [
       vscode-extensions."42crunch".vscode-openapi
@@ -90,7 +100,7 @@ in
     package = pkgs.brave;
     extensions = [
       # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
-      { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; } # ublock origin
+      { id = "dbepggeogbaibhgnhhndojpepiihcmeb"; }
     ];
     commandLineArgs = [
     ];

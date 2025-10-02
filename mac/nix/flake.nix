@@ -13,8 +13,8 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
 
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
     # Optional: Declarative tap management
     homebrew-core = {
       url = "github:homebrew/homebrew-core";
@@ -24,12 +24,17 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
-    
+
     # Nixvim configuration
-    nixvim = {
-      url = "github:nix-community/nixvim/nixos-25.05";
-      inputs.nixpkgs.follows = "nixpkgs";
+    # nixvim = {
+    #   url = "github:nix-community/nixvim/nixos-25.05";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
+
+    nvf = {
+      url = "github:notashelf/nvf";
     };
+
   };
 
   outputs =
@@ -41,7 +46,8 @@
       nix-homebrew,
       homebrew-core,
       homebrew-cask,
-      nixvim,
+      #nixvim,
+      nvf,
       ...
     }:
     let
@@ -50,12 +56,12 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowunfree = true;
-        overlays = [ nixvim.overlays.default ];
+        #overlays = [ nixvim.overlays.default ];
       };
 
     in
     {
-      darwinConfigurations."X-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
+      darwinConfigurations."NO-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
         modules = [
           ./configuration.nix
           home-manager.darwinModules.home-manager
@@ -63,12 +69,16 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.verbose = true;
-            home-manager.users.helgereneurholm = { ... }: {
-              imports = [ 
-                nixvim.homeModules.nixvim
-                ./work.nix
-              ];
-            };
+            home-manager.users.helgereneurholm =
+              { ... }:
+              {
+                imports = [
+                  #nixvim.homeModules.nixvim
+                  ./work.nix
+                  # Use NVF Home Manager module (the previous nixosModules caused invalid option errors on Darwin)
+                  nvf.homeManagerModules.default
+                ];
+              };
           }
         ];
       };

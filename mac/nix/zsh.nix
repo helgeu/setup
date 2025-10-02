@@ -1,4 +1,5 @@
-{ config, pkgs, ... }: {
+{ config, pkgs, ... }:
+{
   programs = {
     zsh = {
       enable = true;
@@ -7,12 +8,17 @@
         enable = true;
       };
       shellAliases = {
-      	ls="eza -la";
-	switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
-	dir = "ls";
-	sudo = "sudo ";
+        ls = "eza -la";
+        switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
+        dir = "ls";
+        sudo = "sudo ";
 
       };
+      # oh-my-zsh = {
+      #   enable = true;
+      #   plugins = ["git" "z" "fzf"];
+      #   theme = "catppuccin";
+      # };
       initContent = "
         # Nix profile to get paths right
         if [ -e \"$HOME/.nix-profile/etc/profile.d/nix.sh\" ]; then
@@ -34,7 +40,9 @@
 
         # Oh my posh
         eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/lambdageneration.omp.json')\"
-        # eval \"$(oh-my-posh init zsh)\"
+        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/catpuccin.omp.json')\"
+        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/tokyonight_storm.omp.json')\"        
+        #eval \"$(oh-my-posh init zsh)\"
 
 ";
     };

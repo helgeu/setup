@@ -11,7 +11,7 @@
     "New Bookmarks" = [{
       Guid = "Dracula-Profile";
       Name = "Dracula Profile";
-      "Normal Font" = "MesloLGLNFM-Regular 11";
+      "Normal Font" = "MesloLGLNFM-Regular 12";
       "Use Non-ASCII Font" = false;
       Columns = 180;
       Rows = 50;

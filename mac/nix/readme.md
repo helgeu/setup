@@ -64,3 +64,6 @@ if [ -f /etc/synthetic.conf ]; then
 fi
 ```
 4. Run ```undo-bootstrap-2.sh```
+
+
+nvim --headless +':checkhealth' +':w! health_report.log' +':qa!'

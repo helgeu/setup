@@ -194,42 +194,72 @@
         options.desc = "Run nix project";
       }
 
-      # UI Keymaps
-      {
-        key = "<C-n>";
-        action = ":Neotree toggle<CR>";
-        mode = "n";
-        options.desc = "Toggle file explorer";
-      }
+      # Snacks UI Keymaps
       {
         key = "<leader>e";
-        action = ":Neotree focus<CR>";
+        action = ":lua Snacks.explorer()<CR>";
         mode = "n";
-        options.desc = "Focus file explorer";
+        options.desc = "Open snacks file explorer";
       }
       {
-        key = "<leader>uf";
-        action = ":Telescope find_files<CR>";
+        key = "<leader>ff";
+        action = ":lua Snacks.picker.files()<CR>";
         mode = "n";
-        options.desc = "Find files";
+        options.desc = "Snacks: Find files";
       }
       {
-        key = "<leader>ug";
-        action = ":Telescope live_grep<CR>";
+        key = "<leader>fg";
+        action = ":lua Snacks.picker.live_grep()<CR>";
         mode = "n";
-        options.desc = "Live grep";
+        options.desc = "Snacks: Live grep";
       }
       {
-        key = "<leader>ub";
-        action = ":Telescope buffers<CR>";
+        key = "<leader>fb";
+        action = ":lua Snacks.picker.buffers()<CR>";
         mode = "n";
-        options.desc = "Find buffers";
+        options.desc = "Snacks: Find buffers";
       }
       {
-        key = "<leader>uh";
-        action = ":Telescope help_tags<CR>";
+        key = "<leader>fh";
+        action = ":lua Snacks.picker.help_tags()<CR>";
         mode = "n";
-        options.desc = "Find help";
+        options.desc = "Snacks: Find help";
+      }
+      {
+        key = "<leader>fr";
+        action = ":lua Snacks.picker.oldfiles()<CR>";
+        mode = "n";
+        options.desc = "Snacks: Recent files";
+      }
+      {
+        key = "<leader>gs";
+        action = ":lua Snacks.picker.git_status()<CR>";
+        mode = "n";
+        options.desc = "Snacks: Git status";
+      }
+      {
+        key = "<leader>gl";
+        action = ":lua Snacks.picker.git_log()<CR>";
+        mode = "n";
+        options.desc = "Snacks: Git log";
+      }
+      {
+        key = "<leader>gc";
+        action = ":lua Snacks.picker.git_commits()<CR>";
+        mode = "n";
+        options.desc = "Snacks: Git commits";
+      }
+      {
+        key = "<leader>uC";
+        action = ":lua Snacks.picker.colorschemes()<CR>";
+        mode = "n";
+        options.desc = "Snacks: Colorschemes";
+      }
+      {
+        key = "<leader>:";
+        action = ":lua Snacks.picker.command_history()<CR>";
+        mode = "n";
+        options.desc = "Snacks: Command history";
       }
 
       # Diagnostic Keymaps
