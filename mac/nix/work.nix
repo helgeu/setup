@@ -96,15 +96,22 @@ in {
 
   programs.home-manager.enable = true;
 
-  programs.chromium = {
+  programs.brave = {
     enable = true;
-    #package = pkgs.chromium;
-    package = pkgs.brave;
     extensions = [
-      # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
-      {id = "dbepggeogbaibhgnhhndojpepiihcmeb";}
-    ];
-    commandLineArgs = [
+      "dbepggeogbaibhgnhhndojpepiihcmeb"
     ];
   };
+
+  #programs.chromium = {
+  #  enable = true;
+  #  #package = pkgs.chromium;
+  #  package = pkgs.brave;
+  #  extensions = [
+  #    # vimium: https://chromewebstore.google.com/detail/dbepggeogbaibhgnhhndojpepiihcmeb?utm_source=item-share-cb
+  #    "dbepggeogbaibhgnhhndojpepiihcmeb"
+  #  ];
+  #  #commandLineArgs = [
+  #  #];
+  #};
 }
