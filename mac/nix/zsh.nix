@@ -44,7 +44,8 @@
 
         # Oh my posh
 
-        eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/powerlevel10kkkk_rainbow.omp.json')\"
+        #eval \"$(oh-my-posh init zsh --config 'https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/powerlevel10kkkk_rainbow.omp.json')\"
+        eval \"$(oh-my-posh init zsh --config 'https://raw.githubusercontent.com/helgeu/setup/refs/heads/main/mac/nix/hru-powerlevel10k_rainbow.omp.json')\"
 
 ";
     };
