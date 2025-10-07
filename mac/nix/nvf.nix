@@ -1,16 +1,18 @@
-{ pkgs, libs, ... }:
 {
+  pkgs,
+  libs,
+  ...
+}: {
   programs.nvf = {
     enable = true;
     # Set Neovim from NVF as system default editor (sets EDITOR in sessionVariables)
     defaultEditor = true;
     settings = {
       vim = {
-
-  # snacks-nvim settings are in nvf/snacks-nvim.nix
-  utility = {
-    snacks-nvim = import ./nvf/snacks-nvim.nix;
-  };
+        # snacks-nvim settings are in nvf/snacks-nvim.nix
+        utility = {
+          snacks-nvim = import ./nvf/snacks-nvim.nix;
+        };
 
         # luaConfigPost = ''
         #   vim.opt.tabstop = 2
@@ -26,7 +28,6 @@
           enable = true;
           name = "tokyonight";
           style = "storm";
-
         };
 
         #      guiFont = "FiraCode Nerd Font Mono:h14";

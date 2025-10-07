@@ -1,5 +1,5 @@
 # Default keymaps aggregator - collects all keymap sections
-let 
+let
   # Import available sections
   general = import ./general.nix;
   lsp = import ./lsp.nix;
@@ -24,7 +24,6 @@ let
   aerial = import ./aerial.nix;
   telescope-extra = import ./telescope-extra.nix;
   dial = import ./dial.nix;
-  harpoon = import ./harpoon.nix;
   vim-illuminate = import ./vim-illuminate.nix;
   leap = import ./leap.nix;
   mini-surround-extra = import ./mini-surround-extra.nix;
@@ -51,5 +50,53 @@ let
   project = import ./project.nix;
   kulala = import ./kulala.nix;
 in
-# Concatenate all keymaps - Systematically implementing ALL LazyVim sections
-  general ++ lsp ++ bufferline ++ mason ++ conform ++ flash ++ grug-far ++ noice ++ persistence ++ snacks ++ todo-comments ++ trouble ++ which-key ++ copilot-chat ++ sidekick ++ mini-surround ++ neogen ++ yanky ++ dap-core ++ dap-ui ++ aerial ++ telescope-extra ++ dial ++ harpoon ++ vim-illuminate ++ leap ++ mini-surround-extra ++ mini-diff ++ mini-files ++ outline ++ overseer ++ refactoring ++ ansible ++ markdown ++ python-dap ++ python-venv ++ sql ++ tex ++ snacks-explorer ++ snacks-picker ++ todo-comments-snacks ++ neotest ++ neotest-dap ++ edgy ++ chezmoi ++ gitui ++ octo ++ project ++ kulala
+  # Concatenate all keymaps - Systematically implementing ALL LazyVim sections
+  general
+  ++ lsp
+  ++ bufferline
+  ++ mason
+  ++ conform
+  ++ flash
+  ++ grug-far
+  ++ noice
+  ++ persistence
+  ++ snacks
+  ++ todo-comments
+  ++ trouble
+  ++ which-key
+  ++ copilot-chat
+  ++ sidekick
+  ++ mini-surround
+  ++ neogen
+  ++ yanky
+  ++ dap-core
+  ++ dap-ui
+  ++ aerial
+  ++ telescope-extra
+  ++ dial
+  ++ vim-illuminate
+  ++ leap
+  ++ mini-surround-extra
+  ++ mini-diff
+  ++ mini-files
+  ++ outline
+  ++ overseer
+  ++ refactoring
+  ++ ansible
+  ++ markdown
+  ++ python-dap
+  ++ python-venv
+  ++ sql
+  ++ tex
+  ++ snacks-explorer
+  ++ snacks-picker
+  ++ todo-comments-snacks
+  ++ neotest
+  ++ neotest-dap
+  ++ edgy
+  ++ chezmoi
+  ++ gitui
+  ++ octo
+  ++ project
+  ++ kulala
+
