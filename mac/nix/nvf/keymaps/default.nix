@@ -18,7 +18,7 @@ let
   sidekick = import ./sidekick.nix;
   mini-surround = import ./mini-surround.nix;
   neogen = import ./neogen.nix;
-  yanky = import ./yanky.nix;
+  #yanky = import ./yanky.nix;
   dap-core = import ./dap-core.nix;
   dap-ui = import ./dap-ui.nix;
   aerial = import ./aerial.nix;
@@ -99,4 +99,3 @@ in
   ++ octo
   ++ project
   ++ kulala
-
