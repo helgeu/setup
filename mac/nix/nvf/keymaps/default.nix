@@ -68,7 +68,7 @@ in
   ++ sidekick
   ++ mini-surround
   ++ neogen
-  ++ yanky
+  #++ yanky
   ++ dap-core
   ++ dap-ui
   ++ aerial
