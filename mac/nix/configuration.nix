@@ -1,5 +1,8 @@
-{ config, pkgs, ... }:
 {
+  config,
+  pkgs,
+  ...
+}: {
   # Necessary for using flakes on this system.
   nix.settings = {
     experimental-features = [
@@ -32,9 +35,12 @@
   homebrew = {
     enable = true;
     # onActivation.cleanup = "uninstall";
+    onActivation.upgrade = true;
 
-    taps = [ ];
-    brews = [ ];
+    taps = [];
+    brews = [
+      "bruno-cli"
+    ];
     casks = [
       "rancher"
       "bruno"

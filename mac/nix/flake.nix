@@ -1,5 +1,4 @@
 # ~/.config/nix/flake.nix
-
 {
   description = "Initial MacOs setup";
 
@@ -34,63 +33,56 @@
     nvf = {
       url = "github:notashelf/nvf";
     };
-
   };
 
-  outputs =
-    inputs@{
-      self,
-      nixpkgs,
-      nix-darwin,
-      home-manager,
-      nix-homebrew,
-      homebrew-core,
-      homebrew-cask,
-      #nixvim,
-      nvf,
-      ...
-    }:
-    let
-      system = "aarch64-darwin";
-      username = "helgereneurholm";
-      pkgs = import nixpkgs {
-        inherit system;
-        config.allowunfree = true;
-        #overlays = [ nixvim.overlays.default ];
-      };
-
-    in
-    {
-      darwinConfigurations."NO-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
-        modules = [
-          ./configuration.nix
-          home-manager.darwinModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.verbose = true;
-            home-manager.users.helgereneurholm =
-              { ... }:
-              {
-                imports = [
-                  #nixvim.homeModules.nixvim
-                  ./work.nix
-                  # Use NVF Home Manager module (the previous nixosModules caused invalid option errors on Darwin)
-                  nvf.homeManagerModules.default
-                ];
-              };
-          }
-          nix-homebrew.darwinModules.nix-homebrew
-          {
-            nix-homebrew = {
-              # Install Homebrew under the default prefix
-              enable = true;
-
-              # User owning the Homebrew prefix
-              user = "helgereneurholm";
-            };
-          }
-        ];
-      };
+  outputs = inputs @ {
+    self,
+    nixpkgs,
+    nix-darwin,
+    home-manager,
+    nix-homebrew,
+    homebrew-core,
+    homebrew-cask,
+    #nixvim,
+    nvf,
+    ...
+  }: let
+    system = "aarch64-darwin";
+    username = "helgereneurholm";
+    pkgs = import nixpkgs {
+      inherit system;
+      config.allowunfree = true;
+      #overlays = [ nixvim.overlays.default ];
     };
+  in {
+    darwinConfigurations."NO-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
+      modules = [
+        ./configuration.nix
+        home-manager.darwinModules.home-manager
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.verbose = true;
+          home-manager.users.helgereneurholm = {...}: {
+            imports = [
+              #nixvim.homeModules.nixvim
+              ./work.nix
+              # Use NVF Home Manager module (the previous nixosModules caused invalid option errors on Darwin)
+              nvf.homeManagerModules.default
+            ];
+          };
+        }
+        nix-homebrew.darwinModules.nix-homebrew
+        {
+          nix-homebrew = {
+            # Install Homebrew under the default prefix
+            enable = true;
+
+            # User owning the Homebrew prefix
+            user = "helgereneurholm";
+          };
+        }
+      ];
+    };
+  };
 }
