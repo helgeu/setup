@@ -1,16 +1,15 @@
-{ config, pkgs, ... }:
 {
+  config,
+  pkgs,
+  ...
+}: {
   programs = {
     git = {
       enable = true;
-
-      userName = "Helge Rene Urholm";
-      userEmail = "helge@urholm.no";
-
-      # This line may need tweaking but should be somewhat standard given windows and WSL
-      extraConfig.credential.helper = "manager";
-
-      extraConfig = {
+      settings = {
+        user.email = "helge@urholm.no";
+        user.name = "helgereneurholm";
+        credential.helper = "manager";
         core = {
           commentChar = ";";
           hooksPath = "${config.home.homeDirectory}/githooks";

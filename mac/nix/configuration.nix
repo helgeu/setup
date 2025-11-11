@@ -2,7 +2,11 @@
   config,
   pkgs,
   ...
-}: {
+}: let
+  vars = {
+    defaultbrowser = "brave";
+  };
+in {
   # Necessary for using flakes on this system.
   nix.settings = {
     experimental-features = [
@@ -27,10 +31,17 @@
     home = "/Users/helgereneurholm";
   };
 
-  environment.systemPackages = with pkgs; [
-    iterm2
-    alt-tab-macos
-  ];
+  environment.systemPackages = with pkgs;
+    [
+      iterm2
+      alt-tab-macos
+      defaultbrowser
+    ]
+    ++ (
+      if (vars ? "defaultbrowser" && builtins.isString vars.defaultbrowser)
+      then [defaultbrowser]
+      else []
+    );
 
   homebrew = {
     enable = true;
@@ -48,10 +59,19 @@
   };
 
   system.primaryUser = "helgereneurholm";
+  system.activationScripts = (
+    if (vars ? "defaultbrowser" && builtins.isString vars.defaultbrowser)
+    then {
+      activateSettings.text = ''
+        defaultbrowser ${vars.defaultbrowser};
+        /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+      '';
+    }
+    else {}
+  );
   #TODO: Move to script/alias switch?
   # system.activationScripts.postUserActivation.text = ''
   #   # Following line should allow us to avoid a logout/login cycle
-  #   /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
   # '';
   system.defaults = {
     finder.AppleShowAllFiles = true;

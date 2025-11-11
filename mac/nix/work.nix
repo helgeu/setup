@@ -32,7 +32,11 @@ in {
     git
     tmux
     tmuxinator
-    #  azure-cli
+    # azure-cli
+    # azure-cli-extensions.azure-devops
+    (azure-cli.withExtensions [
+      azure-cli-extensions.azure-devops
+    ])
     fzf
     lazygit
     combinedDotnet
@@ -82,6 +86,10 @@ in {
     enable = true;
     extensions = [
       "dbepggeogbaibhgnhhndojpepiihcmeb"
+    ];
+    commandLineArgs = [
+      "--disable-features=PasswordManagerOnboarding"
+      "--disable-features=AutofillEnableAccountWalletStorage"
     ];
   };
 
