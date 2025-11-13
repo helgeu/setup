@@ -13,6 +13,7 @@
         utility = {
           snacks-nvim = import ./nvf/snacks-nvim.nix;
         };
+        clipboard.enable = true;
 
         # luaConfigPost = ''
         #   vim.opt.tabstop = 2

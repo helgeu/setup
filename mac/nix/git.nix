@@ -9,7 +9,9 @@
       settings = {
         user.email = "helge@urholm.no";
         user.name = "helgereneurholm";
+
         credential.helper = "manager";
+        credential.useHttpPath = true;
         core = {
           commentChar = ";";
           hooksPath = "${config.home.homeDirectory}/githooks";
