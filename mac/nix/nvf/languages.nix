@@ -1,5 +1,6 @@
 {
   enableFormat = true;
+  enableDAP = true;
   python.enable = true;
   lua.enable = true;
   nix.enable = true;

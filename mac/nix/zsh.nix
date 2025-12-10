@@ -14,7 +14,7 @@
         # eza = "eza --icons ";
         # ls = "eza -la";
         # ls = "lsd -la ";
-        switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
+        #switch = "darwin-rebuild switch --flake ~/git/github/setup/mac/nix";
         dir = "ls -al";
         sudo = "sudo ";
       };

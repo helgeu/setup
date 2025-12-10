@@ -12,6 +12,7 @@
         "editor.fontLigatures" = true;
         "chat.agent.enabled" = true;
         "fsharp.editor.inlayHints.enabled" = "off";
+        "terminal.integrated.defaultProfile.osx" = "pwsh";
       };
       # programs.vscode.profiles.default.extensions
       profiles.default.extensions = with pkgs; [

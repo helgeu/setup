@@ -7,6 +7,12 @@
     enable = true;
     # Set Neovim from NVF as system default editor (sets EDITOR in sessionVariables)
     defaultEditor = true;
+
+    # need these modules in vim to make dadbod work?
+    #Plug 'tpope/vim-dadbod'
+    #Plug 'kristijanhusak/vim-dadbod-ui'
+    #Plug 'kristijanhusak/vim-dadbod-completion' "Optional
+
     settings = {
       vim = {
         # snacks-nvim settings are in nvf/snacks-nvim.nix
@@ -35,7 +41,7 @@
         #guiFont = "MesloLGS NF:h14";
 
         statusline.lualine.enable = true;
-
+        telescope.enable = true;
         autocomplete.nvim-cmp.enable = true;
 
         lsp = import ./nvf/lsp.nix;
@@ -89,6 +95,41 @@
         autopairs.nvim-autopairs.enable = true;
 
         languages = import ./nvf/languages.nix;
+        tabline.nvimBufferline = {
+          enable = true;
+          #mode = "buffers";
+          setupOpts = {
+            options = {
+              show_buffer_close_icons = true;
+              show_close_icon = false;
+              show_filename_only = true;
+              numbers = "none";
+              modified_icon = "●";
+              show_modified_icon = {
+                __raw = ''
+                  function(buf)
+                              return buf.modified
+                            end'';
+              };
+              show_tab_indicators = false;
+              separator_style = "thin";
+              diagnostics = false;
+              indicator = {
+                style = "none";
+              };
+            };
+          };
+          # Buffer Navigation
+          mappings = {
+            cycleNext = "<leader>bl";
+            cyclePrevious = "<leader>bh";
+            closeCurrent = "<leader>bx";
+            pick = "<leader>bp";
+            # ReOrder the tabs
+            moveNext = "<leader>me";
+            movePrevious = "<leader>mq";
+          };
+        };
       };
     };
   };

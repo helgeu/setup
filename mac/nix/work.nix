@@ -56,6 +56,7 @@ in {
     ripgrep
     jetbrains.rider
     alt-tab-macos
+    sqlcmd
   ];
 
   home.sessionVariables = {
@@ -85,7 +86,10 @@ in {
   programs.brave = {
     enable = true;
     extensions = [
+      # vimium
       "dbepggeogbaibhgnhhndojpepiihcmeb"
+      # macos passwords for chrome
+      "pejdijmoenmkgeppbflobdenhhabjlaj"
     ];
     commandLineArgs = [
       "--disable-features=PasswordManagerOnboarding"
