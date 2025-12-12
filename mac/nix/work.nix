@@ -38,7 +38,7 @@ in {
       azure-cli-extensions.azure-devops
     ])
     fzf
-    lazygit
+    #lazygit
     combinedDotnet
     azure-functions-core-tools
     bicep
@@ -77,6 +77,37 @@ in {
   programs.lsd = {
     enable = true;
     enableZshIntegration = true;
+  };
+
+  programs.lazygit = {
+    enable = true;
+    settings = {
+      gui = {
+        # The 'theme' attribute set defines all the colors
+        theme = {
+          # General UI Colors
+          activeBorderColor = ["#89b4fa" "bold"]; # Blue (active panel border)
+          inactiveBorderColor = ["#a6adc8"]; # Gray (inactive panel borders)
+          optionsTextColor =
+            #["#cbdbf5"];
+            ["#89b4fa"]; # Blue (help menu options)
+          selectedLineBgColor = ["#313244"]; # Dark gray (selected line background)
+          defaultFgColor = ["#cdd6f4"]; # White (default text color)
+
+          # Specific Git Status Colors
+          unstagedChangesColor = ["#f38ba8"]; # Pink/Red (unstaged files)
+          stagedChangesColor = ["#fae3b0"]; # Yellow (staged files)
+          trackedFgColor = ["#a6da95"]; # Green (tracked files)
+
+          # Commit colors
+          cherryPickedCommitBgColor = ["#45475a"]; # Darker gray (cherry-picked commit background)
+          cherryPickedCommitFgColor = ["#89b4fa"]; # Blue (cherry-picked commit foreground)
+
+          # Searching
+          searchingActiveBorderColor = ["#f9e2af"]; # Yellow (active border when searching)
+        };
+      };
+    };
   };
 
   # home.file.".vimrc".source = ./vim_configuration;

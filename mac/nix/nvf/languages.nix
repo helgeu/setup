@@ -9,11 +9,11 @@
     enable = true;
     format = {
       enable = true;
-      type = "fantomas";
+      type = ["fantomas"];
     };
     lsp = {
       enable = true;
-      server = "fsautocomplete";
+      servers = ["fsautocomplete"];
     };
     treesitter = {
       enable = true;
@@ -23,11 +23,14 @@
     enable = true;
     lsp = {
       enable = true;
-      server = "omnisharp";
+      servers = ["omnisharp"];
     };
     treesitter = {
       enable = true;
     };
   };
+  # powershell = {
+  #   enable = true;
+  # };
   enableTreesitter = true;
 }

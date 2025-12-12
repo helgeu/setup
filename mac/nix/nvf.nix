@@ -113,6 +113,7 @@
               };
               show_tab_indicators = false;
               separator_style = "thin";
+              clipboard = "unnamedplus";
               diagnostics = false;
               indicator = {
                 style = "none";
