@@ -3,7 +3,6 @@
   pkgs,
   lib,
   nixvim,
-  #vscode-marketplace,
   ...
 }: let
   combinedDotnet = with pkgs.dotnetCorePackages;

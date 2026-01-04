@@ -19,11 +19,11 @@
         utility = {
           snacks-nvim = import ./nvf/snacks-nvim.nix;
         };
+        treesitter.enable = true;
         clipboard = {
-          enable = true;
           registers = "unnamedplus";
+          enable = true;
         };
-
         # luaConfigPost = ''
         #   vim.opt.tabstop = 2
         #   vim.opt.shiftwidth = 2
