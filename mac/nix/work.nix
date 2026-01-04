@@ -29,7 +29,6 @@ in {
   home.stateVersion = "25.11";
 
   home.packages = with pkgs; [
-    git
     tmux
     tmuxinator
     # azure-cli
@@ -38,7 +37,6 @@ in {
       azure-cli-extensions.azure-devops
     ])
     fzf
-    #lazygit
     combinedDotnet
     azure-functions-core-tools
     bicep

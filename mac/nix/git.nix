@@ -6,6 +6,7 @@
   programs = {
     git = {
       enable = true;
+      package = pkgs.git.override {osxkeychainSupport = false;};
       settings = {
         user.email = "helge@urholm.no";
         user.name = "helgereneurholm";

@@ -8,9 +8,10 @@ From https://nixos.org/download/#nix-install-macos
 sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install)
 ```
 
-Details at: https://nix.dev/manual/nix/2.28/installation/installing-binary#macos-installation
+Details at:
+https://nix.dev/manual/nix/2.28/installation/installing-binary#macos-installation
 
-Also added to the file ```bootstrap-nix.sh```
+Also added to the file `bootstrap-nix.sh`
 
 ## Make an initial flake.nix
 
@@ -30,7 +31,8 @@ After setting up the user section as expected lets run some cmds:
 sudo nix run nix-darwin --extra-experimental-features nix-command --extra-experimental-features flakes -- switch --flake ~/.config/nix
 ```
 
-Mind that the paths here needs to align related to the previous created flake.nix etc.
+Mind that the paths here needs to align related to the previous created
+flake.nix etc.
 
 Lets test nix-darwin is installed:
 
@@ -42,18 +44,23 @@ darwin-rebuild --help
 
 https://nix.dev/manual/nix/2.28/installation/uninstall#macos
 
-1. Run ```undo-bootstrap-1.sh```
-2. Do step 4 from above:
-   Edit fstab using ```sudo vifs``` to remove the line mounting the Nix Store volume on /nix, which looks like
+1. Run `undo-bootstrap-1.sh`
+2. Do step 4 from above: Edit fstab using `sudo vifs` to remove the line
+   mounting the Nix Store volume on /nix, which looks like
+
 ```
 UUID=<uuid> /nix apfs rw,noauto,nobrowse,suid,owners
 ```
+
 or
+
 ```
 LABEL=Nix\040Store /nix apfs rw,nobrowse
 ```
-3. Do step 5 from above link:
-Edit /etc/synthetic.conf to remove the nix line. If this is the only line in the file you can remove it entirely:
+
+3. Do step 5 from above link: Edit /etc/synthetic.conf to remove the nix line.
+   If this is the only line in the file you can remove it entirely:
+
 ```
 if [ -f /etc/synthetic.conf ]; then
   if [ "$(cat /etc/synthetic.conf)" = "nix" ]; then
@@ -63,7 +70,24 @@ if [ -f /etc/synthetic.conf ]; then
   fi
 fi
 ```
-4. Run ```undo-bootstrap-2.sh```
 
+4. Run `undo-bootstrap-2.sh`
 
 nvim --headless +':checkhealth snacks' +':w! health_report.log' +':qa!'
+
+## Updates and clean
+
+List channels:
+
+```zsh
+sudo nix-channel --list
+```
+
+```zsh
+sudo nix-channel --update
+```
+
+```zsh
+sudo ./update
+```
+
