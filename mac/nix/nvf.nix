@@ -50,8 +50,6 @@
         telescope.enable = true;
         autocomplete.nvim-cmp.enable = true;
 
-        assistant.copilot = import ./nvf/copilot.nix {inherit pkgs;};
-
         lsp = import ./nvf/lsp.nix;
 
         debugger = import ./nvf/debugger.nix;
