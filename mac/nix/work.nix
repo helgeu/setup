@@ -21,6 +21,7 @@ in {
     #./nixvim.nix
     ./nvf.nix
     ./vscode.nix
+    ./adoboards-config.nix
   ];
 
   home.username = "helgereneurholm";
@@ -52,13 +53,13 @@ in {
     direnv
     eza
     delta
-    nixfmt-rfc-style
+    nixfmt
     fd
     ripgrep
     jetbrains.rider
     alt-tab-macos
     sqlcmd
-    adoboards.packages.${pkgs.system}.default
+    adoboards.packages.${pkgs.stdenv.hostPlatform.system}.default
   ];
 
   home.sessionVariables = {
