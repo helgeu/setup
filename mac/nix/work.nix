@@ -3,6 +3,7 @@
   pkgs,
   lib,
   nixvim,
+  adoboards,
   ...
 }: let
   combinedDotnet = with pkgs.dotnetCorePackages;
@@ -32,8 +33,11 @@ in {
     tmuxinator
     # azure-cli
     # azure-cli-extensions.azure-devops
+    # https://search.nixos.org/packages?channel=unstable&query=azure-cli-extensions.
     (azure-cli.withExtensions [
       azure-cli-extensions.azure-devops
+      azure-cli-extensions.resource-graph
+      azure-cli-extensions.application-insights
     ])
     fzf
     combinedDotnet
@@ -54,6 +58,7 @@ in {
     jetbrains.rider
     alt-tab-macos
     sqlcmd
+    adoboards.packages.${pkgs.system}.default
   ];
 
   home.sessionVariables = {

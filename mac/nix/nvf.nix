@@ -15,6 +15,9 @@
 
     settings = {
       vim = {
+        # Extra plugins (see nvf/extraplugins/)
+        extraPlugins = import ./nvf/extraplugins {inherit pkgs;};
+
         # snacks-nvim settings are in nvf/snacks-nvim.nix
         utility = {
           snacks-nvim = import ./nvf/snacks-nvim.nix;
@@ -46,6 +49,8 @@
         statusline.lualine.enable = true;
         telescope.enable = true;
         autocomplete.nvim-cmp.enable = true;
+
+        assistant.copilot = import ./nvf/copilot.nix {inherit pkgs;};
 
         lsp = import ./nvf/lsp.nix;
 

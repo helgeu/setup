@@ -13,6 +13,17 @@
         "chat.agent.enabled" = true;
         "fsharp.editor.inlayHints.enabled" = "off";
         "terminal.integrated.defaultProfile.osx" = "pwsh";
+        "chat.agent.maxRequests" = 250;
+        "chat.tools.terminal.autoApprove" = {
+          "/^dotnet test$/" = {
+            "approve" = true;
+            "matchCommandLine" = true;
+          };
+        };
+        "/^dotnet build$/" = {
+          "approve" = true;
+          "matchCommandLine" = true;
+        };
       };
       # programs.vscode.profiles.default.extensions
       profiles.default.extensions = with pkgs; [

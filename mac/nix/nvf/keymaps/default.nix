@@ -49,6 +49,7 @@ let
   octo = import ./octo.nix;
   project = import ./project.nix;
   kulala = import ./kulala.nix;
+  adoboards = import ./adoboards.nix;
 in
   # Concatenate all keymaps - Systematically implementing ALL LazyVim sections
   general
@@ -98,4 +99,4 @@ in
   ++ gitui
   ++ octo
   ++ project
-  ++ kulala
+  ++ kulala  ++ adoboards

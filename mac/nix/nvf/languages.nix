@@ -5,6 +5,10 @@
   lua.enable = true;
   nix.enable = true;
   markdown.enable = true;
+  ts.enable = true;
+  bash.enable = true;
+  css.enable = true;
+  yaml.enable = true;
   fsharp = {
     enable = true;
     format = {

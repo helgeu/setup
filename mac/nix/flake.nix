@@ -4,8 +4,8 @@
 
   inputs = {
     #nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    #nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nixpkgs.url = "github:NixOS/nixpkgs/cad22e7d996aea55ecab064e84834289143e44a0";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    #nixpkgs.url = "github:NixOS/nixpkgs/cad22e7d996aea55ecab064e84834289143e44a0";  # fallback if treesitter breaks
     nix-darwin = {
       #url = "github:LnL7/nix-darwin/nix-darwin-25.11";
       url = "github:LnL7/nix-darwin";
@@ -36,6 +36,11 @@
     nvf = {
       url = "github:notashelf/nvf/";
     };
+
+    adoboards = {
+      url = "github:Wotee/adoboards-tui";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ {
@@ -48,6 +53,7 @@
     homebrew-cask,
     #nixvim,
     nvf,
+    adoboards,
     ...
   }: let
     system = "aarch64-darwin";
@@ -66,6 +72,7 @@
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.verbose = true;
+          home-manager.extraSpecialArgs = {inherit adoboards;};
           home-manager.users.helgereneurholm = {...}: {
             imports = [
               #nixvim.homeModules.nixvim
