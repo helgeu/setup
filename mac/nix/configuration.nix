@@ -52,11 +52,15 @@ in {
     taps = [];
     brews = [
       "bruno-cli"
+      "mas"
     ];
     casks = [
       "rancher"
       "bruno"
     ];
+    masApps = {
+      Xcode = 497799835;
+    };
   };
 
   system.primaryUser = "helgereneurholm";

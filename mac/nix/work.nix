@@ -50,6 +50,9 @@ in {
     powershell
     pandoc
     fnm
+    bun
+    pnpm
+    uv
     direnv
     eza
     delta
@@ -60,6 +63,7 @@ in {
     alt-tab-macos
     sqlcmd
     adoboards.packages.${pkgs.stdenv.hostPlatform.system}.default
+    claude-code
   ];
 
   home.sessionVariables = {
@@ -80,6 +84,15 @@ in {
   programs.lsd = {
     enable = true;
     enableZshIntegration = true;
+  };
+
+  programs.gh = {
+    enable = true;
+    gitCredentialHelper.enable = false; # Keep using git-credential-manager
+    settings = {
+      git_protocol = "ssh";
+      editor = "nvim";
+    };
   };
 
   programs.lazygit = {
