@@ -50,9 +50,7 @@ in {
     powershell
     pandoc
     fnm
-    bun
     pnpm
-    uv
     direnv
     eza
     delta
