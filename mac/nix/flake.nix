@@ -74,6 +74,7 @@
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.verbose = true;
+          home-manager.backupFileExtension = "backup";
           home-manager.extraSpecialArgs = {inherit adoboards; claude-code = inputs.claude-code;};
           home-manager.users.helgereneurholm = {...}: {
             imports = [
