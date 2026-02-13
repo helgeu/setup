@@ -7,6 +7,9 @@
 
   # Configure iTerm2 preferences
   targets.darwin.defaults."com.googlecode.iterm2" = {
+    # Enable Python API for it2 CLI and agent support
+    EnablePythonAPI = true;
+
     "Default Bookmark Guid" = "Dracula-Profile";
     "New Bookmarks" = [{
       Guid = "Dracula-Profile";
@@ -42,6 +45,9 @@
       "Mouse Reporting" = true;
       ShowMarkIndicators = 1;
       "Visual Bell" = true;
+
+      "Option Key Sends" = 2;
+      "Right Option Key Sends" = 2;
     }];
   };
 }

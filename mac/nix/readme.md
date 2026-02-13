@@ -1,93 +1,87 @@
-# Mac setup of Nix and Home Manager
+# Mac Setup with Nix, nix-darwin and Home Manager
 
-## Bootstrap nix
+Declarative macOS configuration using nix-darwin and home-manager.
 
-From https://nixos.org/download/#nix-install-macos
+## Structure
+
+```
+.
+├── flake.nix            # Main flake with inputs and outputs
+├── configuration.nix    # System-level config (nix-darwin)
+├── work.nix             # User-level config (home-manager), imports modules
+├── git.nix              # Git configuration
+├── zsh.nix              # Zsh shell configuration
+├── iterm2.nix           # iTerm2 preferences
+├── vscode.nix           # VS Code configuration
+├── adoboards-config.nix # Azure DevOps TUI configuration
+├── claude.nix           # Claude Code global rules
+├── claude/              # Claude Code config files
+├── nvf.nix              # Neovim configuration via nvf
+├── nvf/                 # Neovim modules and keymaps
+└── nixvim/              # Legacy nixvim config (unused)
+```
+
+## Bootstrap
+
+### 1. Install Nix
+
+```bash
+./bootstrap-nix.sh
+```
+
+Or manually:
 
 ```bash
 sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install)
 ```
 
-Details at:
-https://nix.dev/manual/nix/2.28/installation/installing-binary#macos-installation
-
-Also added to the file `bootstrap-nix.sh`
-
-## Make an initial flake.nix
-
-Make sure to edit $USER in the script file.
-
-```nix
-# ~/.config/nix/flake.nix
-
-{
-  TBD
-}
-```
-
-After setting up the user section as expected lets run some cmds:
+### 2. Install nix-darwin
 
 ```bash
-sudo nix run nix-darwin --extra-experimental-features nix-command --extra-experimental-features flakes -- switch --flake ~/.config/nix
+./bootstrap-nix-darwin.sh
 ```
 
-Mind that the paths here needs to align related to the previous created
-flake.nix etc.
+This runs the initial nix-darwin switch. After this, use `./switch.sh` for rebuilds.
 
-Lets test nix-darwin is installed:
+## Daily Usage
+
+### Rebuild after changes
 
 ```bash
-darwin-rebuild --help
+./switch.sh
 ```
 
-## Uninstall or clean up
+Or directly:
 
-https://nix.dev/manual/nix/2.28/installation/uninstall#macos
-
-1. Run `undo-bootstrap-1.sh`
-2. Do step 4 from above: Edit fstab using `sudo vifs` to remove the line
-   mounting the Nix Store volume on /nix, which looks like
-
-```
-UUID=<uuid> /nix apfs rw,noauto,nobrowse,suid,owners
+```bash
+darwin-rebuild switch --flake .
 ```
 
-or
+### Update flake inputs
 
-```
-LABEL=Nix\040Store /nix apfs rw,nobrowse
-```
-
-3. Do step 5 from above link: Edit /etc/synthetic.conf to remove the nix line.
-   If this is the only line in the file you can remove it entirely:
-
-```
-if [ -f /etc/synthetic.conf ]; then
-  if [ "$(cat /etc/synthetic.conf)" = "nix" ]; then
-    sudo rm /etc/synthetic.conf
-  else
-    sudo vi /etc/synthetic.conf
-  fi
-fi
+```bash
+./update.sh
 ```
 
-4. Run `undo-bootstrap-2.sh`
+This updates all flake inputs and commits the lock file.
 
-nvim --headless +':checkhealth snacks' +':w! health_report.log' +':qa!'
+## Scripts
 
-## Updates and clean
+| Script | Purpose |
+|--------|---------|
+| `bootstrap-nix.sh` | Install Nix |
+| `bootstrap-nix-darwin.sh` | Initial nix-darwin setup |
+| `switch.sh` | Rebuild configuration |
+| `update.sh` | Update flake inputs |
+| `cleangitcred.sh` | Clean git credentials |
+| `undo-bootstrap-1.sh` | Uninstall step 1 |
+| `undo-bootstrap-2.sh` | Uninstall step 2 |
 
-List channels:
+## Uninstall
 
-```zsh
-sudo nix-channel --list
-```
+See https://nix.dev/manual/nix/2.28/installation/uninstall#macos
 
-```zsh
-sudo nix-channel --update
-```
-
-```zsh
-sudo ./update
-```
-
+1. Run `./undo-bootstrap-1.sh`
+2. Edit fstab: `sudo vifs` and remove the Nix Store mount line
+3. Edit `/etc/synthetic.conf` to remove the nix line
+4. Run `./undo-bootstrap-2.sh`

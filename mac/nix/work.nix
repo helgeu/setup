@@ -22,6 +22,7 @@ in {
     ./nvf.nix
     ./vscode.nix
     ./adoboards-config.nix
+    ./claude.nix
   ];
 
   home.username = "helgereneurholm";
@@ -30,6 +31,21 @@ in {
   home.stateVersion = "25.11";
 
   home.packages = with pkgs; [
+    # it2 CLI for iTerm2 Python API
+    (pkgs.python313.withPackages (ps: [
+      (ps.buildPythonPackage rec {
+        pname = "it2";
+        version = "0.2.3";
+        pyproject = true;
+        src = pkgs.fetchPypi {
+          inherit pname version;
+          hash = "sha256:3d47f802ccd6da56b134dc6c7affb01f29eb40c26d9c91f9c80f25a431981d54";
+        };
+        build-system = [ ps.hatchling ];
+        dependencies = with ps; [ click iterm2 pyyaml rich ];
+        doCheck = false;
+      })
+    ]))
     tmux
     tmuxinator
     # azure-cli
@@ -61,7 +77,6 @@ in {
     alt-tab-macos
     sqlcmd
     adoboards.packages.${pkgs.stdenv.hostPlatform.system}.default
-    claude-code
   ];
 
   home.sessionVariables = {
