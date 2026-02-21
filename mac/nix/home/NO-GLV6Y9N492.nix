@@ -5,13 +5,6 @@
   adoboards,
   ...
 }: let
-  combinedDotnet = with pkgs.dotnetCorePackages;
-    combinePackages [
-      sdk_8_0
-      sdk_9_0
-      sdk_10_0
-      runtime_8_0
-    ];
   defaultBrowserBundleId = "com.brave.Browser";
 in {
   imports = [
@@ -60,7 +53,6 @@ in {
     bicep
 
     # .NET development
-    combinedDotnet
     omnisharp-roslyn
     fsautocomplete
 
@@ -84,9 +76,4 @@ in {
     # Azure DevOps TUI
     adoboards.packages.${pkgs.stdenv.hostPlatform.system}.default
   ];
-
-  home.sessionVariables = {
-    DOTNET_ROOT = "${combinedDotnet}/share/dotnet";
-  };
-
 }

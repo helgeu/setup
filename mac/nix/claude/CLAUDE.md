@@ -133,6 +133,12 @@ Examples:
 - Always multi-arch: `linux/amd64,linux/arm64`
 - GitHub Actions: `docker/setup-qemu-action@v3` before `docker/setup-buildx-action@v3`
 
+## Swift
+
+- Use `xcodegen` to generate Xcode projects from YAML specs
+- Keep `project.yml` in version control, not `.xcodeproj`
+- Run `xcodegen generate` after modifying `project.yml`
+
 ## Azure DevOps
 
 ### User Stories

@@ -3,7 +3,15 @@
   pkgs,
   lib,
   ...
-}: {
+}: let
+  combinedDotnet = with pkgs.dotnetCorePackages;
+    combinePackages [
+      sdk_8_0
+      sdk_9_0
+      sdk_10_0
+      runtime_8_0
+    ];
+in {
   imports = [
     ../git.nix
     ../zsh.nix
@@ -14,6 +22,8 @@
 
   # Shared packages
   home.packages = with pkgs; [
+    # .NET development
+    combinedDotnet
     # Shell tools
     tmux
     fzf
@@ -26,9 +36,11 @@
     # Dev tools
     oh-my-posh
     pandoc
+    basictex  # Needed for pandoc PDF output
     powershell
     nixfmt
     gitleaks
+    xcodegen  # Swift project generation
 
     # Git
     git-credential-manager
@@ -36,6 +48,7 @@
 
   home.sessionVariables = {
     MANPAGER = "nvim +Man!";
+    DOTNET_ROOT = "${combinedDotnet}/share/dotnet";
   };
 
   programs.home-manager.enable = true;

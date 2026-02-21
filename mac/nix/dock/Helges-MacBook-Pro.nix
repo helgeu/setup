@@ -29,8 +29,10 @@ in {
     # Apps in the Dock
     persistent-apps = [
       # Browsers
+      "/Applications/Safari.app"
       "${hmApps}/Brave Browser.app"
       "${hmApps}/Firefox.app"
+      "/Applications/Tor Browser.app"
 
       # Communication
       "/Applications/Slack.app"
@@ -39,6 +41,12 @@ in {
 
       # Development
       "${hmApps}/Visual Studio Code.app"
+      "/Applications/Xcode.app"
+
+      # iWork
+      "/Applications/Pages.app"
+      "/Applications/Numbers.app"
+      "/Applications/Keynote.app"
 
       # System
       "/System/Applications/System Settings.app"
