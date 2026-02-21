@@ -21,7 +21,10 @@
   - [x] Refactor configs for cross-platform (git.nix, zsh.nix, vscode.nix)
   - [x] Add nixos-wsl input to flake.nix
   - [x] Create system/wsl-work.nix and home/wsl-work.nix
-  - [ ] Test on Windows machine
+  - [x] Add .gitattributes for cross-platform line endings
+  - [x] Auto-enable Windows features (WSL, VirtualMachinePlatform)
+  - [x] Use flake directly from Windows mount (/mnt/c/...)
+  - [ ] Complete first successful nixos-rebuild on Windows
 - [ ] Window/tab/buffer titling (needs clarification)
   - [x] oh-my-posh console_title_template
   - [ ] nvim active file in terminal title?
