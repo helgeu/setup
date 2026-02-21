@@ -38,12 +38,21 @@ if command -v nix &> /dev/null; then
     echo "Nix is already installed."
 else
     echo ""
-    echo "=== Installing Nix ==="
-    curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+    echo "=== Installing Nix (official installer) ==="
+    sh <(curl -L https://nixos.org/nix/install) --daemon
 
     echo ""
     echo "Sourcing Nix profile..."
-    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+    if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+        . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+    elif [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
+        . "$HOME/.nix-profile/etc/profile.d/nix.sh"
+    fi
+
+    echo ""
+    echo "=== Enabling flakes ==="
+    sudo mkdir -p /etc/nix
+    echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf
 fi
 
 echo ""
