@@ -2,10 +2,12 @@
 
 ## Priority
 
-- [ ] Make brave default browser
 - [ ] Add helgeu@Helges-Macbook-Pro setup
-  - Make sure to clean computer before. either with script or some other
-    procedure. investigate!
+  - [x] Create discovery script (scripts/discover-installed.sh)
+  - [ ] Run discovery on home Mac, save results
+  - [ ] Compare work vs home, decide on shared/separate modules
+  - [ ] Build multi-machine flake structure
+  - [ ] Clean home Mac before applying nix config
 
 ## Backlog
 
@@ -25,6 +27,7 @@
 
 ## Done
 
+- [x] Make Brave default browser (via duti)
 - [x] Brave and extensions
 - [x] AI dev (VS Code)
 - [x] Swift dev
