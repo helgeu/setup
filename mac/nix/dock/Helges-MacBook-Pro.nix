@@ -50,6 +50,7 @@ in {
       "/Applications/Keynote.app"
 
       # System
+      "/System/Applications/App Store.app"
       "/System/Applications/System Settings.app"
     ];
 
