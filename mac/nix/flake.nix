@@ -143,7 +143,7 @@
             inherit adoboards;
             claude-code = inputs.claude-code;
           };
-          home-manager.users.helge = {...}: {
+          home-manager.users.nixos = {...}: {
             imports = [
               ./home/wsl-work.nix
               nvf.homeManagerModules.default

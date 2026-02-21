@@ -10,8 +10,8 @@
     ../adoboards-config.nix
   ];
 
-  home.username = "helge";
-  home.homeDirectory = "/home/helge";
+  home.username = "nixos";
+  home.homeDirectory = "/home/nixos";
   home.stateVersion = "24.05";
 
   # Work-specific packages (Linux versions)

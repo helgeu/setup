@@ -7,7 +7,7 @@
   # WSL-specific settings
   wsl = {
     enable = true;
-    defaultUser = "helge";
+    defaultUser = "nixos";
     startMenuLaunchers = true;
 
     # Windows interop
@@ -17,8 +17,8 @@
     };
   };
 
-  # User configuration
-  users.users.helge = {
+  # User configuration (nixos is the default WSL user)
+  users.users.nixos = {
     isNormalUser = true;
     extraGroups = ["wheel"];
     shell = pkgs.zsh;
@@ -30,7 +30,7 @@
   # Nix settings
   nix.settings = {
     experimental-features = ["nix-command" "flakes"];
-    trusted-users = ["root" "helge"];
+    trusted-users = ["root" "nixos"];
   };
 
   # Allow unfree packages
