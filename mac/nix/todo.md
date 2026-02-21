@@ -4,7 +4,7 @@
 
 - [ ] macOS Dock configuration
   - [x] Research nix-darwin dock options
-  - [x] Create work-dock.nix and home-dock.nix
+  - [x] Create dock configs (dock/*.nix)
   - [x] Integrated into flake.nix
   - [ ] Test on work Mac: `sudo ./switch.sh`
   - Known issue: Home Manager app paths may show ? icons (see mac-app-util)
@@ -13,9 +13,10 @@
   - [x] Run discovery on home Mac, save results
   - [x] Compare work vs home, decide on shared/separate modules
   - [x] Build multi-machine flake structure
-  - [ ] Clean home Mac (uninstall Homebrew packages)
-  - [ ] Install Nix on home Mac
-  - [ ] Clone repo and run switch
+  - [x] Create cleanup script (scripts/clean-homebrew.sh)
+  - [x] Create install script (scripts/install.sh)
+  - [ ] Run cleanup on home Mac
+  - [ ] Run install on home Mac
 
 ## Backlog
 
