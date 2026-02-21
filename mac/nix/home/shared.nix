@@ -91,18 +91,8 @@ in {
     };
   };
 
-  programs.brave = {
-    enable = true;
-    extensions = [
-      # vimium
-      "dbepggeogbaibhgnhhndojpepiihcmeb"
-      # macos passwords for chrome
-      "pejdijmoenmkgeppbflobdenhhabjlaj"
-    ];
-    commandLineArgs = [
-      "--disable-features=PasswordManagerOnboarding"
-      "--disable-features=AutofillEnableAccountWalletStorage"
-      "--disable-background-networking"
-    ];
-  };
+  # Brave is installed via Homebrew (system/shared.nix) to preserve
+  # Apple code signature for iCloud Passwords compatibility.
+  # Extensions (vimium, iCloud Passwords) must be installed manually.
+  # Policies are configured via system.defaults.CustomUserPreferences.
 }

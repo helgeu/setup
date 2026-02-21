@@ -28,9 +28,9 @@ in {
 
     # Apps in the Dock
     persistent-apps = [
-      # Browsers
+      # Browsers (Brave via Homebrew for iCloud Passwords compatibility)
       "/Applications/Safari.app"
-      "${hmApps}/Brave Browser.app"
+      "/Applications/Brave Browser.app"
       "${hmApps}/Firefox.app"
       "/Applications/Tor Browser.app"
 

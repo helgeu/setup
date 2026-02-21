@@ -45,10 +45,19 @@
         location = "~/Documents/Screenshots";
         type = "png";
       };
-      # Disable auto-updates for Nix-managed apps (Sparkle framework)
+      # Brave Browser settings and policies
+      # Installed via Homebrew to preserve Apple code signature for iCloud Passwords
       "com.brave.Browser" = {
+        # Disable Sparkle auto-updates (Homebrew manages updates)
         SUAutomaticallyUpdate = false;
         SUEnableAutomaticChecks = false;
+        # Enterprise policies (Chromium-based)
+        # Disable background mode (equivalent to --disable-background-networking)
+        BackgroundModeEnabled = false;
+        # Disable built-in password manager onboarding (using iCloud Passwords instead)
+        PasswordManagerEnabled = false;
+        # Disable payment autofill to cloud storage
+        AutofillCreditCardEnabled = false;
       };
     };
     NSGlobalDomain = {

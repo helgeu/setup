@@ -30,8 +30,8 @@ in {
     # Apps in the Dock (left side)
     # Order matters - this is the order they appear
     persistent-apps = [
-      # Browsers
-      "${hmApps}/Brave Browser.app"
+      # Browsers (Brave via Homebrew for iCloud Passwords compatibility)
+      "/Applications/Brave Browser.app"
       "/Applications/Microsoft Edge.app"
 
       # Communication

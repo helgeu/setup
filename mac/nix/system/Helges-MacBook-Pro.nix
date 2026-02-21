@@ -26,7 +26,7 @@
       "mas"
     ];
     casks = [
-      # Personal apps via homebrew if needed
+      "brave-browser"
     ];
     masApps = {
       Xcode = 497799835;
