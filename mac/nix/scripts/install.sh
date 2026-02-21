@@ -50,24 +50,15 @@ else
     fi
 fi
 
-# Ensure flakes are enabled (always check, not just on fresh install)
-if ! grep -q "experimental-features.*flakes" /etc/nix/nix.conf 2>/dev/null; then
-    echo ""
-    echo "=== Enabling flakes ==="
-    sudo mkdir -p /etc/nix
-    echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf
-
-    # Restart nix-daemon to pick up changes
-    if [[ "$(uname)" == "Darwin" ]]; then
-        sudo launchctl kickstart -k system/org.nixos.nix-daemon 2>/dev/null || true
-    fi
-fi
+# Note: Flakes are enabled via --extra-experimental-features flag in the nix command below.
+# After nix-darwin is installed, it will manage /etc/nix/nix.conf with flakes enabled.
 
 echo ""
 echo "=== Bootstrapping nix-darwin for $HOSTNAME ==="
 cd "$(dirname "$0")/.."
 
-nix run nix-darwin -- switch --flake ".#$HOSTNAME"
+# Use --extra-experimental-features to ensure flakes work even if nix.conf isn't set up yet
+nix --extra-experimental-features "nix-command flakes" run nix-darwin -- switch --flake ".#$HOSTNAME"
 
 echo ""
 echo "=== Done ==="
