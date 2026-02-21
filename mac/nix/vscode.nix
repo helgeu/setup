@@ -1,8 +1,12 @@
 {
   config,
   pkgs,
+  lib,
   ...
-}: {
+}: let
+  isDarwin = pkgs.stdenv.isDarwin;
+  isLinux = pkgs.stdenv.isLinux;
+in {
   programs = {
     vscode = {
       enable = true;
@@ -13,10 +17,6 @@
         "update.mode" = "none";  # Nix manages VS Code updates
         "chat.agent.enabled" = true;
         "fsharp.editor.inlayHints.enabled" = "off";
-        "terminal.integrated.defaultProfile.osx" = "pwsh";
-        "powershell.powerShellAdditionalExePaths" = {
-          "Nix pwsh" = "/etc/profiles/per-user/helgereneurholm/bin/pwsh";
-        };
         "chat.agent.maxRequests" = 250;
         "chat.tools.terminal.autoApprove" = {
           "/^dotnet test$/" = {
@@ -28,6 +28,13 @@
           "approve" = true;
           "matchCommandLine" = true;
         };
+      } // lib.optionalAttrs isDarwin {
+        "terminal.integrated.defaultProfile.osx" = "pwsh";
+        "powershell.powerShellAdditionalExePaths" = {
+          "Nix pwsh" = "/etc/profiles/per-user/${config.home.username}/bin/pwsh";
+        };
+      } // lib.optionalAttrs isLinux {
+        "terminal.integrated.defaultProfile.linux" = "pwsh";
       };
       # programs.vscode.profiles.default.extensions
       profiles.default.extensions = with pkgs; [

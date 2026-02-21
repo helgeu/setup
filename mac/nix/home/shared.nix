@@ -4,6 +4,8 @@
   lib,
   ...
 }: let
+  isDarwin = pkgs.stdenv.isDarwin;
+  isLinux = pkgs.stdenv.isLinux;
   combinedDotnet = with pkgs.dotnetCorePackages;
     combinePackages [
       sdk_8_0
@@ -20,7 +22,7 @@ in {
     ../claude.nix
   ];
 
-  # Shared packages
+  # Shared packages (cross-platform)
   home.packages = with pkgs; [
     # .NET development
     combinedDotnet
@@ -43,12 +45,12 @@ in {
     powershell
     nixfmt
     gitleaks
-    xcodegen  # Swift project generation
 
     # Git
     git-credential-manager
-
-    # Utilities
+  ] ++ lib.optionals isDarwin [
+    # macOS-only
+    xcodegen  # Swift project generation
     alt-tab-macos
   ];
 
@@ -94,25 +96,22 @@ in {
     };
   };
 
-  # Brave is installed via Homebrew (system/shared.nix) to preserve
-  # Apple code signature for iCloud Passwords compatibility.
-  # Extensions are managed via:
-  # 1. Enterprise policies (ExtensionSettings in system.defaults.CustomUserPreferences)
-  # 2. External Extensions JSON files (below) as fallback
-
-  # External Extensions for Brave (triggers installation prompt)
-  home.file = {
-    # Vimium
-    "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/dbepggeogbaibhgnhhndojpepiihcmeb.json" = {
-      text = builtins.toJSON {
-        external_update_url = "https://clients2.google.com/service/update2/crx";
-      };
+  # Brave extension management via External Extensions JSON
+  # Path differs: macOS uses "Library/Application Support/", Linux uses ".config/"
+  # iCloud Passwords extension only works on macOS
+  home.file = let
+    braveExtPath = id:
+      if isDarwin
+      then "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/${id}.json"
+      else ".config/BraveSoftware/Brave-Browser/External Extensions/${id}.json";
+    extConfig = {
+      external_update_url = "https://clients2.google.com/service/update2/crx";
     };
-    # iCloud Passwords
-    "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/pejdijmoenmkgeppbflobdenhhabjlaj.json" = {
-      text = builtins.toJSON {
-        external_update_url = "https://clients2.google.com/service/update2/crx";
-      };
-    };
+  in {
+    # Vimium (all platforms)
+    "${braveExtPath "dbepggeogbaibhgnhhndojpepiihcmeb"}".text = builtins.toJSON extConfig;
+  } // lib.optionalAttrs isDarwin {
+    # iCloud Passwords (macOS only)
+    "${braveExtPath "pejdijmoenmkgeppbflobdenhhabjlaj"}".text = builtins.toJSON extConfig;
   };
 }

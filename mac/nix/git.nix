@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  lib,
   ...
 }: {
   home.file."githooks/pre-commit" = {
@@ -18,7 +19,10 @@
   programs = {
     git = {
       enable = true;
-      package = pkgs.git.override {osxkeychainSupport = false;};
+      package =
+        if pkgs.stdenv.isDarwin
+        then pkgs.git.override {osxkeychainSupport = false;}
+        else pkgs.git;
       settings = {
         user.email = "helge@urholm.no";
         user.name = "helgereneurholm";

@@ -1,6 +1,6 @@
-# Multi-machine macOS Nix configuration
+# Multi-machine Nix configuration (macOS + WSL)
 {
-  description = "macOS setup for work and home machines";
+  description = "Nix setup for macOS and WSL machines";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -15,6 +15,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # WSL support
+    nixos-wsl = {
+      url = "github:nix-community/NixOS-WSL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # macOS Homebrew integration
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
 
     homebrew-core = {
@@ -44,6 +51,7 @@
     nixpkgs,
     nix-darwin,
     home-manager,
+    nixos-wsl,
     nix-homebrew,
     homebrew-core,
     homebrew-cask,
@@ -51,11 +59,12 @@
     adoboards,
     ...
   }: let
-    system = "aarch64-darwin";
+    darwinSystem = "aarch64-darwin";
+    linuxSystem = "x86_64-linux";
   in {
     # Work Mac: NO-GLV6Y9N492
     darwinConfigurations."NO-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
-      inherit system;
+      system = darwinSystem;
       modules = [
         ./system/NO-GLV6Y9N492.nix
         ./dock/NO-GLV6Y9N492.nix
@@ -88,7 +97,7 @@
 
     # Home Mac: Helges-MacBook-Pro
     darwinConfigurations."Helges-MacBook-Pro" = nix-darwin.lib.darwinSystem {
-      inherit system;
+      system = darwinSystem;
       modules = [
         ./system/Helges-MacBook-Pro.nix
         ./dock/Helges-MacBook-Pro.nix
@@ -113,6 +122,32 @@
           nix-homebrew = {
             enable = true;
             user = "helgeu";
+          };
+        }
+      ];
+    };
+
+    # WSL: wsl-work
+    nixosConfigurations."wsl-work" = nixpkgs.lib.nixosSystem {
+      system = linuxSystem;
+      modules = [
+        nixos-wsl.nixosModules.default
+        ./system/wsl-work.nix
+        home-manager.nixosModules.home-manager
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.verbose = true;
+          home-manager.backupFileExtension = "backup";
+          home-manager.extraSpecialArgs = {
+            inherit adoboards;
+            claude-code = inputs.claude-code;
+          };
+          home-manager.users.helge = {...}: {
+            imports = [
+              ./home/wsl-work.nix
+              nvf.homeManagerModules.default
+            ];
           };
         }
       ];

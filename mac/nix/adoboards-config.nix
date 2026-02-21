@@ -1,6 +1,11 @@
-{config, pkgs, ...}: {
+{config, pkgs, lib, ...}: let
+  configPath =
+    if pkgs.stdenv.isDarwin
+    then "Library/Application Support/adoboards/default-config.toml"
+    else ".config/adoboards/default-config.toml";
+in {
   # AdoBoards configuration managed by Nix
-  home.file."Library/Application Support/adoboards/default-config.toml" = {
+  home.file."${configPath}" = {
     text = ''
       # AdoBoards Configuration
       # Your display name in Azure DevOps
