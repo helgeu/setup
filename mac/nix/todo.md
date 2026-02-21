@@ -18,9 +18,9 @@
 - [ ] WSL NixOS setup
   - [x] Create PowerShell bootstrap script (scripts/install-wsl-nixos.ps1)
   - [x] Create post-install script (scripts/setup-nixos.sh)
-  - [ ] Refactor configs for cross-platform (git.nix, zsh.nix, vscode.nix)
-  - [ ] Add nixos-wsl input to flake.nix
-  - [ ] Create system/wsl-work.nix and home/wsl-work.nix
+  - [x] Refactor configs for cross-platform (git.nix, zsh.nix, vscode.nix)
+  - [x] Add nixos-wsl input to flake.nix
+  - [x] Create system/wsl-work.nix and home/wsl-work.nix
   - [ ] Test on Windows machine
 - [ ] Window/tab/buffer titling (needs clarification)
   - [x] oh-my-posh console_title_template
