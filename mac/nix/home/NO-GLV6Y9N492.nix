@@ -69,7 +69,6 @@ in {
     # Utilities
     tmuxinator
     zip
-    alt-tab-macos
     iterm2
     nil
 

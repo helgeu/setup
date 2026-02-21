@@ -10,6 +10,7 @@
         "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
         "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
         "editor.fontLigatures" = true;
+        "update.mode" = "none";  # Nix manages VS Code updates
         "chat.agent.enabled" = true;
         "fsharp.editor.inlayHints.enabled" = "off";
         "terminal.integrated.defaultProfile.osx" = "pwsh";

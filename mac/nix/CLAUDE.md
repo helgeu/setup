@@ -27,6 +27,10 @@ dock/                    # Dock configurations
 - **DRY** - Shared config in `*/shared.nix`, machine-specific only where needed
 - **Prefer `programs.X` modules** over `home.packages` when available
 - **File naming** - Hostname for machine-specific, `shared.nix` for common
+- **ALWAYS verify packages** - Before adding any package to nix config, verify it exists:
+  ```bash
+  nix eval nixpkgs#<package-name>.meta.description
+  ```
 
 ## Rebuild
 

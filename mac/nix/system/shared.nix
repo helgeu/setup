@@ -45,6 +45,11 @@
         location = "~/Documents/Screenshots";
         type = "png";
       };
+      # Disable auto-updates for Nix-managed apps (Sparkle framework)
+      "com.brave.Browser" = {
+        SUAutomaticallyUpdate = false;
+        SUEnableAutomaticChecks = false;
+      };
     };
     NSGlobalDomain = {
       AppleShowScrollBars = "Always";

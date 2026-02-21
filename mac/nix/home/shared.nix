@@ -36,7 +36,7 @@ in {
     # Dev tools
     oh-my-posh
     pandoc
-    basictex  # Needed for pandoc PDF output
+    texliveBasic  # Needed for pandoc PDF output
     powershell
     nixfmt
     gitleaks
@@ -44,6 +44,9 @@ in {
 
     # Git
     git-credential-manager
+
+    # Utilities
+    alt-tab-macos
   ];
 
   home.sessionVariables = {
@@ -99,6 +102,7 @@ in {
     commandLineArgs = [
       "--disable-features=PasswordManagerOnboarding"
       "--disable-features=AutofillEnableAccountWalletStorage"
+      "--disable-background-networking"
     ];
   };
 }
