@@ -248,8 +248,9 @@ $WslFlakePath = "/mnt/" + $FlakeDir.Substring(0,1).ToLower() + $FlakeDir.Substri
 Write-Info "Flake path: $WslFlakePath"
 
 # Run nixos-rebuild directly from Windows filesystem
+# Use --no-update-lock-file since git isn't available yet
 Write-Info "Running NixOS rebuild (this may take a while)..."
-wsl -d $DistroName -- bash -c "cd '$WslFlakePath' && sudo nixos-rebuild switch --flake .#wsl-work"
+wsl -d $DistroName -- bash -c "cd '$WslFlakePath' && sudo nixos-rebuild switch --flake .#wsl-work --no-update-lock-file"
 
 # -----------------------------------------------------------------------------
 # Step 8: Summary
