@@ -15,6 +15,13 @@
 
 ## Backlog
 
+- [ ] WSL NixOS setup
+  - [x] Create PowerShell bootstrap script (scripts/install-wsl-nixos.ps1)
+  - [x] Create post-install script (scripts/setup-nixos.sh)
+  - [ ] Refactor configs for cross-platform (git.nix, zsh.nix, vscode.nix)
+  - [ ] Add nixos-wsl input to flake.nix
+  - [ ] Create system/wsl-work.nix and home/wsl-work.nix
+  - [ ] Test on Windows machine
 - [ ] Window/tab/buffer titling (needs clarification)
   - [x] oh-my-posh console_title_template
   - [ ] nvim active file in terminal title?
@@ -43,3 +50,7 @@
   - Vimium, iCloud Passwords auto-install
 - [x] AI dev (VS Code)
 - [x] Swift dev
+- [x] Script consolidation
+  - All scripts moved to scripts/
+  - Created uninstall-nix.sh (combined undo-bootstrap scripts)
+  - Removed obsolete bootstrap-nix*.sh

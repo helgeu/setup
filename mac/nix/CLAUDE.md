@@ -20,6 +20,16 @@ home/                    # home-manager configs
 dock/                    # Dock configurations
   NO-GLV6Y9N492.nix
   Helges-MacBook-Pro.nix
+
+scripts/                 # All scripts
+  install.sh             # Bootstrap: install Nix + nix-darwin
+  switch.sh              # Rebuild current machine
+  update.sh              # Update flake inputs
+  uninstall-nix.sh       # Complete Nix removal
+  clean-homebrew.sh      # Pre-nix Homebrew cleanup
+  discover-installed.sh  # Discover installed apps
+  install-wsl-nixos.ps1  # Windows: WSL NixOS installer
+  setup-nixos.sh         # WSL: post-install setup
 ```
 
 ## Conventions
@@ -32,10 +42,30 @@ dock/                    # Dock configurations
   nix eval nixpkgs#<package-name>.meta.description
   ```
 
-## Rebuild
+## Commands
 
 ```bash
-sudo ./switch.sh
+# Fresh install (new machine)
+./scripts/install.sh
+
+# Rebuild after config changes
+sudo ./scripts/switch.sh
+
+# Update flake inputs
+./scripts/update.sh
+
+# Complete Nix removal
+./scripts/uninstall-nix.sh
 ```
 
-Do NOT run `darwin-rebuild` directly.
+Do NOT run `darwin-rebuild` directly - use `switch.sh`.
+
+## Special Cases
+
+### Brave Browser
+Installed via **Homebrew** (not Nix) to preserve Apple code signature for iCloud Passwords compatibility. Extensions managed via:
+- `ExtensionSettings` policy in `system.defaults.CustomUserPreferences`
+- External Extensions JSON via `home.file`
+
+### WSL Support (Planned)
+PowerShell script `install-wsl-nixos.ps1` for Windows machines. Run from elevated PowerShell to install WSL2 + NixOS-WSL.
