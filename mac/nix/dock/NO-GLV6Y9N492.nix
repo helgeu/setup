@@ -31,6 +31,7 @@ in {
     # Order matters - this is the order they appear
     persistent-apps = [
       # Browsers (Brave via Homebrew for iCloud Passwords compatibility)
+      "/Applications/Safari.app"
       "/Applications/Brave Browser.app"
       "/Applications/Microsoft Edge.app"
 
