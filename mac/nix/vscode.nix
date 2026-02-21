@@ -34,6 +34,8 @@
         vscode-extensions.bierner.markdown-mermaid
         vscode-extensions.ms-dotnettools.csdevkit
         vscode-extensions.jnoortheen.nix-ide
+
+        vscode-extensions.ms-vscode.powershell
       ];
     };
   };

@@ -73,6 +73,7 @@ in {
     eza
     delta
     nixfmt
+    gitleaks
     fd
     ripgrep
     jetbrains.rider

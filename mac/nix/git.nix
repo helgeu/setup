@@ -3,6 +3,18 @@
   pkgs,
   ...
 }: {
+  home.file."githooks/pre-commit" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      gitleaks detect --staged --no-banner
+      if [ $? -ne 0 ]; then
+        echo "gitleaks: secrets detected in staged changes. Commit blocked."
+        exit 1
+      fi
+    '';
+  };
+
   programs = {
     git = {
       enable = true;
