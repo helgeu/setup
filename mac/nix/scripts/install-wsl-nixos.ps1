@@ -5,9 +5,10 @@
 
 .DESCRIPTION
     This script automates the installation of:
-    1. WSL2 (if not already installed)
-    2. NixOS-WSL distribution
-    3. Initial flake configuration
+    1. Required Windows features (WSL, Virtual Machine Platform)
+    2. WSL2 (if not already installed)
+    3. NixOS-WSL distribution
+    4. Initial flake configuration
 
 .NOTES
     Run this script from an elevated PowerShell prompt.
@@ -64,15 +65,49 @@ if ($osVersion.Build -lt 18362) {
 }
 Write-Success "Windows version OK"
 
-# Check if virtualization is enabled
+# -----------------------------------------------------------------------------
+# Step 2: Enable required Windows features
+# -----------------------------------------------------------------------------
+Write-Step "Enabling Windows features for WSL2"
+
+$featuresEnabled = $false
+
+# Enable WSL feature
+Write-Info "Enabling Windows Subsystem for Linux..."
+$wslFeature = dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+if ($LASTEXITCODE -eq 3010) { $featuresEnabled = $true }
+
+# Enable Virtual Machine Platform
+Write-Info "Enabling Virtual Machine Platform..."
+$vmpFeature = dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+if ($LASTEXITCODE -eq 3010) { $featuresEnabled = $true }
+
+# Enable Hyper-V (for Pro/Enterprise - silently fails on Home)
+Write-Info "Enabling Hyper-V Platform (if available)..."
+dism.exe /online /enable-feature /featurename:HypervisorPlatform /all /norestart 2>$null
+
+if ($featuresEnabled) {
+    Write-Warning "Windows features were enabled. A REBOOT is required."
+    Write-Warning "After reboot, run this script again."
+
+    $reboot = Read-Host "Reboot now? (y/N)"
+    if ($reboot -eq 'y') {
+        Restart-Computer -Force
+    }
+    exit 0
+}
+
+Write-Success "Windows features OK"
+
+# Check if virtualization is enabled in BIOS
 $hyperv = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty HypervisorPresent
 if (-not $hyperv) {
-    Write-Warning "Hyper-V/virtualization may not be enabled. WSL2 requires virtualization."
-    Write-Warning "Enable it in BIOS if installation fails."
+    Write-Warning "Virtualization may not be enabled in BIOS/UEFI."
+    Write-Warning "If installation fails, enable Intel VT-x / AMD-V in BIOS."
 }
 
 # -----------------------------------------------------------------------------
-# Step 2: Install/Update WSL
+# Step 3: Install/Update WSL
 # -----------------------------------------------------------------------------
 if (-not $SkipWSLInstall) {
     Write-Step "Installing/Updating WSL"
@@ -106,7 +141,7 @@ if (-not $SkipWSLInstall) {
 }
 
 # -----------------------------------------------------------------------------
-# Step 3: Check if NixOS already exists
+# Step 4: Check if NixOS already exists
 # -----------------------------------------------------------------------------
 Write-Step "Checking existing distributions"
 
@@ -129,7 +164,7 @@ if ($existingDistros -contains $DistroName) {
 }
 
 # -----------------------------------------------------------------------------
-# Step 4: Download NixOS-WSL
+# Step 5: Download NixOS-WSL
 # -----------------------------------------------------------------------------
 Write-Step "Downloading NixOS-WSL"
 
@@ -169,7 +204,7 @@ if ($fileSize -lt 50) {
 }
 
 # -----------------------------------------------------------------------------
-# Step 5: Import NixOS distribution
+# Step 6: Import NixOS distribution
 # -----------------------------------------------------------------------------
 Write-Step "Importing NixOS distribution"
 
@@ -195,7 +230,7 @@ Write-Info "Setting $DistroName as default WSL distribution..."
 wsl --set-default $DistroName
 
 # -----------------------------------------------------------------------------
-# Step 6: Initial configuration
+# Step 7: Initial configuration
 # -----------------------------------------------------------------------------
 Write-Step "Running initial NixOS configuration"
 
@@ -248,7 +283,7 @@ $setupScript | wsl -d $DistroName -- bash -c "cat > $setupScriptPath && chmod +x
 wsl -d $DistroName -- bash $setupScriptPath
 
 # -----------------------------------------------------------------------------
-# Step 7: Summary
+# Step 8: Summary
 # -----------------------------------------------------------------------------
 Write-Step "Installation Complete"
 
