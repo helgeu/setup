@@ -93,6 +93,23 @@ in {
 
   # Brave is installed via Homebrew (system/shared.nix) to preserve
   # Apple code signature for iCloud Passwords compatibility.
-  # Extensions (vimium, iCloud Passwords) must be installed manually.
-  # Policies are configured via system.defaults.CustomUserPreferences.
+  # Extensions are managed via:
+  # 1. Enterprise policies (ExtensionSettings in system.defaults.CustomUserPreferences)
+  # 2. External Extensions JSON files (below) as fallback
+
+  # External Extensions for Brave (triggers installation prompt)
+  home.file = {
+    # Vimium
+    "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/dbepggeogbaibhgnhhndojpepiihcmeb.json" = {
+      text = builtins.toJSON {
+        external_update_url = "https://clients2.google.com/service/update2/crx";
+      };
+    };
+    # iCloud Passwords
+    "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/pejdijmoenmkgeppbflobdenhhabjlaj.json" = {
+      text = builtins.toJSON {
+        external_update_url = "https://clients2.google.com/service/update2/crx";
+      };
+    };
+  };
 }
