@@ -234,53 +234,29 @@ wsl --set-default $DistroName
 # -----------------------------------------------------------------------------
 Write-Step "Running initial NixOS configuration"
 
-# Create initial setup script to run inside NixOS
-$setupScript = @"
-#!/usr/bin/env bash
+# Enable flakes and clone repo
+wsl -d $DistroName -- bash -c @"
 set -e
-
-echo "=== NixOS-WSL Initial Setup ==="
-
-# Update channels
-echo "Updating Nix channels..."
-sudo nix-channel --update
-
-# Set password for nixos user
-echo ""
-echo "Set a password for the 'nixos' user:"
-sudo passwd nixos
-
-# Enable flakes
-echo ""
-echo "Enabling Nix flakes..."
+echo '=== Enabling Nix flakes ==='
 sudo mkdir -p /etc/nix
-echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf
+grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf
 
-# Clone the configuration repository
-echo ""
-echo "Cloning configuration repository..."
+echo ''
+echo '=== Cloning configuration repository ==='
 mkdir -p ~/git
 cd ~/git
-if [ ! -d "setup" ]; then
+if [ ! -d 'setup' ]; then
     git clone $FlakeRepo
 else
-    echo "Repository already exists, pulling latest..."
+    echo 'Repository already exists, pulling latest...'
     cd setup && git pull
 fi
 
-echo ""
-echo "=== Initial setup complete ==="
-echo ""
-echo "Next steps:"
-echo "1. Review/edit the flake at ~/git/setup/mac/nix/"
-echo "2. Run: sudo nixos-rebuild switch --flake ~/git/setup/mac/nix#wsl-work"
-echo ""
+echo ''
+echo '=== Running NixOS rebuild ==='
+cd ~/git/setup/mac/nix
+sudo nixos-rebuild switch --flake .#wsl-work
 "@
-
-# Write setup script and execute it
-$setupScriptPath = "/tmp/initial-setup.sh"
-$setupScript | wsl -d $DistroName -- bash -c "cat > $setupScriptPath && chmod +x $setupScriptPath"
-wsl -d $DistroName -- bash $setupScriptPath
 
 # -----------------------------------------------------------------------------
 # Step 8: Summary
@@ -289,19 +265,16 @@ Write-Step "Installation Complete"
 
 Write-Host @"
 
-NixOS-WSL has been installed successfully!
+NixOS-WSL has been installed and configured!
 
 Distribution: $DistroName
 Install Path: $InstallPath
-Default User: nixos (change to $Username via configuration.nix)
+Flake: ~/git/setup/mac/nix#wsl-work
 
 To enter NixOS:
   wsl -d $DistroName
 
-To rebuild with your flake:
+To rebuild after changes:
   sudo nixos-rebuild switch --flake ~/git/setup/mac/nix#wsl-work
-
-To open in Windows Terminal:
-  Add a new profile with command: wsl.exe -d $DistroName
 
 "@ -ForegroundColor Green
