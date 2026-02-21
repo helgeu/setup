@@ -51,6 +51,7 @@ in {
       "/Applications/keymapp.app"
 
       # System
+      "/System/Applications/App Store.app"
       "/System/Applications/System Settings.app"
     ];
 
