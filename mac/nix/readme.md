@@ -64,7 +64,9 @@ sudo ./scripts/switch.sh
 
 ### Fresh Install
 
-Run as Administrator:
+Right-click `scripts\install-wsl-nixos.cmd` → **Run as administrator**
+
+Or from an elevated Command Prompt / PowerShell:
 
 ```cmd
 .\scripts\install-wsl-nixos.cmd
