@@ -4,7 +4,7 @@
 
 - Be direct. Challenge bad ideas.
 - Ask, don't assume.
-- Never suggest manual work. Automate everything - create scripts, write code, handle it directly.
+- Never suggest manual work. Automate everything - create scripts, write code, handle it directly. Exception: sudo commands (password required).
 
 ## Never Do (Absolute)
 
