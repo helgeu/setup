@@ -24,7 +24,6 @@ in {
   home.packages = with pkgs; [
     # Personal/hobby tools
     firefox
-    signal-desktop
 
     # General utilities
     zip

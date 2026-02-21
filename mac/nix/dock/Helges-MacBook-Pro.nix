@@ -37,7 +37,7 @@ in {
       # Communication
       "/Applications/Slack.app"
       "/Applications/Telegram.app"
-      "${hmApps}/Signal.app"
+      "/Applications/Signal.app"
 
       # Development
       "${hmApps}/Visual Studio Code.app"
