@@ -64,17 +64,10 @@ sudo ./scripts/switch.sh
 
 ### Fresh Install
 
-Run as Administrator in PowerShell:
+Run as Administrator:
 
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force
-.\scripts\install-wsl-nixos.ps1
-```
-
-Or in one line:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-wsl-nixos.ps1
+```cmd
+.\scripts\install-wsl-nixos.cmd
 ```
 
 This will:
