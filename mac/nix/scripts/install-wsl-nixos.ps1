@@ -133,8 +133,8 @@ if ($existingDistros -contains $DistroName) {
 # -----------------------------------------------------------------------------
 Write-Step "Downloading NixOS-WSL"
 
-$nixosWslRelease = "https://github.com/nix-community/NixOS-WSL/releases/latest/download/nixos-wsl.tar.gz"
-$downloadPath = "$env:TEMP\nixos-wsl.tar.gz"
+$nixosWslRelease = "https://github.com/nix-community/NixOS-WSL/releases/latest/download/nixos.wsl"
+$downloadPath = "$env:TEMP\nixos.wsl"
 
 # Check for existing download
 if (Test-Path $downloadPath) {
