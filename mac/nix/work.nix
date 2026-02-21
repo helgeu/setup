@@ -76,6 +76,8 @@ in {
     gitleaks
     fd
     ripgrep
+    omnisharp-roslyn
+    fsautocomplete
     jetbrains.rider
     alt-tab-macos
     sqlcmd
