@@ -7,7 +7,7 @@
     executable = true;
     text = ''
       #!/usr/bin/env bash
-      gitleaks detect --staged --no-banner
+      gitleaks protect --staged --no-banner
       if [ $? -ne 0 ]; then
         echo "gitleaks: secrets detected in staged changes. Commit blocked."
         exit 1

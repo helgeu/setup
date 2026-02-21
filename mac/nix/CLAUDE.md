@@ -21,5 +21,7 @@ macOS system configuration using nix-darwin and home-manager.
 ## Rebuild
 
 ```bash
-darwin-rebuild switch --flake .
+sudo ./switch.sh
 ```
+
+Do NOT run `darwin-rebuild` directly.

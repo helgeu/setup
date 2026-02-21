@@ -78,6 +78,7 @@ in {
     ripgrep
     omnisharp-roslyn
     fsautocomplete
+    nil
     jetbrains.rider
     alt-tab-macos
     sqlcmd
