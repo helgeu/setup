@@ -10,7 +10,7 @@
   - [x] Create cleanup script (scripts/clean-homebrew.sh)
   - [x] Create install script (scripts/install.sh)
   - [x] Fix install script (use official Nix installer, not Determinate)
-  - [ ] Run cleanup on home Mac
+  - [x] Run cleanup on home Mac
   - [ ] Run install on home Mac
 
 ## Backlog
