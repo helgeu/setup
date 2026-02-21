@@ -1,87 +1,103 @@
-# Mac Setup with Nix, nix-darwin and Home Manager
+# Nix Configuration (macOS + WSL)
 
-Declarative macOS configuration using nix-darwin and home-manager.
+Multi-platform system configuration using nix-darwin (macOS) and NixOS-WSL (Windows).
 
 ## Structure
 
 ```
-.
-├── flake.nix            # Main flake with inputs and outputs
-├── configuration.nix    # System-level config (nix-darwin)
-├── work.nix             # User-level config (home-manager), imports modules
-├── git.nix              # Git configuration
-├── zsh.nix              # Zsh shell configuration
-├── iterm2.nix           # iTerm2 preferences
-├── vscode.nix           # VS Code configuration
-├── adoboards-config.nix # Azure DevOps TUI configuration
-├── claude.nix           # Claude Code global rules
-├── claude/              # Claude Code config files
-├── nvf.nix              # Neovim configuration via nvf
-├── nvf/                 # Neovim modules and keymaps
-└── nixvim/              # Legacy nixvim config (unused)
+flake.nix                # Multi-machine flake
+
+system/                  # System configs
+  shared.nix             # macOS shared
+  NO-GLV6Y9N492.nix      # Work Mac
+  Helges-MacBook-Pro.nix # Personal Mac
+  wsl-work.nix           # WSL NixOS
+
+home/                    # home-manager configs
+  shared.nix             # Cross-platform shared
+  NO-GLV6Y9N492.nix
+  Helges-MacBook-Pro.nix
+  wsl-work.nix           # WSL home config
+
+dock/                    # macOS Dock configurations
+  NO-GLV6Y9N492.nix
+  Helges-MacBook-Pro.nix
+
+scripts/                 # All scripts
+  install.sh             # macOS: install Nix + nix-darwin
+  switch.sh              # macOS: rebuild
+  update.sh              # Update flake inputs
+  uninstall-nix.sh       # macOS: complete Nix removal
+  clean-homebrew.sh      # macOS: pre-nix Homebrew cleanup
+  discover-installed.sh  # Discover installed apps
+  install-wsl-nixos.ps1  # Windows: WSL NixOS installer
+  setup-nixos.sh         # WSL: post-install setup
 ```
 
-## Bootstrap
+## macOS
 
-### 1. Install Nix
+### Fresh Install
 
 ```bash
-./bootstrap-nix.sh
+./scripts/install.sh
 ```
 
-Or manually:
+### Rebuild
 
 ```bash
-sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install)
+sudo ./scripts/switch.sh
 ```
 
-### 2. Install nix-darwin
+### Update Flake Inputs
 
 ```bash
-./bootstrap-nix-darwin.sh
+./scripts/update.sh
 ```
 
-This runs the initial nix-darwin switch. After this, use `./switch.sh` for rebuilds.
-
-## Daily Usage
-
-### Rebuild after changes
+### Uninstall
 
 ```bash
-./switch.sh
+./scripts/uninstall-nix.sh
 ```
 
-Or directly:
+## Windows (WSL)
+
+### Fresh Install
+
+Run as Administrator in PowerShell:
+
+```powershell
+.\scripts\install-wsl-nixos.ps1
+```
+
+This will:
+1. Enable/update WSL2
+2. Download and import NixOS-WSL
+3. Clone this repo inside WSL
+4. Run initial setup
+
+### After Install (inside WSL)
 
 ```bash
-darwin-rebuild switch --flake .
+cd ~/git/setup/mac/nix
+sudo nixos-rebuild switch --flake .#wsl-work
 ```
 
-### Update flake inputs
+### Rebuild
 
 ```bash
-./update.sh
+sudo nixos-rebuild switch --flake ~/git/setup/mac/nix#wsl-work
 ```
 
-This updates all flake inputs and commits the lock file.
+## Machines
 
-## Scripts
+| Name | Type | Config |
+|------|------|--------|
+| NO-GLV6Y9N492 | Work Mac | `darwinConfigurations."NO-GLV6Y9N492"` |
+| Helges-MacBook-Pro | Personal Mac | `darwinConfigurations."Helges-MacBook-Pro"` |
+| wsl-work | Windows WSL | `nixosConfigurations."wsl-work"` |
 
-| Script | Purpose |
-|--------|---------|
-| `bootstrap-nix.sh` | Install Nix |
-| `bootstrap-nix-darwin.sh` | Initial nix-darwin setup |
-| `switch.sh` | Rebuild configuration |
-| `update.sh` | Update flake inputs |
-| `cleangitcred.sh` | Clean git credentials |
-| `undo-bootstrap-1.sh` | Uninstall step 1 |
-| `undo-bootstrap-2.sh` | Uninstall step 2 |
+## Notes
 
-## Uninstall
-
-See https://nix.dev/manual/nix/2.28/installation/uninstall#macos
-
-1. Run `./undo-bootstrap-1.sh`
-2. Edit fstab: `sudo vifs` and remove the Nix Store mount line
-3. Edit `/etc/synthetic.conf` to remove the nix line
-4. Run `./undo-bootstrap-2.sh`
+### Brave Browser
+Installed via Homebrew (not Nix) to preserve Apple code signature for iCloud Passwords. Extensions managed via enterprise policies.
