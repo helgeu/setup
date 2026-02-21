@@ -81,6 +81,7 @@ in {
     nil
     jetbrains.rider
     alt-tab-macos
+    iterm2
     sqlcmd
     adoboards.packages.${pkgs.stdenv.hostPlatform.system}.default
   ];

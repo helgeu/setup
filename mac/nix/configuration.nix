@@ -4,7 +4,7 @@
   ...
 }: let
   vars = {
-    defaultbrowser = "brave";
+    defaultBrowserBundleId = "com.brave.Browser";
   };
 in {
   # Necessary for using flakes on this system.
@@ -31,17 +31,9 @@ in {
     home = "/Users/helgereneurholm";
   };
 
-  environment.systemPackages = with pkgs;
-    [
-      iterm2
-      alt-tab-macos
-      defaultbrowser
-    ]
-    ++ (
-      if (vars ? "defaultbrowser" && builtins.isString vars.defaultbrowser)
-      then [defaultbrowser]
-      else []
-    );
+  environment.systemPackages = with pkgs; [
+    duti # needed for activation script
+  ];
 
   homebrew = {
     enable = true;
@@ -64,16 +56,10 @@ in {
   };
 
   system.primaryUser = "helgereneurholm";
-  system.activationScripts = (
-    if (vars ? "defaultbrowser" && builtins.isString vars.defaultbrowser)
-    then {
-      activateSettings.text = ''
-        defaultbrowser ${vars.defaultbrowser};
-        /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
-      '';
-    }
-    else {}
-  );
+  system.activationScripts.setDefaultBrowser.text = ''
+    ${pkgs.duti}/bin/duti -s ${vars.defaultBrowserBundleId} http
+    ${pkgs.duti}/bin/duti -s ${vars.defaultBrowserBundleId} https
+  '';
   #TODO: Move to script/alias switch?
   # system.activationScripts.postUserActivation.text = ''
   #   # Following line should allow us to avoid a logout/login cycle
