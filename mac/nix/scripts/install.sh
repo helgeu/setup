@@ -48,11 +48,19 @@ else
     elif [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
         . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     fi
+fi
 
+# Ensure flakes are enabled (always check, not just on fresh install)
+if ! grep -q "experimental-features.*flakes" /etc/nix/nix.conf 2>/dev/null; then
     echo ""
     echo "=== Enabling flakes ==="
     sudo mkdir -p /etc/nix
     echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf
+
+    # Restart nix-daemon to pick up changes
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sudo launchctl kickstart -k system/org.nixos.nix-daemon 2>/dev/null || true
+    fi
 fi
 
 echo ""
