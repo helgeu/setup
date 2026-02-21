@@ -2,12 +2,6 @@
 
 ## Priority
 
-- [ ] macOS Dock configuration
-  - [x] Research nix-darwin dock options
-  - [x] Create dock configs (dock/*.nix)
-  - [x] Integrated into flake.nix
-  - [ ] Test on work Mac: `sudo ./switch.sh`
-  - Known issue: Home Manager app paths may show ? icons (see mac-app-util)
 - [ ] Add helgeu@Helges-MacBook-Pro setup
   - [x] Create discovery script (scripts/discover-installed.sh)
   - [x] Run discovery on home Mac, save results
@@ -15,6 +9,7 @@
   - [x] Build multi-machine flake structure
   - [x] Create cleanup script (scripts/clean-homebrew.sh)
   - [x] Create install script (scripts/install.sh)
+  - [x] Fix install script (use official Nix installer, not Determinate)
   - [ ] Run cleanup on home Mac
   - [ ] Run install on home Mac
 
@@ -33,10 +28,18 @@
     - copilot.lua (prerequisites)[https://github.com/zbirenbaum/copilot.lua]
 - [ ] Yabai, aerospace, amethyst? (tiling WM)
   - (Example for aerospace)[https://github.com/AlexNabokikh/nix-config/blob/master/modules/home-manager/programs/aerospace/default.nix]
+- [ ] Dock folder icons (custom icons via fileicon)
 
 ## Done
 
+- [x] macOS Dock configuration
+  - Research, create dock configs, integrate into flake
 - [x] Make Brave default browser (via duti)
-- [x] Brave and extensions
+- [x] Brave migration to Homebrew (for iCloud Passwords compatibility)
+  - Nix strips Apple code signatures, breaking iCloud Passwords whitelist
+  - Now installed via Homebrew cask, policies via CustomUserPreferences
+- [x] Declarative Brave extension management
+  - ExtensionSettings policy + External Extensions JSON
+  - Vimium, iCloud Passwords auto-install
 - [x] AI dev (VS Code)
 - [x] Swift dev
