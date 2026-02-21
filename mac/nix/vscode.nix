@@ -13,6 +13,9 @@
         "chat.agent.enabled" = true;
         "fsharp.editor.inlayHints.enabled" = "off";
         "terminal.integrated.defaultProfile.osx" = "pwsh";
+        "powershell.powerShellAdditionalExePaths" = {
+          "Nix pwsh" = "/etc/profiles/per-user/helgereneurholm/bin/pwsh";
+        };
         "chat.agent.maxRequests" = 250;
         "chat.tools.terminal.autoApprove" = {
           "/^dotnet test$/" = {

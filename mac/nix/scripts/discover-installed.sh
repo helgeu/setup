@@ -62,4 +62,34 @@ echo "=== Shell ==="
 echo "SHELL: $SHELL"
 echo ""
 
+echo "=== Current Dock Apps ==="
+defaults read com.apple.dock persistent-apps 2>/dev/null | grep "file-label" | sed 's/.*= "\(.*\)";/\1/' || echo "(none)"
+echo ""
+
+echo "=== Dock Settings ==="
+defaults read com.apple.dock 2>/dev/null | grep -E "autohide|tilesize|orientation|magnification" || echo "(none)"
+echo ""
+
+echo "=== App Usage (sorted by last used) ==="
+for app in /Applications/*.app ~/Applications/*.app ~/Applications/Home\ Manager\ Apps/*.app; do
+  if [ -d "$app" ] 2>/dev/null; then
+    last=$(mdls -name kMDItemLastUsedDate "$app" 2>/dev/null | cut -d'=' -f2)
+    if [ -n "$last" ] && [ "$last" != " (null)" ]; then
+      echo "$last | $(basename "$app")"
+    fi
+  fi
+done 2>/dev/null | sort -r
+echo ""
+
+echo "=== Apps Never Used ==="
+for app in /Applications/*.app ~/Applications/*.app ~/Applications/Home\ Manager\ Apps/*.app; do
+  if [ -d "$app" ] 2>/dev/null; then
+    last=$(mdls -name kMDItemLastUsedDate "$app" 2>/dev/null | cut -d'=' -f2)
+    if [ "$last" = " (null)" ]; then
+      echo "$(basename "$app")"
+    fi
+  fi
+done 2>/dev/null | sort
+echo ""
+
 echo "=== Done ==="
