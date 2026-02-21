@@ -129,9 +129,12 @@ if (-not $SkipWSLInstall) {
         exit 0
     }
 
-    # Update WSL to latest version
+    # Update WSL to latest version (may fail on older Windows builds)
     Write-Info "Updating WSL to latest version..."
-    wsl --update
+    wsl --update 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "wsl --update not supported, skipping"
+    }
 
     # Set WSL2 as default
     Write-Info "Setting WSL2 as default version..."
