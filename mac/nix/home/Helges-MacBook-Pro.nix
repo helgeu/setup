@@ -8,6 +8,7 @@
 in {
   imports = [
     ./shared.nix
+    ../iterm2.nix
   ];
 
   home.username = "helgeu";
@@ -24,6 +25,7 @@ in {
   home.packages = with pkgs; [
     # Personal/hobby tools
     firefox
+    iterm2
 
     # General utilities
     zip

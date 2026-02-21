@@ -41,6 +41,7 @@ in {
 
       # Development
       "${hmApps}/Visual Studio Code.app"
+      "${hmApps}/iTerm2.app"
       "/Applications/Xcode.app"
 
       # iWork
