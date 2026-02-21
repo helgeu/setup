@@ -33,6 +33,9 @@ in {
     ripgrep
     direnv
 
+    # JS/Node
+    fnm
+
     # Dev tools
     oh-my-posh
     pandoc

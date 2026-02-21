@@ -60,7 +60,6 @@ in {
     jetbrains.rider
 
     # JS/Node
-    fnm
     pnpm
 
     # Database
