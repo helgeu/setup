@@ -11,8 +11,11 @@
   - [ ] Make nvim set it? Like the active file...
   - [ ] Have some nice tab like overview of files in nvim
 - [ ] Swift dev?
-- [ ] AI dev? Like VS code
+- [x] AI dev? Like VS code
   - (blink-cmp and
     blink-cmp-copilot)[https://github.com/giuxtaposition/blink-cmp-copilot]
   - copilot.lua (prerequisites)[https://github.com/zbirenbaum/copilot.lua]
 - [ ] Make brave default browser
+- [ ] Add helgeu@Helges-Macbook-Pro setup
+  - Make sure to clean computer before. either with script or some other
+    procedure. investigate!
