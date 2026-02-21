@@ -237,29 +237,19 @@ wsl --set-default $DistroName
 # -----------------------------------------------------------------------------
 Write-Step "Running initial NixOS configuration"
 
-# Enable flakes and clone repo
-wsl -d $DistroName -- bash -c @"
-set -e
-echo '=== Enabling Nix flakes ==='
-sudo mkdir -p /etc/nix
-grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf
+# Enable flakes
+Write-Info "Enabling Nix flakes..."
+wsl -d $DistroName -- sudo mkdir -p /etc/nix
+wsl -d $DistroName -- bash -c "grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf"
 
-echo ''
-echo '=== Cloning configuration repository ==='
-mkdir -p ~/git
-cd ~/git
-if [ ! -d 'setup' ]; then
-    git clone $FlakeRepo
-else
-    echo 'Repository already exists, pulling latest...'
-    cd setup && git pull
-fi
+# Clone repo
+Write-Info "Cloning configuration repository..."
+wsl -d $DistroName -- mkdir -p ~/git
+wsl -d $DistroName -- bash -c "cd ~/git && if [ ! -d 'setup' ]; then git clone $FlakeRepo; else cd setup && git pull; fi"
 
-echo ''
-echo '=== Running NixOS rebuild ==='
-cd ~/git/setup/mac/nix
-sudo nixos-rebuild switch --flake .#wsl-work
-"@
+# Run nixos-rebuild
+Write-Info "Running NixOS rebuild (this may take a while)..."
+wsl -d $DistroName -- bash -c "cd ~/git/setup/mac/nix && sudo nixos-rebuild switch --flake .#wsl-work"
 
 # -----------------------------------------------------------------------------
 # Step 8: Summary
