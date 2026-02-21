@@ -26,8 +26,6 @@
 param(
     [string]$DistroName = "NixOS",
     [string]$InstallPath = "$env:USERPROFILE\WSL\$DistroName",
-    [string]$Username = "helge",
-    [string]$FlakeRepo = "https://github.com/helgereneurholm/setup.git",
     [switch]$SkipWSLInstall,
     [switch]$Force
 )
@@ -242,14 +240,17 @@ Write-Info "Enabling Nix flakes..."
 wsl -d $DistroName -- sudo mkdir -p /etc/nix
 wsl -d $DistroName -- bash -c "grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf"
 
-# Install git (may not be in minimal NixOS-WSL)
-Write-Info "Ensuring git is available..."
-wsl -d $DistroName -- nix-shell -p git --run "git --version"
+# Copy repo from Windows (avoids needing git credentials)
+Write-Info "Copying configuration from Windows filesystem..."
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = (Resolve-Path "$ScriptDir\..\..\..").Path
+$WslRepoPath = "/mnt/" + $RepoRoot.Substring(0,1).ToLower() + $RepoRoot.Substring(2).Replace("\", "/")
 
-# Clone repo
-Write-Info "Cloning configuration repository..."
+Write-Info "Windows repo: $RepoRoot"
+Write-Info "WSL path: $WslRepoPath"
+
 wsl -d $DistroName -- mkdir -p /home/nixos/git
-wsl -d $DistroName -- nix-shell -p git --run "cd /home/nixos/git && if [ ! -d 'setup' ]; then git clone $FlakeRepo; else cd setup && git pull; fi"
+wsl -d $DistroName -- cp -r "$WslRepoPath" /home/nixos/git/
 
 # Run nixos-rebuild
 Write-Info "Running NixOS rebuild (this may take a while)..."
