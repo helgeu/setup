@@ -2,6 +2,10 @@
 
 Multi-platform Nix configuration for macOS and WSL.
 
+## Rules
+
+- **Never suggest manual work** - Automate everything. Create scripts, write code, handle it directly. Don't tell the user to do something manually.
+
 ## Structure
 
 - `system/*.nix` - System-level configs (nix-darwin on macOS, NixOS on WSL)
