@@ -242,14 +242,18 @@ Write-Info "Enabling Nix flakes..."
 wsl -d $DistroName -- sudo mkdir -p /etc/nix
 wsl -d $DistroName -- bash -c "grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf"
 
+# Install git (may not be in minimal NixOS-WSL)
+Write-Info "Ensuring git is available..."
+wsl -d $DistroName -- nix-shell -p git --run "git --version"
+
 # Clone repo
 Write-Info "Cloning configuration repository..."
-wsl -d $DistroName -- mkdir -p ~/git
-wsl -d $DistroName -- bash -c "cd ~/git && if [ ! -d 'setup' ]; then git clone $FlakeRepo; else cd setup && git pull; fi"
+wsl -d $DistroName -- mkdir -p /home/nixos/git
+wsl -d $DistroName -- nix-shell -p git --run "cd /home/nixos/git && if [ ! -d 'setup' ]; then git clone $FlakeRepo; else cd setup && git pull; fi"
 
 # Run nixos-rebuild
 Write-Info "Running NixOS rebuild (this may take a while)..."
-wsl -d $DistroName -- bash -c "cd ~/git/setup/mac/nix && sudo nixos-rebuild switch --flake .#wsl-work"
+wsl -d $DistroName -- bash -c "cd /home/nixos/git/setup/mac/nix && sudo nixos-rebuild switch --flake .#wsl-work"
 
 # -----------------------------------------------------------------------------
 # Step 8: Summary
@@ -262,12 +266,13 @@ NixOS-WSL has been installed and configured!
 
 Distribution: $DistroName
 Install Path: $InstallPath
-Flake: ~/git/setup/mac/nix#wsl-work
+Flake: /home/nixos/git/setup/mac/nix#wsl-work
 
 To enter NixOS:
   wsl -d $DistroName
 
 To rebuild after changes:
-  sudo nixos-rebuild switch --flake ~/git/setup/mac/nix#wsl-work
+  cd /home/nixos/git/setup/mac/nix
+  sudo nixos-rebuild switch --flake .#wsl-work
 
 "@ -ForegroundColor Green
