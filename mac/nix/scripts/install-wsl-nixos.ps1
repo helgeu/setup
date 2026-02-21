@@ -240,21 +240,16 @@ Write-Info "Enabling Nix flakes..."
 wsl -d $DistroName -- sudo mkdir -p /etc/nix
 wsl -d $DistroName -- bash -c "grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf"
 
-# Copy repo from Windows (avoids needing git credentials)
-Write-Info "Copying configuration from Windows filesystem..."
+# Get WSL path to the flake
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = (Resolve-Path "$ScriptDir\..\..\..").Path
-$WslRepoPath = "/mnt/" + $RepoRoot.Substring(0,1).ToLower() + $RepoRoot.Substring(2).Replace("\", "/")
+$FlakeDir = (Resolve-Path "$ScriptDir\..").Path
+$WslFlakePath = "/mnt/" + $FlakeDir.Substring(0,1).ToLower() + $FlakeDir.Substring(2).Replace("\", "/")
 
-Write-Info "Windows repo: $RepoRoot"
-Write-Info "WSL path: $WslRepoPath"
+Write-Info "Flake path: $WslFlakePath"
 
-wsl -d $DistroName -- mkdir -p /home/nixos/git
-wsl -d $DistroName -- cp -r "$WslRepoPath" /home/nixos/git/
-
-# Run nixos-rebuild
+# Run nixos-rebuild directly from Windows filesystem
 Write-Info "Running NixOS rebuild (this may take a while)..."
-wsl -d $DistroName -- bash -c "cd /home/nixos/git/setup/mac/nix && sudo nixos-rebuild switch --flake .#wsl-work"
+wsl -d $DistroName -- bash -c "cd '$WslFlakePath' && sudo nixos-rebuild switch --flake .#wsl-work"
 
 # -----------------------------------------------------------------------------
 # Step 8: Summary
@@ -267,13 +262,13 @@ NixOS-WSL has been installed and configured!
 
 Distribution: $DistroName
 Install Path: $InstallPath
-Flake: /home/nixos/git/setup/mac/nix#wsl-work
+Flake: $WslFlakePath
 
 To enter NixOS:
   wsl -d $DistroName
 
 To rebuild after changes:
-  cd /home/nixos/git/setup/mac/nix
+  cd $WslFlakePath
   sudo nixos-rebuild switch --flake .#wsl-work
 
 "@ -ForegroundColor Green
