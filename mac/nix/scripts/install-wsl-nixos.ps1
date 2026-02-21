@@ -12,6 +12,14 @@
 .NOTES
     Run this script from an elevated PowerShell prompt.
     After completion, run the setup script inside WSL.
+
+.EXAMPLE
+    # If execution policy blocks the script:
+    Set-ExecutionPolicy Bypass -Scope Process -Force
+    .\install-wsl-nixos.ps1
+
+    # Or run directly:
+    powershell -ExecutionPolicy Bypass -File .\install-wsl-nixos.ps1
 #>
 
 param(
