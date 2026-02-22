@@ -63,6 +63,14 @@
   - Removed 16 placeholder keymaps ("not implemented")
   - Fixed key conflicts (cs→trouble/cA→aerial/cO→outline, gS→gO for octo)
   - Deleted duplicate files (snacks-picker, todo-comments, project)
+- [x] Terminal & nvim improvements (Feb 2026)
+  - Added Ghostty terminal (via Homebrew) with Dracula theme, synced with iTerm2 config
+  - Enabled trouble.nvim, removed aerial (use trouble for symbols)
+  - Removed adoboards-tui (nvim plugin, package, flake input)
+  - Added nvim-check.sh for headless diagnostics
+  - Added packages: tree-sitter, imagemagick, mermaid-cli
+  - Improved update.sh with validation
+  - Fixed Snacks dashboard (removed lazy.nvim dependency)
 - [x] macOS Dock configuration
   - Research, create dock configs, integrate into flake
 - [x] Make Brave default browser (via duti)

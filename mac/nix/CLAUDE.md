@@ -9,7 +9,7 @@ Multi-platform Nix configuration for macOS and WSL.
 ## Structure
 
 - `system/*.nix` - System-level configs (nix-darwin on macOS, NixOS on WSL)
-- `home/*.nix` - Home-manager configs
+- `home-manager/*.nix` - Home-manager configs
 - `dock/*.nix` - macOS Dock configs
 - `scripts/` - Install/rebuild scripts
 - `*/shared.nix` - Cross-platform shared config
@@ -35,5 +35,6 @@ Do NOT run `darwin-rebuild` directly.
 ## Special Cases
 
 - **Brave Browser**: Installed via Homebrew (not Nix) for iCloud Passwords compatibility
-- **macOS-only packages**: `xcodegen`, `alt-tab-macos`, `iterm2`
+- **Ghostty**: Installed via Homebrew (not Nix) - nixpkgs only supports Linux
+- **macOS-only packages**: `xcodegen`, `alt-tab-macos`, `iterm2`, `ghostty`
 - **Config paths**: macOS uses `Library/Application Support/`, Linux uses `.config/`
