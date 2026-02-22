@@ -11,14 +11,17 @@ FLAKE_DIR="${SCRIPT_DIR}/.."
 HOSTNAME=$(hostname -s)
 
 case "$HOSTNAME" in
-    NO-GLV6Y9N492|Helges-MacBook-Pro)
-        echo "Evaluating darwin configuration for $HOSTNAME..."
-        nix eval "$FLAKE_DIR#darwinConfigurations.$HOSTNAME.config.system.build.toplevel" --no-build > /dev/null
+    NO-GLV6Y9N492|X-GLV6Y9N492|Helges-MacBook-Pro)
+        # Map X-GLV6Y9N492 to NO-GLV6Y9N492 (same machine, renamed)
+        CONFIG_NAME="$HOSTNAME"
+        [[ "$HOSTNAME" == "X-GLV6Y9N492" ]] && CONFIG_NAME="NO-GLV6Y9N492"
+        echo "Evaluating darwin configuration for $CONFIG_NAME..."
+        nix eval "$FLAKE_DIR#darwinConfigurations.$CONFIG_NAME.config.system.build.toplevel" > /dev/null
         ;;
     *)
         echo "Unknown hostname: $HOSTNAME"
         echo "Evaluating all configurations..."
-        nix eval "$FLAKE_DIR#darwinConfigurations.NO-GLV6Y9N492.config.system.build.toplevel" --no-build > /dev/null
+        nix eval "$FLAKE_DIR#darwinConfigurations.NO-GLV6Y9N492.config.system.build.toplevel" > /dev/null
         ;;
 esac
 

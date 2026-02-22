@@ -31,9 +31,9 @@
   - [ ] bufferline/tabline in nvim?
 - [ ] NVIM cleanup project
   - [x] Delete unused nixvim config (only NVF is used)
-  - [ ] Consolidate keymaps (50 files → ~8 logical groups)
-  - [ ] Remove placeholder keymaps that just print "not implemented"
-  - [ ] Fix key conflicts (<leader>cs used by 3 plugins)
+  - [x] Consolidate keymaps (50 files → 8 logical groups)
+  - [x] Remove placeholder keymaps that just print "not implemented"
+  - [x] Fix key conflicts (<leader>cs, <leader>fp, <leader>gS)
   - [ ] blink-cmp AI completion
   - [ ] vim-dadbod (low prio) - MS SQL only, Cosmos DB via Azure Data Studio
     - (blink-cmp and blink-cmp-copilot)[https://github.com/giuxtaposition/blink-cmp-copilot]
@@ -58,6 +58,11 @@
   - Removed Brave External Extensions (keep system policy only)
   - Cleaned up unused bindings across all files
   - Added validation scripts (check.sh, eval.sh, build.sh)
+- [x] NVF keymap consolidation (Feb 2026)
+  - Consolidated 50 keymap files → 8 logical groups
+  - Removed 16 placeholder keymaps ("not implemented")
+  - Fixed key conflicts (cs→trouble/cA→aerial/cO→outline, gS→gO for octo)
+  - Deleted duplicate files (snacks-picker, todo-comments, project)
 - [x] macOS Dock configuration
   - Research, create dock configs, integrate into flake
 - [x] Make Brave default browser (via duti)

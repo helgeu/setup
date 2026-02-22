@@ -1,56 +1,15 @@
-# Default keymaps aggregator - collects all keymap sections
+# Default keymaps aggregator - consolidated into 8 logical groups
 let
-  # List all keymap modules (order matters)
   keymapModules = [
-    "general"
-    "lsp"
-    "bufferline"
-    "mason"
-    "conform"
-    "flash"
-    "grug-far"
-    "noice"
-    "persistence"
-    "snacks"
-    "todo-comments"
-    "trouble"
-    "which-key"
-    "mini-surround"
-    "neogen"
-    "dap-core"
-    "dap-ui"
-    "aerial"
-    "telescope-extra"
-    "dial"
-    "vim-illuminate"
-    "leap"
-    "mini-surround-extra"
-    "mini-diff"
-    "mini-files"
-    "outline"
-    "overseer"
-    "refactoring"
-    "ansible"
-    "markdown"
-    "python-dap"
-    "python-venv"
-    "sql"
-    "tex"
-    "snacks-explorer"
-    "snacks-picker"
-    "todo-comments-snacks"
-    "neotest"
-    "neotest-dap"
-    "edgy"
-    "chezmoi"
-    "gitui"
-    "octo"
-    "project"
-    "kulala"
-    "adoboards"
+    "core"        # movement, windows, buffers, tabs, UI toggles
+    "editor"      # refactoring, surround, increment/decrement, yank
+    "tools"       # LSP, language-specific, utilities, sessions
+    "git"         # git tools and GitHub integration
+    "debug-test"  # DAP, neotest
+    "navigation"  # pickers, file explorer, motion
+    "ui"          # trouble, symbols, notifications, bufferline
   ];
-  
-  # Import and concatenate all modules
+
   importModule = name: import ./${name}.nix;
 in
   builtins.concatLists (map importModule keymapModules)
