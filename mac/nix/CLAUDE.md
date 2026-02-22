@@ -25,14 +25,28 @@ Multi-platform Nix configuration for macOS and WSL.
   nix eval nixpkgs#<package-name>.meta.description
   ```
 
+## Workflow
+
+1. **Code** - Make changes
+2. **Check** - Run validation scripts (see below)
+3. **Commit** - Only if checks pass
+4. **User tests** - User rebuilds and verifies manually
+5. **Update todo** - Only mark done after user confirms working
+
 ## Validation Scripts
 
-Always run these before committing or rebuilding:
+Run before committing:
 
 ```bash
-./scripts/check.sh   # Syntax check all .nix files
-./scripts/eval.sh    # Evaluate flake (catches runtime errors)
+./scripts/check.sh      # Syntax check all .nix files
+./scripts/eval.sh       # Evaluate flake (catches config errors)
+./scripts/nvim-check.sh # Headless nvim checkhealth (for nvf changes)
 ```
+
+Which scripts to run depends on what changed:
+- **Any .nix file**: `check.sh` + `eval.sh`
+- **nvf/ changes**: Also run `nvim-check.sh`
+- **system/ changes**: Full rebuild required to verify
 
 ## Rebuild Commands
 
