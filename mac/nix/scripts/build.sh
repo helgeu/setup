@@ -16,7 +16,8 @@ case "$HOSTNAME" in
         CONFIG_NAME="$HOSTNAME"
         [[ "$HOSTNAME" == "X-GLV6Y9N492" ]] && CONFIG_NAME="NO-GLV6Y9N492"
         echo "Building darwin configuration for $CONFIG_NAME..."
-        darwin-rebuild build --flake "$FLAKE_DIR#$CONFIG_NAME" --no-link
+        darwin-rebuild build --flake "$FLAKE_DIR#$CONFIG_NAME"
+        rm -f "$FLAKE_DIR/result"
         ;;
     *)
         echo "Unknown hostname: $HOSTNAME"

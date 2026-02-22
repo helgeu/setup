@@ -19,7 +19,7 @@
       sections = [
         { section = "header"; }
         { section = "keys"; gap = 1; padding = 1; }
-        { section = "startup"; }
+        # Note: "startup" section removed - requires lazy.nvim which NVF doesn't use
       ];
     };
     explorer.enable = true;
