@@ -1,5 +1,5 @@
 # Tools keymaps - language-specific, utilities, sessions
-# Consolidated from: lsp.nix, mason.nix, ansible.nix, markdown.nix, python-venv.nix, sql.nix, tex.nix, kulala.nix, chezmoi.nix, overseer.nix, persistence.nix, mini-files.nix, sidekick.nix, adoboards.nix
+# Consolidated from: lsp.nix, mason.nix, ansible.nix, markdown.nix, python-venv.nix, sql.nix, tex.nix, kulala.nix, chezmoi.nix, overseer.nix, persistence.nix, mini-files.nix, sidekick.nix
 [
   # === Which-key groups ===
   { mode = "n"; key = "<leader>c"; action = ""; desc = "+code"; }
@@ -87,9 +87,4 @@
   { mode = ["v"]; key = "<leader>as"; action = "<cmd>lua require('sidekick').send_visual_selection()<cr>"; desc = "Sidekick Send Visual Selection"; }
   { mode = ["n" "i" "t" "x"]; key = "<c-.>"; action = "<cmd>lua require('sidekick').switch_focus()<cr>"; desc = "Sidekick Switch Focus"; }
 
-  # === AdoBoards (Azure DevOps) ===
-  { mode = "n"; key = "<leader>ab"; action = "<cmd>AdoBoards<cr>"; desc = "AdoBoards (horizontal split)"; }
-  { mode = "n"; key = "<leader>aB"; action = "<cmd>AdoBoardsFullscreen<cr>"; desc = "AdoBoards (fullscreen)"; }
-  { mode = "n"; key = "<leader>av"; action = "<cmd>AdoBoardsV<cr>"; desc = "AdoBoards (vertical split)"; }
-  { mode = "n"; key = "<leader>at"; action = "<cmd>AdoBoardsTab<cr>"; desc = "AdoBoards (new tab)"; }
 ]

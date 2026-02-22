@@ -38,11 +38,6 @@
       url = "github:notashelf/nvf/";
     };
 
-    adoboards = {
-      url = "github:Wotee/adoboards-tui";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     claude-code.url = "github:sadjow/claude-code-nix";
   };
 
@@ -56,7 +51,6 @@
     homebrew-core,
     homebrew-cask,
     nvf,
-    adoboards,
     ...
   }: let
     darwinSystem = "aarch64-darwin";
@@ -75,7 +69,6 @@
           home-manager.verbose = true;
           home-manager.backupFileExtension = "backup";
           home-manager.extraSpecialArgs = {
-            inherit adoboards;
             claude-code = inputs.claude-code;
           };
           home-manager.users.helgereneurholm = {...}: {
@@ -140,7 +133,6 @@
           home-manager.verbose = true;
           home-manager.backupFileExtension = "backup";
           home-manager.extraSpecialArgs = {
-            inherit adoboards;
             claude-code = inputs.claude-code;
           };
           home-manager.users.nixos = {...}: {

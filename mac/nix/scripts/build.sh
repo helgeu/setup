@@ -11,9 +11,12 @@ FLAKE_DIR="${SCRIPT_DIR}/.."
 HOSTNAME=$(hostname -s)
 
 case "$HOSTNAME" in
-    NO-GLV6Y9N492|Helges-MacBook-Pro)
-        echo "Building darwin configuration for $HOSTNAME..."
-        darwin-rebuild build --flake "$FLAKE_DIR#$HOSTNAME"
+    NO-GLV6Y9N492|X-GLV6Y9N492|Helges-MacBook-Pro)
+        # Map X-GLV6Y9N492 to NO-GLV6Y9N492 (same machine, renamed)
+        CONFIG_NAME="$HOSTNAME"
+        [[ "$HOSTNAME" == "X-GLV6Y9N492" ]] && CONFIG_NAME="NO-GLV6Y9N492"
+        echo "Building darwin configuration for $CONFIG_NAME..."
+        darwin-rebuild build --flake "$FLAKE_DIR#$CONFIG_NAME" --no-link
         ;;
     *)
         echo "Unknown hostname: $HOSTNAME"

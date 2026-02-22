@@ -24,6 +24,7 @@
     ];
     casks = [
       "brave-browser"
+      "ghostty"
       "rancher"
       "bruno"
     ];

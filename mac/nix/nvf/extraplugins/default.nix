@@ -4,15 +4,6 @@
   pkgs,
   ...
 }: {
-  adoboards-nvim = {
-    package = import ./adoboards.nix {inherit pkgs;};
-    setup = ''
-      require('adoboards').setup({
-        -- Configuration will be loaded from ~/Library/Application Support/adoboards/default-config.toml
-      })
-    '';
-  };
-
   edgy-nvim = {
     package = pkgs.vimPlugins.edgy-nvim;
     setup = ''
@@ -26,7 +17,6 @@
             open = function() Snacks.explorer.open() end,
           },
           { title = "Outline", ft = "Outline" },
-          { title = "Aerial", ft = "aerial" },
         },
         bottom = {
           { title = "Trouble", ft = "trouble" },

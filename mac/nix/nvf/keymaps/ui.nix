@@ -1,5 +1,5 @@
 # UI keymaps - trouble, symbols, notifications, bufferline
-# Consolidated from: trouble.nix, aerial.nix, outline.nix, which-key.nix, noice.nix, bufferline.nix, edgy.nix
+# Consolidated from: trouble.nix, outline.nix, which-key.nix, noice.nix, bufferline.nix, edgy.nix
 [
   # === Trouble ===
   { mode = ["n"]; key = "<leader>cs"; action = "<cmd>Trouble symbols toggle<cr>"; desc = "Symbols (Trouble)"; }
@@ -10,9 +10,6 @@
   { mode = ["n"]; key = "<leader>xX"; action = "<cmd>Trouble diagnostics toggle filter.buf=0<cr>"; desc = "Buffer Diagnostics (Trouble)"; }
   { mode = ["n"]; key = "[q"; action = "<cmd>lua require('trouble').prev({ skip_groups = true, jump = true })<cr>"; desc = "Previous Trouble/Quickfix Item"; }
   { mode = ["n"]; key = "]q"; action = "<cmd>lua require('trouble').next({ skip_groups = true, jump = true })<cr>"; desc = "Next Trouble/Quickfix Item"; }
-
-  # === Aerial (symbol navigation) ===
-  { mode = ["n"]; key = "<leader>cA"; action = "<cmd>AerialToggle<cr>"; desc = "Aerial (Symbols)"; }
 
   # === Outline ===
   { mode = ["n"]; key = "<leader>cO"; action = "<cmd>Outline<cr>"; desc = "Toggle Outline"; }

@@ -63,8 +63,8 @@
   { key = "<leader>st"; action = "<cmd>lua Snacks.picker.todo_comments()<cr>"; mode = ["n"]; desc = "Todo"; }
   { key = "<leader>sT"; action = "<cmd>lua Snacks.picker.todo_comments({ keywords = { 'TODO', 'FIX', 'FIXME' } })<cr>"; mode = ["n"]; desc = "Todo/Fix/Fixme"; }
 
-  # Telescope aerial
-  { mode = ["n"]; key = "<leader>ss"; action = "<cmd>Telescope aerial<cr>"; desc = "Goto Symbol (Aerial)"; }
+  # Symbol picker (using Snacks)
+  { mode = ["n"]; key = "<leader>ss"; action = "<cmd>lua Snacks.picker.lsp_symbols()<cr>"; desc = "Goto Symbol"; }
 
   # === Snacks Explorer ===
   { mode = ["n"]; key = "<leader>e"; action = "<cmd>lua Snacks.explorer.open({ cwd = vim.uv.cwd() })<cr>"; desc = "Explorer Snacks (root dir)"; }

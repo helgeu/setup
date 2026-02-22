@@ -1,11 +1,8 @@
 # Shared work development tools (macOS work machine + WSL)
 {
   pkgs,
-  adoboards,
   ...
 }: {
-  imports = [../adoboards-config.nix];
-
   home.packages = with pkgs; [
     # Azure / Cloud
     (azure-cli.withExtensions [
@@ -32,8 +29,5 @@
     # Utilities
     tmuxinator
     nil
-
-    # Azure DevOps TUI
-    adoboards.packages.${pkgs.stdenv.hostPlatform.system}.default
   ];
 }

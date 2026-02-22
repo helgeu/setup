@@ -23,6 +23,7 @@
     ];
     casks = [
       "brave-browser"
+      "ghostty"
     ];
     masApps = {
       Xcode = 497799835;

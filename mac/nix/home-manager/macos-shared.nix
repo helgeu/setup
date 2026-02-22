@@ -6,7 +6,10 @@
 }: let
   defaultBrowserBundleId = "com.brave.Browser";
 in {
-  imports = [../iterm2.nix];
+  imports = [
+    ../iterm2.nix
+    ../ghostty.nix
+  ];
 
   # Set Brave as default browser after installation
   home.activation.setDefaultBrowser = lib.hm.dag.entryAfter ["writeBoundary"] ''
