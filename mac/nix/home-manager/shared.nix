@@ -49,6 +49,11 @@ in {
 
     # Utilities
     zip
+
+    # Nvim tools
+    tree-sitter      # Parser generator (for treesitter CLI)
+    imagemagick      # Image manipulation (magick)
+    mermaid-cli      # Diagram generation (mmdc)
   ] ++ lib.optionals isDarwin [
     # macOS-only
     xcodegen  # Swift project generation
