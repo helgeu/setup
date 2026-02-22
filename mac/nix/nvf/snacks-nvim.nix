@@ -2,7 +2,7 @@
   enable = true;
   setupOpts = {
     bigfile.enable = true;
-    #dashboard.enable = true;
+    dashboard.enable = true;
     explorer.enable = true;
     indent.enable = true;
     input.enable = true;

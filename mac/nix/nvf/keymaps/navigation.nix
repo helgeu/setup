@@ -1,6 +1,9 @@
 # Navigation keymaps - pickers, file explorer, motion
 # Consolidated from: snacks.nix, snacks-explorer.nix, flash.nix, leap.nix, harpoon.nix, telescope-extra.nix, vim-illuminate.nix
 [
+  # === Which-key group ===
+  { mode = "n"; key = "<leader>s"; action = ""; desc = "+search"; }
+
   # === Snacks Picker ===
   { mode = ["n"]; key = "<leader><space>"; action = "<cmd>lua Snacks.picker.files()<cr>"; desc = "Find Files (Root Dir)"; }
   { mode = ["n"]; key = "<leader>,"; action = "<cmd>lua Snacks.picker.buffers()<cr>"; desc = "Buffers"; }

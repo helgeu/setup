@@ -1,6 +1,9 @@
 # Debug and test keymaps - DAP, neotest
 # Consolidated from: dap-core.nix, dap-ui.nix, neotest.nix, neotest-dap.nix, python-dap.nix
 [
+  # === Which-key group ===
+  { mode = "n"; key = "<leader>d"; action = ""; desc = "+debug"; }
+
   # === DAP Core ===
   { mode = ["n"]; key = "<leader>da"; action = "<cmd>lua require('dap').run_with_args(vim.fn.input('Args: '))<cr>"; desc = "Run with Args"; }
   { mode = ["n"]; key = "<leader>db"; action = "<cmd>lua require('dap').toggle_breakpoint()<cr>"; desc = "Toggle Breakpoint"; }

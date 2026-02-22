@@ -1,6 +1,9 @@
 # Git keymaps - git tools and GitHub integration
 # Consolidated from: gitui.nix, octo.nix, mini-diff.nix
 [
+  # === Which-key group ===
+  { mode = "n"; key = "<leader>g"; action = ""; desc = "+git"; }
+
   # === GitUI / Snacks git browse ===
   { key = "<leader>gg"; action = "<cmd>lua Snacks.gitbrowse()<cr>"; mode = ["n"]; desc = "GitUi (Root Dir)"; }
   { key = "<leader>gG"; action = "<cmd>lua Snacks.gitbrowse({ cwd = vim.uv.cwd() })<cr>"; mode = ["n"]; desc = "GitUi (cwd)"; }

@@ -1,6 +1,15 @@
 # Core keymaps - movement, windows, buffers, tabs, UI toggles
 # Consolidated from: general.nix
 [
+  # === Which-key groups ===
+  { mode = "n"; key = "<leader>b"; action = ""; desc = "+buffer"; }
+  { mode = "n"; key = "<leader>f"; action = ""; desc = "+file/find"; }
+  { mode = "n"; key = "<leader>q"; action = ""; desc = "+quit/session"; }
+  { mode = "n"; key = "<leader>u"; action = ""; desc = "+ui"; }
+  { mode = "n"; key = "<leader>w"; action = ""; desc = "+windows"; }
+  { mode = "n"; key = "<leader>x"; action = ""; desc = "+diagnostics"; }
+  { mode = "n"; key = "<leader><tab>"; action = ""; desc = "+tabs"; }
+
   # Movement (display lines)
   { mode = ["n" "x"]; key = "j"; action = "gj"; desc = "Move down (display lines)"; }
   { mode = ["n" "x"]; key = "<Down>"; action = "gj"; desc = "Move down (display lines)"; }
