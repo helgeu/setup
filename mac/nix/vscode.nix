@@ -9,7 +9,8 @@
 in {
   programs = {
     vscode = {
-      enable = true;
+      # Disable on Linux/WSL - use Windows VS Code with Remote-WSL extension
+      enable = isDarwin;
       profiles.default.userSettings = {
         "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
         "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";

@@ -2,7 +2,7 @@
 
 ## Priority
 
-- [ ] Add helgeu@Helges-MacBook-Pro setup
+- [x] Add helgeu@Helges-MacBook-Pro setup
   - [x] Create discovery script (scripts/discover-installed.sh)
   - [x] Run discovery on home Mac, save results
   - [x] Compare work vs home, decide on shared/separate modules
@@ -11,7 +11,7 @@
   - [x] Create install script (scripts/install.sh)
   - [x] Fix install script (use official Nix installer, not Determinate)
   - [x] Run cleanup on home Mac
-  - [ ] Run install on home Mac
+  - [x] Run install on home Mac
 
 ## Backlog
 
@@ -34,6 +34,7 @@
   - Simplify and reorganize keybindings
   - Too cluttered as-is
   - [ ] blink-cmp AI completion
+  - [ ] vim-dadbod (low prio) - MS SQL only, Cosmos DB via Azure Data Studio
     - (blink-cmp and blink-cmp-copilot)[https://github.com/giuxtaposition/blink-cmp-copilot]
     - copilot.lua (prerequisites)[https://github.com/zbirenbaum/copilot.lua]
 - [ ] Yabai, aerospace, amethyst? (tiling WM)

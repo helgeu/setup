@@ -235,17 +235,16 @@ wsl --set-default $DistroName
 # -----------------------------------------------------------------------------
 Write-Step "Running initial NixOS configuration"
 
-# Enable flakes
-Write-Info "Enabling Nix flakes..."
-wsl -d $DistroName -- sudo mkdir -p /etc/nix
-wsl -d $DistroName -- bash -c "grep -q 'experimental-features' /etc/nix/nix.conf 2>/dev/null || echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf"
-
 # Get WSL path to the flake
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $FlakeDir = (Resolve-Path "$ScriptDir\..").Path
 $WslFlakePath = "/mnt/" + $FlakeDir.Substring(0,1).ToLower() + $FlakeDir.Substring(2).Replace("\", "/")
 
 Write-Info "Flake path: $WslFlakePath"
+
+# Fix CRLF line endings (Windows git may have checked out with CRLF)
+Write-Info "Normalizing line endings..."
+wsl -d $DistroName -- bash -c "find '$WslFlakePath' -name '*.nix' -o -name '*.sh' | xargs sed -i 's/\r$//'"
 
 # Run nixos-rebuild directly from Windows filesystem
 # Use --no-update-lock-file since git isn't available yet
