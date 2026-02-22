@@ -15,7 +15,7 @@
 
 ## Backlog
 
-- [ ] WSL NixOS setup
+- [x] WSL NixOS setup
   - [x] Create PowerShell bootstrap script (scripts/install-wsl-nixos.ps1)
   - [x] Create post-install script (scripts/setup-nixos.sh)
   - [x] Refactor configs for cross-platform (git.nix, zsh.nix, vscode.nix)
@@ -24,7 +24,7 @@
   - [x] Add .gitattributes for cross-platform line endings
   - [x] Auto-enable Windows features (WSL, VirtualMachinePlatform)
   - [x] Use flake directly from Windows mount (/mnt/c/...)
-  - [ ] Complete first successful nixos-rebuild on Windows
+  - [x] Complete first successful nixos-rebuild on Windows
 - [ ] Window/tab/buffer titling (needs clarification)
   - [x] oh-my-posh console_title_template
   - [ ] nvim active file in terminal title?
