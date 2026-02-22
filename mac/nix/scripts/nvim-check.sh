@@ -68,25 +68,30 @@ else
     echo "OK"
 fi
 
-# 4. Run checkhealth (summary only)
-echo -n "Running checkhealth... "
-HEALTH_OUTPUT=$(nvim --headless -c 'checkhealth' -c 'w! /tmp/nvim-health.txt' -c 'qa!' 2>&1)
-if [[ -f /tmp/nvim-health.txt ]]; then
-    ERRORS=$(grep -c "ERROR" /tmp/nvim-health.txt 2>/dev/null || echo "0")
-    WARNINGS=$(grep -c "WARNING" /tmp/nvim-health.txt 2>/dev/null || echo "0")
-    echo "OK ($ERRORS errors, $WARNINGS warnings)"
+# 4. Run checkhealth (write to buffer, then save)
+echo "Running checkhealth..."
+HEALTH_FILE="/tmp/nvim-health-$$.txt"
+nvim --headless -c 'checkhealth' -c "w $HEALTH_FILE" -c 'qa' 2>/dev/null
+
+if [[ -f "$HEALTH_FILE" ]]; then
+    ERRORS=$(grep -c "❌" "$HEALTH_FILE" 2>/dev/null || true)
+    WARNINGS=$(grep -c "⚠️" "$HEALTH_FILE" 2>/dev/null || true)
+    [[ -z "$ERRORS" ]] && ERRORS=0
+    [[ -z "$WARNINGS" ]] && WARNINGS=0
+    echo "Checkhealth: $ERRORS errors, $WARNINGS warnings"
 
     if [[ "$1" == "-v" || "$1" == "--verbose" ]]; then
         echo ""
         echo "=== Health Report ==="
-        cat /tmp/nvim-health.txt
-    elif [[ $ERRORS -gt 0 ]]; then
+        cat "$HEALTH_FILE"
+    elif [[ "$ERRORS" -gt 0 ]]; then
         echo ""
         echo "Errors found (run with -v for full report):"
-        grep -A1 "ERROR" /tmp/nvim-health.txt | head -20
+        grep -B1 "❌" "$HEALTH_FILE" | head -40
     fi
+    rm -f "$HEALTH_FILE"
 else
-    echo "SKIPPED (no output)"
+    echo "Checkhealth: FAILED (no output)"
 fi
 
 # 5. Test keymaps are registered
