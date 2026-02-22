@@ -20,7 +20,7 @@
   - [x] Create post-install script (scripts/setup-nixos.sh)
   - [x] Refactor configs for cross-platform (git.nix, zsh.nix, vscode.nix)
   - [x] Add nixos-wsl input to flake.nix
-  - [x] Create system/wsl-work.nix and home/wsl-work.nix
+  - [x] Create system/wsl-work.nix and home-manager/wsl-work.nix
   - [x] Add .gitattributes for cross-platform line endings
   - [x] Auto-enable Windows features (WSL, VirtualMachinePlatform)
   - [x] Use flake directly from Windows mount (/mnt/c/...)
@@ -30,9 +30,10 @@
   - [ ] nvim active file in terminal title?
   - [ ] bufferline/tabline in nvim?
 - [ ] NVIM cleanup project
-  - Clean up entire nvim setup, remove unused plugins/config
-  - Simplify and reorganize keybindings
-  - Too cluttered as-is
+  - [x] Delete unused nixvim config (only NVF is used)
+  - [ ] Consolidate keymaps (50 files → ~8 logical groups)
+  - [ ] Remove placeholder keymaps that just print "not implemented"
+  - [ ] Fix key conflicts (<leader>cs used by 3 plugins)
   - [ ] blink-cmp AI completion
   - [ ] vim-dadbod (low prio) - MS SQL only, Cosmos DB via Azure Data Studio
     - (blink-cmp and blink-cmp-copilot)[https://github.com/giuxtaposition/blink-cmp-copilot]
@@ -41,8 +42,22 @@
   - (Example for aerospace)[https://github.com/AlexNabokikh/nix-config/blob/master/modules/home-manager/programs/aerospace/default.nix]
 - [ ] Dock folder icons (custom icons via fileicon)
 
+## Suggestions
+
+- [ ] Touch ID + Apple Watch sudo authentication
+  - `security.pam.enableSudoTouchIdAuth = true` in system/shared.nix
+  - Enables Touch ID and Apple Watch for sudo on both Macs
+  - Note: Apple Watch screen unlock is System Settings only (iCloud pairing)
+
 ## Done
 
+- [x] Nix config refactoring (Feb 2026)
+  - Deleted unused nixvim config (18 files, ~900 lines)
+  - Renamed home/ to home-manager/ for clarity
+  - Created shared modules (macos-shared.nix, work-tools.nix, dock/shared.nix)
+  - Removed Brave External Extensions (keep system policy only)
+  - Cleaned up unused bindings across all files
+  - Added validation scripts (check.sh, eval.sh, build.sh)
 - [x] macOS Dock configuration
   - Research, create dock configs, integrate into flake
 - [x] Make Brave default browser (via duti)
