@@ -23,16 +23,22 @@
           registers = "unnamedplus";
           enable = true;
         };
-        # luaConfigPost = ''
-        #   vim.opt.tabstop = 2
-        #   vim.opt.shiftwidth = 2
-        #   vim.opt.expandtab = true
-        #   vim.opt.fillchars = { eob = " "}
-        #   vim.opt.autoindent = false
-        #   vim.opt.smartindent = false
-        #   vim.opt.smarttab = true
-        #   vim.opt.scrolloff = 20;
-        # '';
+        luaConfigPost = ''
+          -- Auto-attach snacks.image.doc for inline image rendering
+          vim.api.nvim_create_autocmd("FileType", {
+            pattern = { "markdown", "norg", "html" },
+            callback = function(ev)
+              vim.defer_fn(function()
+                local ok, err = pcall(function()
+                  Snacks.image.doc.attach(ev.buf)
+                end)
+                if not ok then
+                  vim.notify("Snacks.image.doc.attach error: " .. tostring(err), vim.log.levels.WARN)
+                end
+              end, 100)
+            end,
+          })
+        '';
         theme = {
           enable = true;
           name = "tokyonight";

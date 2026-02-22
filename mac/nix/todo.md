@@ -38,6 +38,20 @@
   - [ ] vim-dadbod (low prio) - MS SQL only, Cosmos DB via Azure Data Studio
     - (blink-cmp and blink-cmp-copilot)[https://github.com/giuxtaposition/blink-cmp-copilot]
     - copilot.lua (prerequisites)[https://github.com/zbirenbaum/copilot.lua]
+- [ ] NVIM project & session management (LazyVim-style)
+  - [ ] Investigate project management options: Snacks.project, project.nvim, workspaces.nvim
+  - [ ] Research how LazyVim handles project switching and session restore
+  - [ ] Add persistence.nvim (currently referenced in keymaps but not installed)
+  - [ ] Configure project select workflow:
+    - Don't auto-open file picker on project select
+    - Open explorer instead
+    - Auto-restore session (open files, buffers) if exists
+  - [ ] Auto-save session on exit when in a project
+  - [ ] Restore explorer state with session
+- [ ] DBUI keys investigation
+  - [ ] Check if vim-dadbod and vim-dadbod-ui are installed
+  - [ ] Verify DBUI keymaps work (`<leader>D` toggle)
+  - [ ] Test with actual database connection
 - [ ] Yabai, aerospace, amethyst? (tiling WM)
   - (Example for aerospace)[https://github.com/AlexNabokikh/nix-config/blob/master/modules/home-manager/programs/aerospace/default.nix]
 - [ ] Dock folder icons (custom icons via fileicon)
@@ -71,6 +85,7 @@
   - Added packages: tree-sitter, imagemagick, mermaid-cli
   - Improved update.sh with validation
   - Fixed Snacks dashboard (removed lazy.nvim dependency)
+  - Configured Snacks.image for inline rendering in Ghostty (autocmd on markdown)
 - [x] macOS Dock configuration
   - Research, create dock configs, integrate into flake
 - [x] Make Brave default browser (via duti)

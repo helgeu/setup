@@ -23,6 +23,14 @@
       ];
     };
     explorer.enable = true;
+    image = {
+      enabled = true;
+      doc = {
+        enabled = true;
+        inline = true;
+        float = true;
+      };
+    };
     indent.enable = true;
     input.enable = true;
     picker.enable = true;
