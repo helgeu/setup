@@ -19,26 +19,6 @@
           enable = true;
         };
         luaConfigPost = ''
-          -- Session options (LazyVim-style) - controls what :mksession saves
-          vim.opt.sessionoptions = { "buffers", "curdir", "tabpages", "winsize", "help", "globals", "skiprtp", "folds" }
-
-          -- Close explorer and special buffers before saving session
-          vim.api.nvim_create_autocmd("User", {
-            pattern = "PersistenceSavePre",
-            callback = function()
-              -- Close snacks explorer
-              pcall(function() Snacks.explorer.close() end)
-              -- Delete special buffers that shouldn't be in sessions
-              for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-                local ft = vim.bo[buf].filetype
-                local bt = vim.bo[buf].buftype
-                if ft == "snacks_explorer" or ft == "snacks_dashboard" or bt == "nofile" then
-                  pcall(vim.api.nvim_buf_delete, buf, { force = true })
-                end
-              end
-            end,
-          })
-
           -- Auto-attach snacks.image.doc for inline image rendering
           vim.api.nvim_create_autocmd("FileType", {
             pattern = { "markdown", "norg", "html" },

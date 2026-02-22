@@ -95,13 +95,6 @@
 
   # System
   { mode = "n"; key = "<leader>qq"; action = "<cmd>qa<cr>"; desc = "Quit all"; }
-
-  # Session (persistence.nvim)
-  { mode = "n"; key = "<leader>qd"; action = "<cmd>lua require('persistence').stop()<cr>"; desc = "Don't save session"; }
-  { mode = "n"; key = "<leader>ql"; action = "<cmd>lua require('persistence').load({ last = true })<cr>"; desc = "Restore last session"; }
-  { mode = "n"; key = "<leader>qs"; action = "<cmd>lua require('persistence').load()<cr>"; desc = "Restore session"; }
-  { mode = "n"; key = "<leader>qS"; action = "<cmd>lua require('persistence').select()<cr>"; desc = "Select session"; }
-
   { mode = "n"; key = "<leader>ui"; action = "<cmd>Inspect<cr>"; desc = "Inspect pos"; }
   { mode = "n"; key = "<leader>uI"; action = "<cmd>InspectTree<cr>"; desc = "Inspect tree"; }
 

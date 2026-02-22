@@ -11,7 +11,6 @@
           { icon = " "; key = "g"; desc = "Find Text"; action = ":lua Snacks.picker.grep()"; }
           { icon = " "; key = "r"; desc = "Recent Files"; action = ":lua Snacks.picker.recent()"; }
           { icon = " "; key = "c"; desc = "Config"; action = ":lua Snacks.picker.files({ cwd = vim.fn.stdpath('config') })"; }
-          { icon = " "; key = "s"; desc = "Restore Session"; action = ":lua require('persistence').load()"; }
           { icon = "󰒲 "; key = "p"; desc = "Projects"; action = ":lua Snacks.picker.projects()"; }
           { icon = " "; key = "q"; desc = "Quit"; action = ":qa"; }
         ];
@@ -33,14 +32,7 @@
     };
     indent.enable = true;
     input.enable = true;
-    picker = {
-      enable = true;
-      sources = {
-        projects = {
-          confirm = "load_session";  # Try to restore session when selecting project
-        };
-      };
-    };
+    picker.enable = true;
     notifier.enable = true;
     project.enable = true;
     quickfile.enable = true;
