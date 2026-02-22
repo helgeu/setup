@@ -25,6 +25,15 @@ Multi-platform Nix configuration for macOS and WSL.
   nix eval nixpkgs#<package-name>.meta.description
   ```
 
+## Validation Scripts
+
+Always run these before committing or rebuilding:
+
+```bash
+./scripts/check.sh   # Syntax check all .nix files
+./scripts/eval.sh    # Evaluate flake (catches runtime errors)
+```
+
 ## Rebuild Commands
 
 - macOS: `sudo ./scripts/switch.sh`

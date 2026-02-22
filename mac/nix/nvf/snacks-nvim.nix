@@ -33,7 +33,14 @@
     };
     indent.enable = true;
     input.enable = true;
-    picker.enable = true;
+    picker = {
+      enable = true;
+      sources = {
+        projects = {
+          confirm = "load_session";  # Try to restore session when selecting project
+        };
+      };
+    };
     notifier.enable = true;
     project.enable = true;
     quickfile.enable = true;

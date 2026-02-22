@@ -4,6 +4,17 @@
   pkgs,
   ...
 }: {
+  persistence-nvim = {
+    package = pkgs.vimPlugins.persistence-nvim;
+    setup = ''
+      require('persistence').setup({
+        dir = vim.fn.stdpath("state") .. "/sessions/",
+        need = 1,  -- minimum number of file buffers to save session
+        branch = true,  -- use git branch in session name
+      })
+    '';
+  };
+
   edgy-nvim = {
     package = pkgs.vimPlugins.edgy-nvim;
     setup = ''
