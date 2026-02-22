@@ -23,8 +23,8 @@ in {
       window-width = ${toString columns}
       window-height = ${toString rows}
 
-      # macOS: Option key sends Alt/Meta (like iTerm2 "Option Key Sends = 2")
-      macos-option-as-alt = true
+      # macOS: Keep Option key for special characters (disable Alt behavior)
+      macos-option-as-alt = false
 
       # Behavior
       mouse-hide-while-typing = true
