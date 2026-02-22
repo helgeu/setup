@@ -4,11 +4,6 @@
     # Set Neovim from NVF as system default editor (sets EDITOR in sessionVariables)
     defaultEditor = true;
 
-    # need these modules in vim to make dadbod work?
-    #Plug 'tpope/vim-dadbod'
-    #Plug 'kristijanhusak/vim-dadbod-ui'
-    #Plug 'kristijanhusak/vim-dadbod-completion' "Optional
-
     settings = {
       vim = {
         # Extra plugins (see nvf/extraplugins/)

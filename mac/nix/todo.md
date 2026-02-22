@@ -34,10 +34,10 @@
   - [x] Consolidate keymaps (50 files → 8 logical groups)
   - [x] Remove placeholder keymaps that just print "not implemented"
   - [x] Fix key conflicts (<leader>cs, <leader>fp, <leader>gS)
+  - [x] Remove dead keymaps for uninstalled plugins (~107 keymaps, 230 lines)
   - [ ] blink-cmp AI completion
-  - [ ] vim-dadbod (low prio) - MS SQL only, Cosmos DB via Azure Data Studio
-    - (blink-cmp and blink-cmp-copilot)[https://github.com/giuxtaposition/blink-cmp-copilot]
-    - copilot.lua (prerequisites)[https://github.com/zbirenbaum/copilot.lua]
+    - [blink-cmp-copilot](https://github.com/giuxtaposition/blink-cmp-copilot)
+    - [copilot.lua](https://github.com/zbirenbaum/copilot.lua) (prerequisite)
 - [ ] NVIM project & session management (LazyVim-style)
   - [ ] Investigate project management options: Snacks.project, project.nvim, workspaces.nvim
   - [ ] Research how LazyVim handles project switching and session restore
@@ -48,10 +48,6 @@
     - Auto-restore session (open files, buffers) if exists
   - [ ] Auto-save session on exit when in a project
   - [ ] Restore explorer state with session
-- [ ] DBUI keys investigation
-  - [ ] Check if vim-dadbod and vim-dadbod-ui are installed
-  - [ ] Verify DBUI keymaps work (`<leader>D` toggle)
-  - [ ] Test with actual database connection
 - [ ] Yabai, aerospace, amethyst? (tiling WM)
   - (Example for aerospace)[https://github.com/AlexNabokikh/nix-config/blob/master/modules/home-manager/programs/aerospace/default.nix]
 - [ ] Dock folder icons (custom icons via fileicon)

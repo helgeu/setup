@@ -61,7 +61,6 @@
   { mode = ["i" "x" "n" "s"]; key = "<C-s>"; action = "<cmd>w<cr><esc>"; desc = "Save file"; }
 
   # Comments
-  { mode = "n"; key = "<leader>K"; action = "<cmd>norm! K<cr>"; desc = "Keywordprg"; }
   { mode = "n"; key = "gco"; action = "o<esc>Vcx<esc><cmd>normal gcc<cr>fxa<bs>"; desc = "Add comment below"; }
   { mode = "n"; key = "gcO"; action = "O<esc>Vcx<esc><cmd>normal gcc<cr>fxa<bs>"; desc = "Add comment above"; }
 
@@ -69,8 +68,6 @@
   { mode = "n"; key = "<leader>fn"; action = "<cmd>enew<cr>"; desc = "New file"; }
   { mode = "n"; key = "<leader>xl"; action = "<cmd>lopen<cr>"; desc = "Location list"; }
   { mode = "n"; key = "<leader>xq"; action = "<cmd>copen<cr>"; desc = "Quickfix list"; }
-  { mode = "n"; key = "[q"; action = "<cmd>cprev<cr>"; desc = "Previous quickfix"; }
-  { mode = "n"; key = "]q"; action = "<cmd>cnext<cr>"; desc = "Next quickfix"; }
 
   # Format and diagnostics
   { mode = ["n" "v"]; key = "<leader>cf"; action = "<cmd>lua vim.lsp.buf.format()<cr>"; desc = "Format"; }

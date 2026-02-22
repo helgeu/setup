@@ -1,13 +1,14 @@
-# Default keymaps aggregator - consolidated into 8 logical groups
+# Default keymaps aggregator - consolidated into logical groups
+# Only includes keymaps for INSTALLED plugins
 let
   keymapModules = [
     "core"        # movement, windows, buffers, tabs, UI toggles
-    "editor"      # refactoring, surround, increment/decrement, yank
-    "tools"       # LSP, language-specific, utilities, sessions
-    "git"         # git tools and GitHub integration
-    "debug-test"  # DAP, neotest
-    "navigation"  # pickers, file explorer, motion
-    "ui"          # trouble, symbols, notifications, bufferline
+    "editor"      # (empty - add when installing editor plugins)
+    "tools"       # LSP
+    "git"         # Snacks git browse
+    "debug-test"  # DAP, dap-ui
+    "navigation"  # Snacks picker, Snacks explorer
+    "ui"          # Trouble, which-key, noice, bufferline, edgy
   ];
 
   importModule = name: import ./${name}.nix;

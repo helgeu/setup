@@ -1,5 +1,6 @@
-# UI keymaps - trouble, symbols, notifications, bufferline
-# Consolidated from: trouble.nix, outline.nix, which-key.nix, noice.nix, bufferline.nix, edgy.nix
+# UI keymaps - trouble, which-key, noice, bufferline, edgy
+# Installed: trouble, which-key, noice, bufferline, edgy
+# Removed: outline
 [
   # === Trouble ===
   { mode = ["n"]; key = "<leader>cs"; action = "<cmd>Trouble symbols toggle<cr>"; desc = "Symbols (Trouble)"; }
@@ -10,9 +11,6 @@
   { mode = ["n"]; key = "<leader>xX"; action = "<cmd>Trouble diagnostics toggle filter.buf=0<cr>"; desc = "Buffer Diagnostics (Trouble)"; }
   { mode = ["n"]; key = "[q"; action = "<cmd>lua require('trouble').prev({ skip_groups = true, jump = true })<cr>"; desc = "Previous Trouble/Quickfix Item"; }
   { mode = ["n"]; key = "]q"; action = "<cmd>lua require('trouble').next({ skip_groups = true, jump = true })<cr>"; desc = "Next Trouble/Quickfix Item"; }
-
-  # === Outline ===
-  { mode = ["n"]; key = "<leader>cO"; action = "<cmd>Outline<cr>"; desc = "Toggle Outline"; }
 
   # === Which-key ===
   { mode = ["n"]; key = "<c-w><space>"; action = "<cmd>lua require('which-key').show('<c-w>', { mode = 'n', auto = true })<cr>"; desc = "Window Hydra Mode (which-key)"; }

@@ -1,5 +1,5 @@
-# Navigation keymaps - pickers, file explorer, motion
-# Consolidated from: snacks.nix, snacks-explorer.nix, flash.nix, leap.nix, harpoon.nix, telescope-extra.nix, vim-illuminate.nix
+# Navigation keymaps - pickers, file explorer
+# Installed: snacks-nvim (picker, explorer)
 [
   # === Which-key group ===
   { mode = "n"; key = "<leader>s"; action = ""; desc = "+search"; }
@@ -52,7 +52,6 @@
   { mode = ["n"]; key = "<leader>sl"; action = "<cmd>lua Snacks.picker.loclist()<cr>"; desc = "Location List"; }
   { mode = ["n"]; key = "<leader>sm"; action = "<cmd>lua Snacks.picker.marks()<cr>"; desc = "Marks"; }
   { mode = ["n"]; key = "<leader>sM"; action = "<cmd>lua Snacks.picker.man()<cr>"; desc = "Man Pages"; }
-  { mode = ["n"]; key = "<leader>sp"; action = "<cmd>lua Snacks.picker.files({ cwd = require('lazy.core.config').options.root })<cr>"; desc = "Search for Plugin Spec"; }
   { mode = ["n"]; key = "<leader>sq"; action = "<cmd>lua Snacks.picker.qflist()<cr>"; desc = "Quickfix List"; }
   { mode = ["n"]; key = "<leader>sR"; action = "<cmd>lua Snacks.picker.resume()<cr>"; desc = "Resume"; }
   { mode = ["n"]; key = "<leader>su"; action = "<cmd>lua Snacks.picker.undo()<cr>"; desc = "Undotree"; }
@@ -71,32 +70,4 @@
   { mode = ["n"]; key = "<leader>E"; action = "<cmd>lua Snacks.explorer.open()<cr>"; desc = "Explorer Snacks (cwd)"; }
   { mode = ["n"]; key = "<leader>fe"; action = "<cmd>lua Snacks.explorer.open({ cwd = vim.uv.cwd() })<cr>"; desc = "Explorer Snacks (root dir)"; }
   { mode = ["n"]; key = "<leader>fE"; action = "<cmd>lua Snacks.explorer.open()<cr>"; desc = "Explorer Snacks (cwd)"; }
-
-  # === Flash ===
-  { mode = ["c"]; key = "<c-s>"; action = "<cmd>lua require('flash').toggle()<cr>"; desc = "Toggle Flash Search"; }
-  { mode = ["o"]; key = "r"; action = "<cmd>lua require('flash').remote()<cr>"; desc = "Remote Flash"; }
-  { mode = ["o" "x"]; key = "R"; action = "<cmd>lua require('flash').treesitter_search()<cr>"; desc = "Treesitter Search"; }
-  { mode = ["n" "o" "x"]; key = "s"; action = "<cmd>lua require('flash').jump()<cr>"; desc = "Flash"; }
-  { mode = ["n" "o" "x"]; key = "S"; action = "<cmd>lua require('flash').treesitter()<cr>"; desc = "Flash Treesitter"; }
-  { mode = ["n" "o" "x"]; key = "<c-space>"; action = "<cmd>lua require('flash').treesitter()<cr>"; desc = "Treesitter Incremental Selection"; }
-
-  # === Leap ===
-  { mode = ["n" "o" "x"]; key = "gs"; action = "<cmd>lua require('leap.remote').action()<cr>"; desc = "Leap from Windows"; }
-
-  # === Harpoon ===
-  { mode = ["n"]; key = "<leader>1"; action = "<cmd>lua require('harpoon'):list():select(1)<cr>"; desc = "Harpoon to File 1"; }
-  { mode = ["n"]; key = "<leader>2"; action = "<cmd>lua require('harpoon'):list():select(2)<cr>"; desc = "Harpoon to File 2"; }
-  { mode = ["n"]; key = "<leader>3"; action = "<cmd>lua require('harpoon'):list():select(3)<cr>"; desc = "Harpoon to File 3"; }
-  { mode = ["n"]; key = "<leader>4"; action = "<cmd>lua require('harpoon'):list():select(4)<cr>"; desc = "Harpoon to File 4"; }
-  { mode = ["n"]; key = "<leader>5"; action = "<cmd>lua require('harpoon'):list():select(5)<cr>"; desc = "Harpoon to File 5"; }
-  { mode = ["n"]; key = "<leader>6"; action = "<cmd>lua require('harpoon'):list():select(6)<cr>"; desc = "Harpoon to File 6"; }
-  { mode = ["n"]; key = "<leader>7"; action = "<cmd>lua require('harpoon'):list():select(7)<cr>"; desc = "Harpoon to File 7"; }
-  { mode = ["n"]; key = "<leader>8"; action = "<cmd>lua require('harpoon'):list():select(8)<cr>"; desc = "Harpoon to File 8"; }
-  { mode = ["n"]; key = "<leader>9"; action = "<cmd>lua require('harpoon'):list():select(9)<cr>"; desc = "Harpoon to File 9"; }
-  { mode = ["n"]; key = "<leader>h"; action = "<cmd>lua require('harpoon').ui:toggle_quick_menu(require('harpoon'):list())<cr>"; desc = "Harpoon Quick Menu"; }
-  { mode = ["n"]; key = "<leader>H"; action = "<cmd>lua require('harpoon'):list():add()<cr>"; desc = "Harpoon File"; }
-
-  # === Vim-illuminate ===
-  { mode = ["n"]; key = "[["; action = "<cmd>lua require('illuminate').goto_prev_reference(false)<cr>"; desc = "Prev Reference"; }
-  { mode = ["n"]; key = "]]"; action = "<cmd>lua require('illuminate').goto_next_reference(false)<cr>"; desc = "Next Reference"; }
 ]
