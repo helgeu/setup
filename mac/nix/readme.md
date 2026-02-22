@@ -2,6 +2,27 @@
 
 Multi-platform system configuration using nix-darwin (macOS) and NixOS-WSL (Windows).
 
+## In Memory of Baran
+
+![Baran](baran.jpg)
+
+This repository is dedicated to the memory of **Baran**, who served as Chief Build Quality Assurance Officer until his passing. He is deeply missed.
+
+For years, Baran supervised every commit from his position beside the desk, ensuring deterministic builds remained deterministic through his unwavering presence. His methodical approach to code review, characterized by intense staring, occasional sighs at poorly formatted Nix expressions, and a quiet insistence on reproducibility, set a standard we continue to honor.
+
+He never understood Nix. None of us truly do. But he stayed anyway, through every failed build, every mysterious derivation error, every late night debugging session. He asked for nothing in return except presence, warmth, and the occasional walk that we probably didn't take often enough.
+
+The dashboard header in this configuration displays his portrait. Not as decoration, but as a reminder that the best parts of our work were never really about the work at all.
+
+Baran's legacy includes:
+- Thousands of supervised `nix flake update` operations
+- Countless hours of silent companionship during debugging
+- A successor by the desk who will never know him, but carries on nonetheless
+
+The position has been filled. The place never will be.
+
+*Run free, good boy. Your builds will always succeed.*
+
 ## Structure
 
 ```
