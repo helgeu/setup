@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: {
+{ pkgs, ... }: {
   # Nix settings
   nix.settings = {
     experimental-features = [
@@ -19,8 +15,7 @@
   nixpkgs.config.allowUnfree = true;
 
   # Shared system packages
-  environment.systemPackages = with pkgs; [
-  ];
+  environment.systemPackages = [];
 
   # Shared system defaults
   system.defaults = {

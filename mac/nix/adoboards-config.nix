@@ -1,4 +1,4 @@
-{config, pkgs, lib, ...}: let
+{ pkgs, ... }: let
   configPath =
     if pkgs.stdenv.isDarwin
     then "Library/Application Support/adoboards/default-config.toml"

@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ ... }:
 {
   # Install iTerm2 and required fonts
   # home.packages = with pkgs; [ 

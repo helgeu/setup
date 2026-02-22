@@ -1,8 +1,4 @@
-{
-  pkgs,
-  libs,
-  ...
-}: {
+{ pkgs, ... }: {
   programs.nvf = {
     enable = true;
     # Set Neovim from NVF as system default editor (sets EDITOR in sessionVariables)

@@ -1,9 +1,4 @@
-{
-  config,
-  pkgs,
-  lib,
-  ...
-}: {
+{ pkgs, ... }: {
   # WSL-specific settings
   wsl = {
     enable = true;
