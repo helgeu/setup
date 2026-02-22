@@ -1,11 +1,9 @@
 {
-  config,
   pkgs,
   lib,
   ...
 }: let
   isDarwin = pkgs.stdenv.isDarwin;
-  isLinux = pkgs.stdenv.isLinux;
   combinedDotnet = with pkgs.dotnetCorePackages;
     combinePackages [
       sdk_8_0
@@ -48,6 +46,9 @@ in {
 
     # Git
     git-credential-manager
+
+    # Utilities
+    zip
   ] ++ lib.optionals isDarwin [
     # macOS-only
     xcodegen  # Swift project generation
@@ -96,22 +97,4 @@ in {
     };
   };
 
-  # Brave extension management via External Extensions JSON
-  # Path differs: macOS uses "Library/Application Support/", Linux uses ".config/"
-  # iCloud Passwords extension only works on macOS
-  home.file = let
-    braveExtPath = id:
-      if isDarwin
-      then "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/${id}.json"
-      else ".config/BraveSoftware/Brave-Browser/External Extensions/${id}.json";
-    extConfig = {
-      external_update_url = "https://clients2.google.com/service/update2/crx";
-    };
-  in {
-    # Vimium (all platforms)
-    "${braveExtPath "dbepggeogbaibhgnhhndojpepiihcmeb"}".text = builtins.toJSON extConfig;
-  } // lib.optionalAttrs isDarwin {
-    # iCloud Passwords (macOS only)
-    "${braveExtPath "pejdijmoenmkgeppbflobdenhhabjlaj"}".text = builtins.toJSON extConfig;
-  };
 }

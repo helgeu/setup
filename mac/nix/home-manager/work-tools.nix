@@ -1,20 +1,11 @@
+# Shared work development tools (macOS work machine + WSL)
 {
-  config,
   pkgs,
-  lib,
   adoboards,
   ...
 }: {
-  imports = [
-    ./shared.nix
-    ../adoboards-config.nix
-  ];
+  imports = [../adoboards-config.nix];
 
-  home.username = "nixos";
-  home.homeDirectory = "/home/nixos";
-  home.stateVersion = "24.05";
-
-  # Work-specific packages (Linux versions)
   home.packages = with pkgs; [
     # Azure / Cloud
     (azure-cli.withExtensions [
@@ -40,7 +31,6 @@
 
     # Utilities
     tmuxinator
-    zip
     nil
 
     # Azure DevOps TUI

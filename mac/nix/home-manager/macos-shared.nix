@@ -1,33 +1,22 @@
+# Shared macOS-specific home-manager configuration
 {
-  config,
   pkgs,
   lib,
   ...
 }: let
   defaultBrowserBundleId = "com.brave.Browser";
 in {
-  imports = [
-    ./shared.nix
-    ../iterm2.nix
-  ];
+  imports = [../iterm2.nix];
 
-  home.username = "helgeu";
-  home.homeDirectory = "/Users/helgeu";
-  home.stateVersion = "25.11";
-
-  # Set default browser after Brave is installed
+  # Set Brave as default browser after installation
   home.activation.setDefaultBrowser = lib.hm.dag.entryAfter ["writeBoundary"] ''
     run ${pkgs.duti}/bin/duti -s ${defaultBrowserBundleId} http || true
     run ${pkgs.duti}/bin/duti -s ${defaultBrowserBundleId} https || true
   '';
 
-  # Home-specific packages
+  # macOS-specific packages
   home.packages = with pkgs; [
-    # Personal/hobby tools
-    firefox
+    duti # Required for default browser activation
     iterm2
-
-    # General utilities
-    zip
   ];
 }

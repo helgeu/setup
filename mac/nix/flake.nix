@@ -80,7 +80,7 @@
           };
           home-manager.users.helgereneurholm = {...}: {
             imports = [
-              ./home/NO-GLV6Y9N492.nix
+              ./home-manager/NO-GLV6Y9N492.nix
               nvf.homeManagerModules.default
             ];
           };
@@ -112,7 +112,7 @@
           };
           home-manager.users.helgeu = {...}: {
             imports = [
-              ./home/Helges-MacBook-Pro.nix
+              ./home-manager/Helges-MacBook-Pro.nix
               nvf.homeManagerModules.default
             ];
           };
@@ -145,7 +145,7 @@
           };
           home-manager.users.nixos = {...}: {
             imports = [
-              ./home/wsl-work.nix
+              ./home-manager/wsl-work.nix
               nvf.homeManagerModules.default
             ];
           };
