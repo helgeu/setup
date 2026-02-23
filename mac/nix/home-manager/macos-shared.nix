@@ -22,4 +22,18 @@ in {
     duti # Required for default browser activation
     iterm2
   ];
+
+  # Brave External Extensions (triggers installation prompt on browser start)
+  # This is the fallback method since ExtensionSettings policy in CustomUserPreferences
+  # doesn't work on macOS (Brave reads policies from /Library/Managed Preferences/)
+  home.file = {
+    # Vimium
+    "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/dbepggeogbaibhgnhhndojpepiihcmeb.json".text = builtins.toJSON {
+      external_update_url = "https://clients2.google.com/service/update2/crx";
+    };
+    # iCloud Passwords
+    "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/pejdijmoenmkgeppbflobdenhhabjlaj.json".text = builtins.toJSON {
+      external_update_url = "https://clients2.google.com/service/update2/crx";
+    };
+  };
 }

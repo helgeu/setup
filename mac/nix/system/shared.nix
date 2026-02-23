@@ -53,23 +53,9 @@
         PasswordManagerEnabled = false;
         # Disable payment autofill to cloud storage
         AutofillCreditCardEnabled = false;
-        # Extension management via enterprise policy
-        ExtensionSettings = {
-          # Default: allow all extensions
-          "*" = {
-            installation_mode = "allowed";
-          };
-          # Vimium - auto-install, user can disable
-          "dbepggeogbaibhgnhhndojpepiihcmeb" = {
-            installation_mode = "normal_installed";
-            update_url = "https://clients2.google.com/service/update2/crx";
-          };
-          # iCloud Passwords - auto-install, user can disable
-          "pejdijmoenmkgeppbflobdenhhabjlaj" = {
-            installation_mode = "normal_installed";
-            update_url = "https://clients2.google.com/service/update2/crx";
-          };
-        };
+        # Note: ExtensionSettings doesn't work here - Brave reads enterprise policies
+        # from /Library/Managed Preferences/, not user defaults. Extensions are managed
+        # via External Extensions JSON files in home-manager/macos-shared.nix instead.
       };
     };
     NSGlobalDomain = {
