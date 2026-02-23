@@ -33,6 +33,13 @@ Multi-platform Nix configuration for macOS and WSL.
 4. **User tests** - User rebuilds and verifies manually
 5. **Update todo** - Only mark done after user confirms working
 
+## Change Strategy
+
+- **Small, incremental changes** - One logical change at a time, test before moving on
+- **Verify side effects** - App configs (VS Code extensions, Brave extensions, etc.) can be wiped by Nix if managed declaratively. Always check what Nix will manage vs what the user manages manually
+- **Don't batch unrelated changes** - If something breaks, it's harder to isolate the cause
+- **User confirms before done** - Never assume a change works just because eval passes. Rebuild + manual verification required
+
 ## Validation Scripts
 
 Run before committing:
@@ -61,3 +68,15 @@ Do NOT run `darwin-rebuild` directly.
 - **Ghostty**: Installed via Homebrew (not Nix) - nixpkgs only supports Linux
 - **macOS-only packages**: `xcodegen`, `alt-tab-macos`, `iterm2`, `ghostty`
 - **Config paths**: macOS uses `Library/Application Support/`, Linux uses `.config/`
+
+## VS Code Extension Dependencies
+
+When adding VS Code extensions, check for dependencies using:
+```bash
+jq '.extensionDependencies' ~/.vscode/extensions/<ext>/package.json
+```
+
+Known dependencies (must be added explicitly in Nix):
+- `42crunch.vscode-openapi` → `redhat.vscode-yaml`
+- `ms-dotnettools.csdevkit` → `ms-dotnettools.csharp`, `ms-dotnettools.vscode-dotnet-runtime`
+- `ms-dotnettools.csharp` → `ms-dotnettools.vscode-dotnet-runtime`
