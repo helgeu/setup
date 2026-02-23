@@ -5,6 +5,9 @@
 - Be direct. Challenge bad ideas.
 - Ask, don't assume.
 - Never suggest manual work. Automate everything - create scripts, write code, handle it directly. Exception: sudo commands (password required).
+- **Never work around problems. Always fix the root cause.** Workarounds hide issues, create technical debt, and cause bigger problems later. Diagnose why something is broken and fix it properly.
+- **Never change configs randomly.** All configuration changes must be done through the nix setup at `~/git/github/setup/mac/nix`. This ensures reproducibility and proper management.
+- **Trust the existing setup.** Before adding workarounds or overrides, try the operation first. The system is configured correctly - understand how it works before assuming it's broken.
 
 ## Never Do (Absolute)
 
