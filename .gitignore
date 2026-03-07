@@ -1,4 +1,4 @@
 .DS_Store
 
 *.swp
-mac/nix/.github/copilot-instructions.md
+nix/.github/copilot-instructions.md

@@ -1,0 +1,30 @@
+name: Nix Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Evaluate all configurations
+        run: |
+          echo "Evaluating NO-GLV6Y9N492..."
+          nix eval .#darwinConfigurations.NO-GLV6Y9N492.config.system.build.toplevel > /dev/null
+
+          echo "Evaluating Helges-MacBook-Pro..."
+          nix eval .#darwinConfigurations.Helges-MacBook-Pro.config.system.build.toplevel > /dev/null
+
+          echo "Evaluating wsl-work..."
+          nix eval .#nixosConfigurations.wsl-work.config.system.build.toplevel > /dev/null
+
+          echo "All configurations evaluated successfully!"

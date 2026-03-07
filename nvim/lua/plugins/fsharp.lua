@@ -1,5 +1,0 @@
-return {
-  "ionide/Ionide-vim",
-}
-
- 

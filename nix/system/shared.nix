@@ -1,0 +1,81 @@
+{ ... }: {
+  imports = [
+    ./base.nix
+  ];
+
+  # Used for backwards compatibility
+  system.stateVersion = 5;
+
+  # Platform (both Macs are Apple Silicon)
+  nixpkgs.hostPlatform = "aarch64-darwin";
+
+  # Shared system packages
+  environment.systemPackages = [];
+
+  # Shared macOS defaults
+  system.defaults = {
+    finder.AppleShowAllFiles = true;
+    CustomUserPreferences = {
+      NSGlobalDomain = {
+        WebKitDeveloperExtras = true;
+      };
+      "com.apple.finder" = {
+        ShowExternalHardDrivesOnDesktop = true;
+        ShowHardDrivesOnDesktop = true;
+        ShowMountedServersOnDesktop = true;
+        ShowRemovableMediaOnDesktop = true;
+        _FXSortFoldersFirst = true;
+        FXDefaultSearchScope = "SCcf";
+      };
+      "com.apple.desktopservices" = {
+        DSDontWriteNetworkStores = true;
+        DSDontWriteUSBStores = true;
+      };
+      "com.apple.screencapture" = {
+        location = "~/Documents/Screenshots";
+        type = "png";
+      };
+      # Brave Browser settings and policies
+      # Installed via Homebrew to preserve Apple code signature for iCloud Passwords
+      "com.brave.Browser" = {
+        # Disable Sparkle auto-updates (Homebrew manages updates)
+        SUAutomaticallyUpdate = false;
+        SUEnableAutomaticChecks = false;
+        # Enterprise policies (Chromium-based)
+        # Disable background mode (equivalent to --disable-background-networking)
+        BackgroundModeEnabled = false;
+        # Disable built-in password manager onboarding (using iCloud Passwords instead)
+        PasswordManagerEnabled = false;
+        # Disable payment autofill to cloud storage
+        AutofillCreditCardEnabled = false;
+        # Note: ExtensionSettings doesn't work here - Brave reads enterprise policies
+        # from /Library/Managed Preferences/, not user defaults. Extensions are managed
+        # via External Extensions JSON files in home-manager/macos-shared.nix instead.
+      };
+    };
+    NSGlobalDomain = {
+      AppleShowScrollBars = "Always";
+      "com.apple.keyboard.fnState" = true;
+    };
+    controlcenter.Bluetooth = true;
+    controlcenter.Sound = true;
+  };
+
+  # Shared homebrew config
+  homebrew = {
+    enable = true;
+    onActivation.upgrade = false;
+    onActivation.autoUpdate = false;
+
+    brews = [
+      "mas"
+    ];
+    casks = [
+      "brave-browser"
+      "ghostty"
+    ];
+    masApps = {
+      Xcode = 497799835;
+    };
+  };
+}
