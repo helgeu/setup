@@ -1,67 +1,15 @@
-# Nix Darwin + Home Manager + NixOS-WSL
+# Nix Configuration
 
-Multi-platform Nix configuration for macOS and WSL.
+Nix-specific rules layered on top of the root CLAUDE.md.
 
-## Rules
+## lsp-servers.nix
 
-- **Never suggest manual work** - Automate everything. Create scripts, write code, handle it directly. Exception: sudo commands (password required).
-
-## Structure
-
-- `system/*.nix` - System-level configs (nix-darwin on macOS, NixOS on WSL)
-- `home-manager/*.nix` - Home-manager configs
-- `dock/*.nix` - macOS Dock configs
-- `scripts/` - Install/rebuild scripts
-- `*/shared.nix` - Cross-platform shared config
-- `lsp-servers.nix` - Single source of truth for LSP server configs (shared by nvf and Claude Code)
-- Hostname files for machine-specific config
-
-## Conventions
-
-- **DRY** - Shared config in `*/shared.nix`, machine-specific only where needed
-- **Prefer `programs.X` modules** over `home.packages` when available
-- **Cross-platform** - Use `pkgs.stdenv.isDarwin` / `isLinux` for conditionals
-- **ALWAYS verify packages** before adding:
-  ```bash
-  nix eval nixpkgs#<package-name>.meta.description
-  ```
-
-## Workflow
-
-1. **Code** - Make changes
-2. **Check** - Run validation scripts (see below)
-3. **Commit** - Only if checks pass
-4. **User tests** - User rebuilds and verifies manually
-5. **Update todo** - Only mark done after user confirms working
+Single source of truth for LSP server configs — shared by nvf and Claude Code. Changes here affect both.
 
 ## Change Strategy
 
-- **Small, incremental changes** - One logical change at a time, test before moving on
 - **Verify side effects** - App configs (VS Code extensions, Brave extensions, etc.) can be wiped by Nix if managed declaratively. Always check what Nix will manage vs what the user manages manually
-- **Don't batch unrelated changes** - If something breaks, it's harder to isolate the cause
-- **User confirms before done** - Never assume a change works just because eval passes. Rebuild + manual verification required
-
-## Validation Scripts
-
-Run before committing:
-
-```bash
-./scripts/check.sh      # Syntax check all .nix files
-./scripts/eval.sh       # Evaluate flake (catches config errors)
-./scripts/nvim-check.sh # Headless nvim checkhealth (for nvf changes)
-```
-
-Which scripts to run depends on what changed:
-- **Any .nix file**: `check.sh` + `eval.sh`
-- **nvf/ changes**: Also run `nvim-check.sh`
-- **system/ changes**: Full rebuild required to verify
-
-## Rebuild Commands
-
-- macOS: `sudo ./scripts/switch.sh`
-- WSL: `sudo nixos-rebuild switch --flake .#wsl-work`
-
-Do NOT run `darwin-rebuild` directly.
+- **Update todo** - Only mark done after user confirms working
 
 ## Special Cases
 
