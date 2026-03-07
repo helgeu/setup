@@ -5,17 +5,13 @@ $ErrorActionPreference = 'Stop'
 
 $extensions = @(
     '42crunch.vscode-openapi'
+    'redhat.vscode-yaml'                       # Required by vscode-openapi
     'ionide.ionide-fsharp'
-    'ms-azure-devops.azure-pipelines'
-    'ms-azuretools.vscode-azurefunctions'
-    'ms-azuretools.vscode-azureresourcegroups'
-    'ms-azuretools.vscode-azurestorage'
-    'ms-azuretools.vscode-bicep'
-    'ms-azuretools.vscode-docker'
+    'ms-dotnettools.vscode-dotnet-runtime'      # Required by csdevkit
+    'ms-dotnettools.csharp'                     # Required by csdevkit
     'ms-dotnettools.csdevkit'
     'ms-vscode.powershell'
     'hediet.vscode-drawio'
-    'devcycles.contextive'
     'ChrisChinchilla.vscode-pandoc'
     'bierner.markdown-mermaid'
 )

@@ -22,7 +22,6 @@ $packages = @(
     'JohnMacFarlane.Pandoc'
     'Spotify.Spotify'
     'WiresharkFoundation.Wireshark'
-    'Neovim.Neovim'
     'JesseDuffield.lazygit'
     'junegunn.fzf'
     'BurntSushi.ripgrep.MSVC'
