@@ -114,16 +114,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1772845525,
-        "narHash": "sha256-Dp5Ir2u4jJDGCgeMRviHvEQDe+U37hMxp6RSNOoMMPc=",
-        "owner": "nix-community",
+        "lastModified": 1772881802,
+        "narHash": "sha256-I9S3un4Ioj3LzSWoPyutyZRqaaPu+QTxiG6smA/Qtds=",
+        "owner": "helgeu",
         "repo": "home-manager",
-        "rev": "27b93804fbef1544cb07718d3f0a451f4c4cd6c0",
+        "rev": "954a3e466d06727165584ffeb924e8a3347ec89f",
         "type": "github"
       },
       "original": {
-        "owner": "nix-community",
-        "ref": "master",
+        "owner": "helgeu",
+        "ref": "fix/vscode-extensions-json",
         "repo": "home-manager",
         "type": "github"
       }

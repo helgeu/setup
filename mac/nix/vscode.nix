@@ -11,13 +11,8 @@ in {
     vscode = {
       # Disable on Linux/WSL - use Windows VS Code with Remote-WSL extension
       enable = isDarwin;
-      # WORKAROUND for home-manager bug #8793 / #7880
-      # profiles.default.extensions doesn't work after commit b593765 (Feb 2026)
-      # Using legacy extensions option instead.
-      #
-      # TO REVERT when bug is fixed:
-      # 1. Change `extensions = [...]` back to `profiles.default.extensions = [...]`
-      # 2. The warning about renamed option will disappear
+      # TESTING: PR #8866 fix for home-manager bug #8793 / #7880
+      # Using profiles.default.extensions (the correct way) to test the fix
       # Allow mutable extensions dir so VS Code can install fast-updating extensions
       # like GitHub Copilot directly from marketplace (nixpkgs versions lag behind)
       mutableExtensionsDir = true;
@@ -47,10 +42,9 @@ in {
       } // lib.optionalAttrs isLinux {
         "terminal.integrated.defaultProfile.linux" = "pwsh";
       };
-      # Using legacy extensions (not profiles.default.extensions) due to bug #8793
       # NOTE: Cannot use `with pkgs.vscode-extensions` because 42crunch starts with
       # a number and Nix identifiers can't start with numbers. Keep `with pkgs`.
-      extensions = with pkgs; [
+      profiles.default.extensions = with pkgs; [
         vscode-extensions."42crunch".vscode-openapi
         vscode-extensions.redhat.vscode-yaml           # Required by vscode-openapi
         vscode-extensions.ionide.ionide-fsharp
