@@ -56,11 +56,15 @@
   }: let
     darwinSystem = "aarch64-darwin";
     linuxSystem = "x86_64-linux";
+
+    # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/497478 is merged
+    tempOverlays = [(import ./overlays/azure-cli-fix.nix)];
   in {
     # Work Mac: NO-GLV6Y9N492
     darwinConfigurations."NO-GLV6Y9N492" = nix-darwin.lib.darwinSystem {
       system = darwinSystem;
       modules = [
+        {nixpkgs.overlays = tempOverlays;}
         ./system/NO-GLV6Y9N492.nix
         ./dock/NO-GLV6Y9N492.nix
         home-manager.darwinModules.home-manager
@@ -93,6 +97,7 @@
     darwinConfigurations."Helges-MacBook-Pro" = nix-darwin.lib.darwinSystem {
       system = darwinSystem;
       modules = [
+        {nixpkgs.overlays = tempOverlays;}
         ./system/Helges-MacBook-Pro.nix
         ./dock/Helges-MacBook-Pro.nix
         home-manager.darwinModules.home-manager
@@ -125,6 +130,7 @@
     nixosConfigurations."wsl-work" = nixpkgs.lib.nixosSystem {
       system = linuxSystem;
       modules = [
+        {nixpkgs.overlays = tempOverlays;}
         nixos-wsl.nixosModules.default
         ./system/wsl-work.nix
         home-manager.nixosModules.home-manager

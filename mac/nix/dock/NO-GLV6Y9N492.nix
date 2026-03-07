@@ -11,9 +11,10 @@ in {
       "/Applications/Brave Browser.app"
       "/Applications/Microsoft Edge.app"
 
-      # Communication
+      # Communication & Office
       "/Applications/Microsoft Outlook.app"
       "/Applications/Microsoft Teams.app"
+      "/Applications/Microsoft Excel.app"
       "/Applications/Slack.app"
 
       # Development
