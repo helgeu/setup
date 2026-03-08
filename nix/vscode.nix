@@ -41,6 +41,7 @@ in {
         "terminal.integrated.defaultProfile.linux" = "pwsh";
       };
       # Extensions from VS Code marketplace via nix-vscode-extensions (updated daily)
+      # .NET extensions use nixpkgs versions (marketplace builds fail due to platform patches)
       profiles.default.extensions = [
         # GitHub Copilot
         marketplace.github.copilot
@@ -48,10 +49,10 @@ in {
         # OpenAPI
         marketplace."42crunch".vscode-openapi
         marketplace.redhat.vscode-yaml           # Required by vscode-openapi
-        # .NET
-        marketplace.ms-dotnettools.vscode-dotnet-runtime  # Required by csdevkit
-        marketplace.ms-dotnettools.csharp                 # Required by csdevkit
-        marketplace.ms-dotnettools.csdevkit
+        # .NET (nixpkgs - marketplace versions fail to build)
+        pkgs.vscode-extensions.ms-dotnettools.vscode-dotnet-runtime
+        pkgs.vscode-extensions.ms-dotnettools.csharp
+        pkgs.vscode-extensions.ms-dotnettools.csdevkit
         # Languages
         marketplace.ionide.ionide-fsharp
         marketplace.jnoortheen.nix-ide
