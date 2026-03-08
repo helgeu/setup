@@ -6,16 +6,14 @@
 }: let
   isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;
+  marketplace = pkgs.vscode-marketplace;
 in {
   programs = {
     vscode = {
       # Disable on Linux/WSL - use Windows VS Code with Remote-WSL extension
       enable = isDarwin;
-      # TESTING: PR #8866 fix for home-manager bug #8793 / #7880
-      # Using profiles.default.extensions (the correct way) to test the fix
-      # Allow mutable extensions dir so VS Code can install fast-updating extensions
-      # like GitHub Copilot directly from marketplace (nixpkgs versions lag behind)
-      mutableExtensionsDir = true;
+      # Fully declarative - all extensions managed by nix-vscode-extensions
+      mutableExtensionsDir = false;
       profiles.default.userSettings = {
         "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
         "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
@@ -42,22 +40,26 @@ in {
       } // lib.optionalAttrs isLinux {
         "terminal.integrated.defaultProfile.linux" = "pwsh";
       };
-      # NOTE: Cannot use `with pkgs.vscode-extensions` because 42crunch starts with
-      # a number and Nix identifiers can't start with numbers. Keep `with pkgs`.
-      profiles.default.extensions = with pkgs; [
-        vscode-extensions."42crunch".vscode-openapi
-        vscode-extensions.redhat.vscode-yaml           # Required by vscode-openapi
-        vscode-extensions.ionide.ionide-fsharp
-        vscode-extensions.hediet.vscode-drawio
-        vscode-extensions.chrischinchilla.vscode-pandoc
-        vscode-extensions.bierner.markdown-mermaid
-        vscode-extensions.ms-dotnettools.csharp                 # Required by csdevkit
-        vscode-extensions.ms-dotnettools.vscode-dotnet-runtime  # Required by csdevkit
-        vscode-extensions.ms-dotnettools.csdevkit
-        vscode-extensions.jnoortheen.nix-ide
-        vscode-extensions.ms-vscode.powershell
-        # NOTE: GitHub Copilot extensions NOT managed by Nix - install via VS Code marketplace
-        # Reason: nixpkgs versions lag behind and cause version compatibility errors
+      # Extensions from VS Code marketplace via nix-vscode-extensions (updated daily)
+      profiles.default.extensions = [
+        # GitHub Copilot
+        marketplace.github.copilot
+        marketplace.github.copilot-chat
+        # OpenAPI
+        marketplace."42crunch".vscode-openapi
+        marketplace.redhat.vscode-yaml           # Required by vscode-openapi
+        # .NET
+        marketplace.ms-dotnettools.vscode-dotnet-runtime  # Required by csdevkit
+        marketplace.ms-dotnettools.csharp                 # Required by csdevkit
+        marketplace.ms-dotnettools.csdevkit
+        # Languages
+        marketplace.ionide.ionide-fsharp
+        marketplace.jnoortheen.nix-ide
+        marketplace.ms-vscode.powershell
+        # Tools
+        marketplace.hediet.vscode-drawio
+        marketplace.chrischinchilla.vscode-pandoc
+        marketplace.bierner.markdown-mermaid
       ];
     };
   };

@@ -42,6 +42,12 @@
     };
 
     claude-code.url = "github:sadjow/claude-code-nix";
+
+    # VS Code extensions from marketplace (updated daily)
+    nix-vscode-extensions = {
+      url = "github:nix-community/nix-vscode-extensions";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ {
@@ -59,8 +65,11 @@
     darwinSystem = "aarch64-darwin";
     linuxSystem = "x86_64-linux";
 
-    # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/497478 is merged
-    tempOverlays = [(import ./overlays/azure-cli-fix.nix)];
+    overlays = [
+      inputs.nix-vscode-extensions.overlays.default
+      # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/497478 is merged
+      (import ./overlays/azure-cli-fix.nix)
+    ];
 
     # Shared home-manager config for all platforms
     hmConfig = user: homeModule: {
@@ -89,7 +98,7 @@
       nix-darwin.lib.darwinSystem {
         system = darwinSystem;
         modules = [
-          {nixpkgs.overlays = tempOverlays;}
+          {nixpkgs.overlays = overlays;}
           systemModule
           dockModule
           home-manager.darwinModules.home-manager
@@ -124,7 +133,7 @@
     nixosConfigurations."wsl-work" = nixpkgs.lib.nixosSystem {
       system = linuxSystem;
       modules = [
-        {nixpkgs.overlays = tempOverlays;}
+        {nixpkgs.overlays = overlays;}
         nixos-wsl.nixosModules.default
         ./system/wsl-work.nix
         home-manager.nixosModules.home-manager
