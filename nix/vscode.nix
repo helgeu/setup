@@ -43,8 +43,7 @@ in {
       # Extensions from VS Code marketplace via nix-vscode-extensions (updated daily)
       # .NET extensions use nixpkgs versions (marketplace builds fail due to platform patches)
       profiles.default.extensions = [
-        # GitHub Copilot
-        marketplace.github.copilot
+        # GitHub Copilot (chat only — copilot core conflicts with mutableExtensionsDir=false)
         marketplace.github.copilot-chat
         # OpenAPI
         marketplace."42crunch".vscode-openapi
