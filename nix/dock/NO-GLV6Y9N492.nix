@@ -7,7 +7,7 @@ in {
     # Apps in the Dock (left side)
     persistent-apps = [
       # Browsers (Brave via Homebrew for iCloud Passwords compatibility)
-      "/Applications/Safari.app"
+      "/System/Cryptexes/App/System/Applications/Safari.app"
       "/Applications/Brave Browser.app"
       "/Applications/Microsoft Edge.app"
 
