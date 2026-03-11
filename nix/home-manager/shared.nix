@@ -34,6 +34,7 @@ in {
     fnm
 
     # Dev tools
+    opencode
     pandoc
     texliveBasic  # Needed for pandoc PDF output
     powershell
