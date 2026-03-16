@@ -43,6 +43,11 @@
 
     claude-code.url = "github:sadjow/claude-code-nix";
 
+    rtk = {
+      url = "github:helgeu/rtk/feat/nix-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # VS Code extensions from marketplace (updated daily)
     nix-vscode-extensions = {
       url = "github:nix-community/nix-vscode-extensions";
@@ -79,6 +84,7 @@
       home-manager.backupFileExtension = "backup";
       home-manager.extraSpecialArgs = {
         claude-code = inputs.claude-code;
+        rtk = inputs.rtk;
       };
       home-manager.users.${user} = {...}: {
         imports = [
