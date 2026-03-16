@@ -375,16 +375,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1773681969,
-        "narHash": "sha256-soA7S7xH/+3kWTKLd++wQhfwPOdvk2p1h2ZimL4/a5s=",
+        "lastModified": 1773721820,
+        "narHash": "sha256-6GmPJHcuqTRmtdYqw1cTIi7blbQQoBMYeDTDpT2A+/A=",
         "owner": "helgeu",
         "repo": "rtk",
-        "rev": "bdd96f5806a5d2fb136fe09e5b25fdaa7bd4b8e1",
+        "rev": "ef74fa2b2df362227d5c152db27664d769e6f354",
         "type": "github"
       },
       "original": {
         "owner": "helgeu",
-        "ref": "feat/nix-flake",
+        "ref": "feat/dry-run-json",
         "repo": "rtk",
         "type": "github"
       }
