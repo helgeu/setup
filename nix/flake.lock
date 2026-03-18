@@ -375,11 +375,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1773721820,
-        "narHash": "sha256-6GmPJHcuqTRmtdYqw1cTIi7blbQQoBMYeDTDpT2A+/A=",
+        "lastModified": 1773863987,
+        "narHash": "sha256-97+6nSCm8ZJMhXV6UrhPuiMPwm25Th/TXkTDJSZ8cS4=",
         "owner": "helgeu",
         "repo": "rtk",
-        "rev": "ef74fa2b2df362227d5c152db27664d769e6f354",
+        "rev": "ade4e37525c3032bb256e0ae0c1e6a37129f07b0",
         "type": "github"
       },
       "original": {
