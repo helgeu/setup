@@ -10,10 +10,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # TESTING: Using fork to test vscode fix (PR #8866)
-    # Revert to: url = "github:nix-community/home-manager/master";
     home-manager = {
-      url = "github:helgeu/home-manager/fix/vscode-extensions-json";
+      url = "github:nix-community/home-manager/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
