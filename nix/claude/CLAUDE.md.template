@@ -145,6 +145,8 @@ Examples:
 
 ## Azure DevOps
 
+> **CLI Reference:** Before any `az boards` work, read `~/.claude/ado_cli_reference.md` for flag rules, bulk patterns, and gotchas.
+
 ### User Stories
 
 - Format: "As a [role], I want [goal], so that [benefit]"

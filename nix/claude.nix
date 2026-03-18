@@ -16,4 +16,5 @@ in {
   };
 
   home.file.".claude/.lsp.json".source = lspServers.claudeLspJson;
+  home.file.".claude/ado_cli_reference.md".source = ./claude/ado_cli_reference.md;
 }
