@@ -5,6 +5,8 @@
       "nix-command"
       "flakes"
     ];
+    max-jobs = "auto";
+    cores = 0;
   };
 
   # Automatic garbage collection (keep last 30 days)
