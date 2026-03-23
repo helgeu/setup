@@ -12,8 +12,10 @@ in {
     vscode = {
       # Disable on Linux/WSL - use Windows VS Code with Remote-WSL extension
       enable = isDarwin;
-      # Fully declarative - all extensions managed by nix-vscode-extensions
-      mutableExtensionsDir = false;
+      # Nix manages extensions as individual symlinks in a writable directory.
+      # mutableExtensionsDir=true is required because VS Code (and built-in
+      # Copilot Chat) writes temp/session files to the extensions dir at runtime.
+      mutableExtensionsDir = true;
       profiles.default.userSettings = {
         "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
         "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
