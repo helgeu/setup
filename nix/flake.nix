@@ -44,7 +44,7 @@
     claude-code.url = "github:sadjow/claude-code-nix";
 
     rtk = {
-      url = "github:helgeu/rtk/feat/nix-flake";
+      url = "github:helgeu/rtk/feat/dry-run-json";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -84,12 +84,12 @@
       home-manager.backupFileExtension = "backup";
       home-manager.extraSpecialArgs = {
         claude-code = inputs.claude-code;
-        rtk = inputs.rtk;
       };
       home-manager.users.${user} = {...}: {
         imports = [
           homeModule
           nvf.homeManagerModules.default
+          inputs.rtk.homeManagerModules.default
         ];
       };
     };
