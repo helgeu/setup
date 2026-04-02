@@ -28,6 +28,8 @@ PROJ="<project>"
 | `work-item relation add` | Yes | **No** | |
 | `work-item relation list-type` | Yes | **No** | |
 | `boards query` (WIQL) | Yes | Yes (required) | |
+| `repos pr show` | Yes | **No** | Resolves project from PR ID |
+| `repos pr list` | Yes | Yes | Also needs `--repository` |
 
 ### Relation Types
 
@@ -44,7 +46,7 @@ Use display names, not reference names:
 
 ### show/update Gotchas
 
-- `-f` (fields) conflicts with default `--expand all`. Use `--expand fields` when using `-f`, or omit `-f` and filter with `--query`.
+- `-f` (fields) conflicts with default `--expand all`. Use `--expand none` when using `-f`, or omit `-f` and filter with `--query`.
 - `--state` is a convenience flag on `update`. All other fields use `--fields "Field.Name=value"`.
 
 ### Bulk Operations
@@ -61,3 +63,29 @@ echo "${IDS[@]}" | xargs -P 10 -I {} az boards work-item update --id {} \
 ### Bulk Field Updates
 
 When updating fields like Value Area across a hierarchy, update ALL items -- not just those matching a state filter. Fields may need updating regardless of current state.
+
+### PR Review Threads (`az devops invoke`)
+
+When posting inline PR comments, the API needs TWO separate top-level objects:
+
+```json
+{
+  "comments": [{"parentCommentId": 0, "content": "...", "commentType": 1}],
+  "threadContext": {
+    "filePath": "/path/to/file.cs",
+    "rightFileStart": {"line": 42, "offset": 1},
+    "rightFileEnd": {"line": 48, "offset": 1}
+  },
+  "pullRequestThreadContext": {
+    "changeTrackingId": 5,
+    "iterationContext": {"firstComparingIteration": 1, "secondComparingIteration": 1}
+  },
+  "status": 1
+}
+```
+
+- `threadContext` anchors the comment to the code. Without it, the comment floats as a general PR comment.
+- `pullRequestThreadContext` links the thread to a specific iteration/change.
+- **CRITICAL:** `filePath` and `rightFileStart`/`rightFileEnd` go in `threadContext`, NOT `pullRequestThreadContext`. Putting them in `pullRequestThreadContext` silently fails.
+- Get `changeTrackingId` from `pullRequestIterationChanges` API.
+- To delete a bad thread: DELETE the comment via `pullRequestThreadComments` resource with `commentId`.

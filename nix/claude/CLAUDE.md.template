@@ -162,6 +162,13 @@ Scenario: [Scenario name]
   Then [expected result]
 ```
 
+### PR Reviews
+
+- Use `az` CLI for all ADO operations. Never use `mcp__u-ado-mcp__*` tools.
+- Prefix every PR review comment with `**AI: SEVERITY**` (e.g. `**AI: Warning**`, `**AI: Question**`, `**AI: Nitpick**`, `**AI: Suggestion**`, `**AI: Error**`).
+- Always fetch linked work items (from PR title, e.g. `#80145`) and verify the code matches requirements.
+- See `~/.claude/ado_cli_reference.md` for the correct PR thread API structure.
+
 ### Work Item Linking
 
 - Reference: `#<id>` in commit message

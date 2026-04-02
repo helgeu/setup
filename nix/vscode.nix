@@ -45,7 +45,7 @@ in {
       # Extensions from VS Code marketplace via nix-vscode-extensions (updated daily)
       # .NET extensions use nixpkgs versions (marketplace builds fail due to platform patches)
       profiles.default.extensions = [
-        # GitHub Copilot Chat is built into VS Code since 1.96 — no extension needed
+        # GitHub Copilot Chat is auto-installed by VS Code at runtime — do NOT add here
         # OpenAPI
         marketplace."42crunch".vscode-openapi
         marketplace.redhat.vscode-yaml           # Required by vscode-openapi
