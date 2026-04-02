@@ -13,6 +13,7 @@ in {
       "/Applications/Tor Browser.app"
 
       # Communication
+      "/System/Applications/Mail.app"
       "/Applications/Slack.app"
       "/Applications/Telegram.app"
       "/Applications/Signal.app"
