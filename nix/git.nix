@@ -24,6 +24,7 @@
   programs = {
     git = {
       enable = true;
+      signing.format = null;
       package =
         if pkgs.stdenv.isDarwin
         then pkgs.git.override {osxkeychainSupport = false;}
