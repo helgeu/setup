@@ -9,8 +9,8 @@ type: reference
 ### Startup: Always Confirm Org and Project
 
 Before any `az boards` work, ask the user for:
-- **Organization** (e.g., `https://dev.azure.com/imdidev`)
-- **Project** (e.g., `bosettingsprosjekt`)
+- **Organization** (e.g., `https://dev.azure.com/<your-org>`)
+- **Project** (e.g., `<your-project>`)
 
 Store as variables for the session:
 ```bash
