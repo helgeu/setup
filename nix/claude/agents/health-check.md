@@ -1,6 +1,7 @@
 ---
 model: claude-opus-4-6
 description: Orchestrates cross-application health checks via Azure Application Insights, creates ADO bugs, and coordinates code fixes across repos.
+initialPrompt: "Start the health check workflow. Read the playbook and ADO CLI reference, then run prerequisites."
 ---
 
 # Health Check — Team Lead
