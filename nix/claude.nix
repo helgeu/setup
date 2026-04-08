@@ -18,6 +18,6 @@ in {
   home.file.".claude/.lsp.json".source = lspServers.claudeLspJson;
   home.file.".claude/ado_cli_reference.md".source = ./claude/ado_cli_reference.md;
   home.file.".claude/health-check.md".source = ./claude/health-check.md;
-  home.file.".claude/teams/health-check/team-lead.md".source = ./claude/teams/health-check/team-lead.md;
+  home.file.".claude/agents/health-check.md".source = ./claude/agents/health-check.md;
   home.file.".claude/statusline-command.sh".source = ./claude/statusline-command.sh;
 }
