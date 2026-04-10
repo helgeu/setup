@@ -75,6 +75,7 @@
       "ghostty"
     ];
     masApps = {
+      "Amazon Kindle" = 302584613;
       Xcode = 497799835;
     };
   };
