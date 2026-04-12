@@ -111,7 +111,6 @@ brew install nixfmt
 brew install zip
 brew install mas                    # Mac App Store CLI
 brew install tmuxinator
-brew install duti                   # set default macOS apps
 
 # API testing
 brew install bruno-cli
