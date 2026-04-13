@@ -70,8 +70,8 @@
 
     overlays = [
       inputs.nix-vscode-extensions.overlays.default
-      # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/497478 is merged
-      (import ./overlays/azure-cli-fix.nix)
+      # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/509545 is merged
+      (import ./overlays/vscode-darwin-fix.nix)
     ];
 
     # Shared home-manager config for all platforms
