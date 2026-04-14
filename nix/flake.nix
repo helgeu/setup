@@ -3,7 +3,9 @@
   description = "Nix setup for macOS and WSL machines";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # TEMPORARY: Pinned to master to pick up ICU fix (NixOS/nixpkgs#506470).
+    # Revert to nixpkgs-unstable once the fix lands there.
+    nixpkgs.url = "github:NixOS/nixpkgs/dffee6df67c5ea06799c1e6c7257ffd0e0f0020d";
 
     nix-darwin = {
       url = "github:LnL7/nix-darwin/master";
