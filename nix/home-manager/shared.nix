@@ -60,6 +60,11 @@ in {
   home.sessionVariables = {
     MANPAGER = "nvim +Man!";
     DOTNET_ROOT = "${combinedDotnet}/share/dotnet";
+    # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/506470 is merged
+    # macOS 26.4 updated system ICU to v78, which clashes with nixpkgs' ICU 76 C++ symbols,
+    # causing SIGABRT in all .NET apps (dotnet, git-credential-manager, etc.)
+    # Tracking issue: https://github.com/NixOS/nixpkgs/issues/502224
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT = "1";
   };
 
   programs.home-manager.enable = true;
