@@ -43,7 +43,7 @@ in {
   in lib.hm.dag.entryAfter ["writeBoundary"] ''
     workflow_dir="$HOME/Library/Services/Open Activity Monitor.workflow/Contents"
     run mkdir -p "$workflow_dir"
-    run cp "${wflow}" "$workflow_dir/document.wflow"
+    run install -m 644 "${wflow}" "$workflow_dir/document.wflow"
 
     run /usr/bin/defaults write pbs NSServicesStatus \
       -dict-add "com.apple.Automator.Open Activity Monitor - runWorkflowAsService" \
