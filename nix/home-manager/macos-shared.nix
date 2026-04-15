@@ -34,14 +34,19 @@ in {
       external_update_url = "https://clients2.google.com/service/update2/crx";
     };
 
-    # Quick Action: Open Activity Monitor (bound to Ctrl+Shift+Esc)
-    "Library/Services/Open Activity Monitor.workflow/Contents/document.wflow".source = ../services/open-activity-monitor.wflow;
   };
 
-  # Bind Ctrl+Shift+Esc to the Quick Action
-  home.activation.bindActivityMonitorShortcut = lib.hm.dag.entryAfter ["writeBoundary"] ''
+  # Quick Action: Open Activity Monitor (Ctrl+Shift+Esc)
+  # macOS requires .workflow bundles to be real directories (not nix store symlinks)
+  home.activation.installActivityMonitorQuickAction = let
+    wflow = ../services/open-activity-monitor.wflow;
+  in lib.hm.dag.entryAfter ["writeBoundary"] ''
+    workflow_dir="$HOME/Library/Services/Open Activity Monitor.workflow/Contents"
+    run mkdir -p "$workflow_dir"
+    run cp "${wflow}" "$workflow_dir/document.wflow"
+
     run defaults write pbs NSServicesStatus \
       -dict-add "com.apple.Automator.Open Activity Monitor - runWorkflowAsService" \
-      '{ "key_equivalent" = "^$\\U001b"; }'
+      '{ "key_equivalent" = "^$\U001b"; }'
   '';
 }
