@@ -33,5 +33,15 @@ in {
     "Library/Application Support/BraveSoftware/Brave-Browser/External Extensions/pejdijmoenmkgeppbflobdenhhabjlaj.json".text = builtins.toJSON {
       external_update_url = "https://clients2.google.com/service/update2/crx";
     };
+
+    # Quick Action: Open Activity Monitor (bound to Ctrl+Shift+Esc)
+    "Library/Services/Open Activity Monitor.workflow/Contents/document.wflow".source = ../services/open-activity-monitor.wflow;
   };
+
+  # Bind Ctrl+Shift+Esc to the Quick Action
+  home.activation.bindActivityMonitorShortcut = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    run defaults write pbs NSServicesStatus \
+      -dict-add "com.apple.Automator.Open Activity Monitor - runWorkflowAsService" \
+      '{ "key_equivalent" = "^$\\U001b"; }'
+  '';
 }
