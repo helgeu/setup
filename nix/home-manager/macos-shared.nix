@@ -45,7 +45,7 @@ in {
     run mkdir -p "$workflow_dir"
     run cp "${wflow}" "$workflow_dir/document.wflow"
 
-    run defaults write pbs NSServicesStatus \
+    run /usr/bin/defaults write pbs NSServicesStatus \
       -dict-add "com.apple.Automator.Open Activity Monitor - runWorkflowAsService" \
       '{ "key_equivalent" = "^$\U001b"; }'
   '';
