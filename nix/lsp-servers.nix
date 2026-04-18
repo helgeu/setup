@@ -50,10 +50,33 @@ let
       extensions = { ".fs" = "fsharp"; ".fsx" = "fsharp"; ".fsi" = "fsharp"; };
     };
     csharp = {
-      package = pkgs.omnisharp-roslyn;
-      command = "OmniSharp";
-      args = [ "--languageserver" ];
-      extensions = { ".cs" = "csharp"; };
+      # Microsoft's Roslyn LS - same backend as VS Code's C# Dev Kit.
+      # Neovim uses it via the roslyn.nvim plugin (auto-discovers this binary on PATH).
+      package = pkgs.roslyn-ls;
+      command = "Microsoft.CodeAnalysis.LanguageServer";
+      args = [
+        "--stdio"
+        "--logLevel=Information"
+        "--extensionLogDirectory=/tmp/roslyn-ls-claude"
+      ];
+      extensions = { ".cs" = "csharp"; ".csx" = "csharp"; };
+    };
+    powershell = {
+      # Wrapper script at ${pkgs.powershell-editor-services}/bin/powershell-editor-services
+      # runs pwsh with Start-EditorServices.ps1, forwarding these args.
+      package = pkgs.powershell-editor-services;
+      command = "powershell-editor-services";
+      args = [
+        "-BundledModulesPath" "${pkgs.powershell-editor-services}/lib/powershell-editor-services"
+        "-LogPath" "/tmp/pses-claude.log"
+        "-SessionDetailsPath" "/tmp/pses-claude-session.json"
+        "-FeatureFlags" "@()"
+        "-HostName" "Claude"
+        "-HostProfileId" "claude"
+        "-HostVersion" "1.0.0"
+        "-Stdio"
+      ];
+      extensions = { ".ps1" = "powershell"; ".psm1" = "powershell"; ".psd1" = "powershell"; };
     };
   };
 

@@ -27,7 +27,8 @@
     enable = true;
     lsp = {
       enable = true;
-      servers = ["omnisharp"];
+      # Same pkgs.roslyn-ls binary as Claude (see lsp-servers.nix).
+      servers = ["roslyn_ls"];
     };
     treesitter = {
       enable = true;
