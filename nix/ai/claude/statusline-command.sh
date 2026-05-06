@@ -10,6 +10,15 @@ five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage //
 five_hour_resets=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
 now_hms=$(date +%H:%M:%S)
 
+# Effort level (not in statusline JSON; read from settings files, local overrides global)
+effort=""
+for f in "$HOME/.claude/settings.local.json" "$HOME/.claude/settings.json"; do
+  if [ -r "$f" ]; then
+    effort=$(jq -r '.effortLevel // empty' "$f" 2>/dev/null)
+    [ -n "$effort" ] && break
+  fi
+done
+
 display_cwd="${cwd/#$HOME/\~}"
 
 # Git state
@@ -80,8 +89,10 @@ if [ -n "$git_branch" ]; then
   add_seg "$gbg" "$gfg" "$gtxt"
 fi
 
-# 3. Model (Claude orange)
-add_seg "217;119;87" "255;255;255" "${ICON_MODEL} ${model}"
+# 3. Model (Claude orange) — append effort level as modifier
+model_txt="${ICON_MODEL} ${model}"
+[ -n "$effort" ] && model_txt="${model_txt} · ${effort}"
+add_seg "217;119;87" "255;255;255" "$model_txt"
 
 # 4. 5h session usage (Pro/Max; absent for API key and first response)
 if [ -n "$five_hour_pct" ]; then

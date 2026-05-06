@@ -1,5 +1,5 @@
 {
-  "effort": "auto",
+  "effortLevel": "high",
   "memory": {
     "auto_dream": true
   },

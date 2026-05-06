@@ -17,7 +17,7 @@ in {
     ../zsh.nix
     ../nvf.nix
     ../vscode.nix
-    ../claude.nix
+    ../ai
   ];
 
   # Shared packages (cross-platform)
@@ -34,7 +34,6 @@ in {
     fnm
 
     # Dev tools
-    opencode
     pandoc
     texliveBasic  # Needed for pandoc PDF output
     powershell
