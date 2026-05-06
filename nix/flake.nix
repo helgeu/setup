@@ -3,9 +3,7 @@
   description = "Nix setup for macOS and WSL machines";
 
   inputs = {
-    # TEMPORARY: Pinned to master to pick up ICU fix (NixOS/nixpkgs#506470).
-    # Revert to nixpkgs-unstable once the fix lands there.
-    nixpkgs.url = "github:NixOS/nixpkgs/dffee6df67c5ea06799c1e6c7257ffd0e0f0020d";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     nix-darwin = {
       url = "github:LnL7/nix-darwin/master";
@@ -44,7 +42,7 @@
     claude-code.url = "github:sadjow/claude-code-nix";
 
     rtk = {
-      url = "github:helgeu/rtk/feat/dry-run-json";
+      url = "github:helgeu/rtk/feat/nix-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -72,8 +70,6 @@
 
     overlays = [
       inputs.nix-vscode-extensions.overlays.default
-      # TEMPORARY: Remove when https://github.com/NixOS/nixpkgs/pull/509545 is merged
-      (import ./overlays/vscode-darwin-fix.nix)
     ];
 
     # Shared home-manager config for all platforms
