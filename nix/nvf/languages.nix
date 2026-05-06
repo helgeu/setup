@@ -5,7 +5,7 @@
   lua.enable = true;
   nix.enable = true;
   markdown.enable = true;
-  ts.enable = true;
+  typescript.enable = true;
   bash.enable = true;
   css.enable = true;
   yaml.enable = true;
@@ -28,7 +28,7 @@
     lsp = {
       enable = true;
       # Same pkgs.roslyn-ls binary as Claude (see lsp-servers.nix).
-      servers = ["roslyn_ls"];
+      servers = ["roslyn-ls"];
     };
     treesitter = {
       enable = true;
