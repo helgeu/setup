@@ -22,6 +22,13 @@ in {
 
   # Shared packages (cross-platform)
   home.packages = with pkgs; [
+    # Azure / Cloud
+    (azure-cli.withExtensions [
+      azure-cli-extensions.azure-devops
+      azure-cli-extensions.resource-graph
+      azure-cli-extensions.application-insights
+    ])
+
     # .NET development
     combinedDotnet
     # Shell tools
