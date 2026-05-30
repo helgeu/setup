@@ -64,4 +64,25 @@ in {
       ];
     };
   };
+
+  # Durable guard against silent activation failures.
+  #
+  # Stale VS Code extension symlinks from an older generation, plus the
+  # `extensions.backup` that `backupFileExtension` leaves behind, make
+  # home-manager's `checkLinkTargets` abort. Because the per-user activation
+  # runs as a postActivation sub-step (`launchctl asuser ... activation-<user>`),
+  # that abort does NOT fail `darwin-rebuild switch` — the system switch reports
+  # success while ~/.claude and every other home file silently go stale.
+  #
+  # Pre-clean before `checkLinkTargets` so activation always proceeds. Safe:
+  # these are regenerated nix-store symlinks, not data. Real directories (e.g.
+  # VS Code's runtime-installed Copilot Chat) are not symlinks, so they survive.
+  home.activation = lib.mkIf isDarwin {
+    cleanVscodeExtensionConflicts =
+      lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+        ext="$HOME/.vscode/extensions"
+        rm -rf "$ext.backup"
+        [ -d "$ext" ] && find "$ext" -maxdepth 1 -type l -delete
+      '';
+  };
 }
