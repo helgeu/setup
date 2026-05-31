@@ -146,7 +146,7 @@ Examples:
 
 ## Azure DevOps
 
-> **CLI Reference:** Before any `az boards` work, read `~/.claude/ado_cli_reference.md` for flag rules, bulk patterns, and gotchas.
+> **CLI Reference:** Before any `az boards` work, read `~/.claude/ado-cli-reference.md` for flag rules, bulk patterns, and gotchas.
 
 ### User Stories
 
@@ -168,7 +168,7 @@ Scenario: [Scenario name]
 - Use `az` CLI for all ADO operations. Never use `mcp__u-ado-mcp__*` tools.
 - Prefix every PR review comment with `**AI: SEVERITY**` (e.g. `**AI: Warning**`, `**AI: Question**`, `**AI: Nitpick**`, `**AI: Suggestion**`, `**AI: Error**`).
 - Always fetch linked work items (from PR title, e.g. `#80145`) and verify the code matches requirements.
-- See `~/.claude/ado_cli_reference.md` for the correct PR thread API structure.
+- See `~/.claude/ado-cli-reference.md` for the correct PR thread API structure.
 
 ### Work Item Linking
 
