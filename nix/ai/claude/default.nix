@@ -38,5 +38,6 @@ in {
     ".claude/ado/Ado.Common.ps1".source = ./ado/Ado.Common.ps1;
     ".claude/ado/New-AdoWorkItem.ps1".source = ./ado/New-AdoWorkItem.ps1;
     ".claude/ado/Import-AdoBacklog.ps1".source = ./ado/Import-AdoBacklog.ps1;
+    ".claude/ado/Set-AdoBacklogOrder.ps1".source = ./ado/Set-AdoBacklogOrder.ps1;
   } // adoConfigFiles;
 }
