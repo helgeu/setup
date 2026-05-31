@@ -76,7 +76,7 @@ Use display names: `Parent` (not `System.LinkTypes.Hierarchy-Reverse`), `Child`,
 
 ## Work item type discovery (REST)
 
-`az boards` has no WIT-metadata subcommand; use `az rest`.
+`az boards` has no WIT-metadata subcommand; use `az rest`. **`az rest` against `dev.azure.com` needs `--resource 499b84ac-1321-427f-aa17-267ca6975798`** (the ADO resource), otherwise it returns an HTML sign-in page instead of JSON.
 
 ```bash
 # Types in a project
