@@ -3,7 +3,7 @@
 $ErrorActionPreference = 'Stop'
 
 function Get-AdoConfig {
-    param([Parameter(Mandatory)][string]$Key)   # e.g. urholm-Devkunt
+    param([Parameter(Mandatory)][string]$Key)   # e.g. <org>-<project>
     $path = Join-Path $HOME ".claude/ado/configs/$Key.json"
     if (-not (Test-Path $path)) { throw "No ADO config '$Key' at $path" }
     $cfg = Get-Content $path -Raw | ConvertFrom-Json
