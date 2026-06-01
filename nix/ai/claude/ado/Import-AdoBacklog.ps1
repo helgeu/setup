@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # Idempotently seed an Epic/Feature hierarchy from a backlog JSON file.
-#   Import-AdoBacklog.ps1 -Config urholm-Devkunt -Backlog ./devkunt-backlog.json [-WhatIf]
+#   Import-AdoBacklog.ps1 -Config <org>-<project> -Backlog ./backlog.json [-WhatIf]
 # Backlog schema: { "epics": [ { code,title,tags,description, features:[ {title,tags,description} ] } ] }
 param(
     [Parameter(Mandatory)][string]$Config,

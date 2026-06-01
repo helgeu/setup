@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # Create a single ADO work item (optionally parent-linked).
-#   New-AdoWorkItem.ps1 -Config urholm-Devkunt -Type Feature -Title "..." -ParentId 12 -Tags MVP
+#   New-AdoWorkItem.ps1 -Config <org>-<project> -Type Feature -Title "..." -ParentId 12 -Tags MVP
 param(
     [Parameter(Mandatory)][string]$Config,
     [Parameter(Mandatory)][string]$Type,

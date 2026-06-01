@@ -1,8 +1,9 @@
 #!/usr/bin/env pwsh
 # Set ADO backlog order (Microsoft.VSTS.Common.StackRank; lower = higher in the backlog).
-# Epic priority is the $EpicOrder list below (dependency/MVP-driven); features follow
-# their order within each epic in the backlog file, grouped by epic priority.
-#   Set-AdoBacklogOrder.ps1 -Config urholm-Devkunt -Backlog ./devkunt-backlog.json
+# Epics are ranked in the order they appear in the backlog file (top of file = top of
+# backlog); features follow their order within each epic. Curate the priority by
+# arranging the backlog file itself.
+#   Set-AdoBacklogOrder.ps1 -Config <org>-<project> -Backlog ./backlog.json
 param(
     [Parameter(Mandatory)][string]$Config,
     [Parameter(Mandatory)][string]$Backlog
@@ -12,14 +13,8 @@ $cfg = Get-AdoConfig -Key $Config
 Assert-AdoLogin
 $org = $cfg.organizationUrl; $proj = $cfg.project
 
-# Top of backlog first. Foundations -> identity -> compliance -> organiser -> handler
-# -> payments -> execution -> resale -> admin; then deferred, then stubs.
-$EpicOrder = @('E01','E14','E11','E12','E02','E13','E03','E04','E05',
-               'E06','E07','E09','E08','E15','E10','E16','E17','E18','E19')
-
 if (-not (Test-Path $Backlog)) { throw "Backlog not found: $Backlog" }
 $data = Get-Content $Backlog -Raw | ConvertFrom-Json
-$byCode = @{}; foreach ($e in $data.epics) { $byCode[$e.code] = $e }
 
 # One query: title|type -> id
 $rows = az boards query --org $org --project $proj `
@@ -33,18 +28,15 @@ function Set-Rank([int]$id, [int]$rank) {
 }
 
 $rank = 10
-foreach ($code in $EpicOrder) {
-    $e = $byCode[$code]
-    if (-not $e) { Write-Host "!! no epic $code in backlog"; continue }
+foreach ($e in $data.epics) {
     $eid = $idOf["Epic|$($e.title)"]
     if ($eid) { Set-Rank $eid $rank; Write-Host ("{0,4}  Epic  {1}" -f $rank, $e.title) }
+    else { Write-Host "!! epic not found in board: $($e.title)" }
     $rank += 10
 }
 
 $rank = 10
-foreach ($code in $EpicOrder) {
-    $e = $byCode[$code]
-    if (-not $e) { continue }
+foreach ($e in $data.epics) {
     foreach ($f in $e.features) {
         $fid = $idOf["Feature|$($f.title)"]
         if ($fid) { Set-Rank $fid $rank }
