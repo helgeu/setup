@@ -3,7 +3,7 @@
 #   - <JsonPath>  : machine-readable backlog (round-trips with Import-AdoBacklog)
 #   - <MdPath>    : human-readable snapshot for the wiki
 # ADO is master; these are GENERATED — never hand-edit them.
-#   Export-AdoBacklog.ps1 -Config urholm-Devkunt -JsonPath ./backlog.json -MdPath ./Backlog.md
+#   Export-AdoBacklog.ps1 -Config <org>-<project> -JsonPath ./backlog.json -MdPath ./Backlog.md
 param(
     [Parameter(Mandatory)][string]$Config,
     [string]$JsonPath = "./backlog.json",
