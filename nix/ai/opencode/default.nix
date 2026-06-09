@@ -23,5 +23,10 @@ in
 {
   programs.rtk.opencode.enable = true;
 
+  # Disable TUI mouse capture so terminal-native click-to-select/copy works.
+  # opencode computes useMouse as: !OPENCODE_DISABLE_MOUSE && (config.mouse ?? true).
+  # The env var must be exactly "1" or "true" and overrides config unconditionally.
+  home.sessionVariables.OPENCODE_DISABLE_MOUSE = "1";
+
   home.file.".config/opencode/plugins/rtk.ts".source = rtkOpenCodePlugin;
 }
