@@ -19,6 +19,7 @@
     casks = [
       "rancher"
       "bruno"
+      "ollama-app"
     ];
   };
 }
