@@ -36,6 +36,7 @@ in {
     ".claude/statusline-command.sh".source = ./statusline-command.sh;
     ".claude/ado-cli-reference.md".source = ./ado-cli-reference.md;
     ".claude/pr-review.md".source = ./pr-review.md;
+    ".claude/skills/pr-review/SKILL.md".source = ./skills/pr-review/SKILL.md;
     ".claude/agents/pr-review.md".source = ./agents/pr-review.md;
     ".claude/agents/azure-app-triage.md".source = ./agents/azure-app-triage.md;
     ".claude/ado/Ado.Common.ps1".source = ./ado/Ado.Common.ps1;

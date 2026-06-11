@@ -14,6 +14,14 @@
       source = ./oc;
       executable = true;
     };
+    "bin/pr-review" = {
+      source = ./pr-review;
+      executable = true;
+    };
+    "bin/pr-review-post" = {
+      source = ./pr-review-post;
+      executable = true;
+    };
   };
 
   # Ensure ~/bin is on PATH everywhere.

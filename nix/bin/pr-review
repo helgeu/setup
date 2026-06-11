@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+#
+# pr-review - headless AI code review of an Azure DevOps pull request.
+#
+# Maps a PR id to its local repo clone, checks out the PR source branch in a
+# fresh, ISOLATED git worktree (never touches your working tree or branches),
+# installs dependencies cleanly, then runs opencode (the `pr-review` agent +
+# skill) to produce a STRUCTURED JSON findings file. It does NOT post anything.
+#
+# Review the JSON, edit/approve it, then publish with `pr-review-post`.
+#
+# Usage:
+#   pr-review <pr-id> [org]
+#   pr-review 22846
+#   pr-review 22846 imdidev
+#   pr-review 22846 https://dev.azure.com/imdidev
+#
+# Options (env vars):
+#   PR_REVIEW_ORG          default org (bare name or URL) if not given as arg 2
+#   PR_REVIEW_REPO_ROOTS   colon-separated dirs to search for the local clone
+#                          (default: ~/ado)
+#   PR_REVIEW_MODEL        opencode model override, e.g. github-copilot/claude-opus-4.8
+#   PR_REVIEW_KEEP=1       keep the worktree after the run (default: remove it)
+#
+# Hard rule: this is a partly destructive operation (checkout/install), so it
+# ABORTS on any error and never continues past a failed step.
+set -euo pipefail
+
+die() { echo "pr-review: error: $*" >&2; exit 1; }
+log() { echo "pr-review: $*" >&2; }
+
+# --- args --------------------------------------------------------------------
+KEEP="${PR_REVIEW_KEEP:-}"
+ARGS=()
+for a in "$@"; do
+  case "$a" in
+    --keep) KEEP=1 ;;
+    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+set -- "${ARGS[@]}"
+
+PR_ID="${1:-}"
+[ -n "$PR_ID" ] || die "missing PR id. usage: pr-review <pr-id> [org]"
+[[ "$PR_ID" =~ ^[0-9]+$ ]] || die "PR id must be numeric, got: $PR_ID"
+
+# --- tools -------------------------------------------------------------------
+for t in az jq git opencode; do
+  command -v "$t" >/dev/null || die "$t not found on PATH"
+done
+
+# --- resolve org -------------------------------------------------------------
+ORG_IN="${2:-${PR_REVIEW_ORG:-}}"
+PARAM_DIR="$HOME/.claude/pr-review"
+if [ -z "$ORG_IN" ]; then
+  # Fall back to the single param file, if exactly one exists.
+  shopt -s nullglob
+  params=("$PARAM_DIR"/*.json)
+  shopt -u nullglob
+  # Exclude findings/context files (PR-*.json) from the param-file heuristic.
+  cfgs=()
+  for p in "${params[@]}"; do
+    case "$(basename "$p")" in PR-*.json) ;; *) cfgs+=("$p") ;; esac
+  done
+  [ "${#cfgs[@]}" -eq 1 ] || die "could not determine org: pass it as arg 2, set PR_REVIEW_ORG, or keep exactly one config in $PARAM_DIR (found ${#cfgs[@]})"
+  ORG_IN="$(jq -r '.org' "${cfgs[0]}")"
+  log "org resolved from ${cfgs[0]##*/}: $ORG_IN"
+fi
+case "$ORG_IN" in
+  http*://*) ORG="${ORG_IN%/}" ;;
+  *)         ORG="https://dev.azure.com/${ORG_IN}" ;;
+esac
+
+# --- fetch PR metadata (PR -> repo mapping) ----------------------------------
+mkdir -p "$PARAM_DIR"
+CTX="$PARAM_DIR/PR-${PR_ID}-context.json"
+FINDINGS="$PARAM_DIR/PR-${PR_ID}-findings.json"
+
+log "fetching PR #$PR_ID from $ORG"
+az repos pr show --id "$PR_ID" --org "$ORG" -o json > "$CTX" \
+  || die "az repos pr show failed for PR #$PR_ID in $ORG (auth? wrong org? wrong id?)"
+
+REPO_NAME="$(jq -r '.repository.name' "$CTX")"
+PROJECT="$(jq -r '.repository.project.name' "$CTX")"
+SRC_REF="$(jq -r '.sourceRefName' "$CTX")"
+TGT_REF="$(jq -r '.targetRefName' "$CTX")"
+SRC_COMMIT="$(jq -r '.lastMergeSourceCommit.commitId // empty' "$CTX")"
+SRC_BRANCH="${SRC_REF#refs/heads/}"
+TGT_BRANCH="${TGT_REF#refs/heads/}"
+[ -n "$REPO_NAME" ] && [ "$REPO_NAME" != "null" ] || die "could not read repository name from PR metadata"
+log "PR #$PR_ID -> repo '$REPO_NAME' (project '$PROJECT'), $SRC_BRANCH -> $TGT_BRANCH"
+
+# --- locate the local clone --------------------------------------------------
+IFS=':' read -r -a ROOTS <<< "${PR_REVIEW_REPO_ROOTS:-$HOME/ado}"
+repo_lc="$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')"
+REPO=""
+for root in "${ROOTS[@]}"; do
+  [ -d "$root" ] || continue
+  for d in "$root"/*; do
+    [ -d "$d/.git" ] || [ -f "$d/.git" ] || continue
+    url="$(git -C "$d" remote get-url origin 2>/dev/null || true)"
+    [ -n "$url" ] || continue
+    url_lc="$(echo "$url" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$url_lc" == *"/_git/$repo_lc" ]] || [[ "$url_lc" == *"/$repo_lc" ]] || [[ "$url_lc" == *"/_git/$repo_lc/"* ]]; then
+      REPO="$d"; break 2
+    fi
+  done
+done
+[ -n "$REPO" ] || die "no local clone of '$REPO_NAME' found under: ${ROOTS[*]} (set PR_REVIEW_REPO_ROOTS)"
+log "local clone: $REPO"
+
+# --- fresh, isolated worktree ------------------------------------------------
+REPO_PARENT="$(dirname "$REPO")"
+REPO_BASE="$(basename "$REPO")"
+WT="$REPO_PARENT/${REPO_BASE}-worktrees/pr-review-${PR_ID}"
+
+cleanup() {
+  if [ -n "${WT:-}" ] && [ -d "$WT" ] && [ -z "$KEEP" ]; then
+    log "removing worktree $WT"
+    git -C "$REPO" worktree remove --force "$WT" 2>/dev/null || true
+  elif [ -n "$KEEP" ] && [ -d "${WT:-}" ]; then
+    log "keeping worktree $WT (PR_REVIEW_KEEP set)"
+  fi
+}
+trap cleanup EXIT
+
+# Refuse to clobber an unrelated dir; only remove if it is a known worktree.
+if [ -e "$WT" ]; then
+  log "stale worktree at $WT - removing"
+  git -C "$REPO" worktree remove --force "$WT" || die "could not remove stale worktree $WT"
+fi
+mkdir -p "$(dirname "$WT")"
+
+log "fetching refs"
+git -C "$REPO" fetch --quiet origin "$SRC_BRANCH" "$TGT_BRANCH" \
+  || die "git fetch failed for $SRC_BRANCH / $TGT_BRANCH"
+
+# Prefer the PR's recorded source commit; fall back to the fetched branch tip.
+if [ -z "$SRC_COMMIT" ] || ! git -C "$REPO" cat-file -e "${SRC_COMMIT}^{commit}" 2>/dev/null; then
+  SRC_COMMIT="$(git -C "$REPO" rev-parse "origin/$SRC_BRANCH")" \
+    || die "could not resolve source commit for $SRC_BRANCH"
+fi
+
+log "creating isolated worktree at $WT (detached @ ${SRC_COMMIT:0:12})"
+git -C "$REPO" worktree add --quiet --detach "$WT" "$SRC_COMMIT" \
+  || die "git worktree add failed"
+
+# --- fresh dependency install ------------------------------------------------
+install_deps() {
+  local dir="$1"
+  if [ -f "$dir/pnpm-lock.yaml" ]; then
+    command -v pnpm >/dev/null || die "pnpm-lock.yaml present but pnpm not on PATH"
+    log "pnpm install --frozen-lockfile ($dir)"
+    (cd "$dir" && pnpm install --frozen-lockfile) || die "pnpm install failed in $dir"
+  elif [ -f "$dir/package-lock.json" ]; then
+    log "npm ci ($dir)"
+    (cd "$dir" && npm ci) || die "npm ci failed in $dir"
+  elif [ -f "$dir/yarn.lock" ]; then
+    log "yarn install --immutable ($dir)"
+    (cd "$dir" && yarn install --immutable) || die "yarn install failed in $dir"
+  fi
+}
+
+# Install at the worktree root and any common frontend subdir.
+install_deps "$WT"
+for sub in src/frontend frontend web app; do
+  [ -d "$WT/$sub" ] && install_deps "$WT/$sub"
+done
+# .NET restore if a solution/project exists anywhere.
+if find "$WT" -maxdepth 3 \( -name '*.sln' -o -name '*.csproj' \) -print -quit 2>/dev/null | grep -q .; then
+  command -v dotnet >/dev/null || die ".NET project present but dotnet not on PATH"
+  log "dotnet restore ($WT)"
+  (cd "$WT" && dotnet restore) || die "dotnet restore failed"
+fi
+
+# --- run opencode (headless) -------------------------------------------------
+MODEL_ARGS=()
+[ -n "${PR_REVIEW_MODEL:-}" ] && MODEL_ARGS=(--model "$PR_REVIEW_MODEL")
+
+PROMPT="Use the pr-review skill. The verified PR context is in ${CTX} (read it; do not re-fetch PR metadata). The current working directory is a fresh, isolated worktree checked out at the PR source branch '${SRC_BRANCH}' (target branch '${TGT_BRANCH}'). Review Azure DevOps pull request #${PR_ID}. Write the structured findings JSON to ${FINDINGS}. Do NOT post any comments."
+
+log "running opencode pr-review agent (this can take a while)..."
+opencode run --agent pr-review --dir "$WT" "${MODEL_ARGS[@]}" "$PROMPT" \
+  || die "opencode run failed"
+
+[ -s "$FINDINGS" ] || die "opencode finished but no findings file at $FINDINGS"
+
+echo
+log "done. findings written to:"
+echo "  $FINDINGS"
+log "review/edit it, then publish with:"
+echo "  pr-review-post $FINDINGS"

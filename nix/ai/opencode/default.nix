@@ -25,6 +25,10 @@ in
 
   home.file.".config/opencode/plugins/rtk.ts".source = rtkOpenCodePlugin;
 
+  # Headless PR-review agent (scoped permissions). Used by the `pr-review`
+  # script together with the ~/.claude/skills/pr-review skill.
+  home.file.".config/opencode/agent/pr-review.md".source = ./agents/pr-review.md;
+
   # OpenCode config, incl. a local Ollama provider (OpenAI-compatible endpoint).
   # Model keys MUST match the exact `ollama list` names so `opencode --model
   # ollama/<key>` resolves. Launch via the `oc` helper script (see ../../bin).

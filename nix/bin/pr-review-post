@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+#
+# pr-review-post - publish AI review findings to an Azure DevOps PR.
+#
+# Reads a findings JSON produced by `pr-review`, shows a summary, and posts each
+# finding with "post": true as an anchored PR review thread (or a reply to an
+# existing reviewer thread). You are expected to review/edit the JSON first.
+#
+# Usage:
+#   pr-review-post <findings.json> [--dry-run] [--yes]
+#   pr-review-post ~/.claude/pr-review/PR-22846-findings.json --dry-run
+#   pr-review-post ~/.claude/pr-review/PR-22846-findings.json --yes
+#
+# Options:
+#   --dry-run   print the payloads that would be posted; post nothing
+#   --yes       skip the confirmation prompt
+#
+# Env:
+#   PR_REVIEW_AZURE_CONFIG_DIR   set AZURE_CONFIG_DIR for isolated az identity
+#
+set -euo pipefail
+
+die() { echo "pr-review-post: error: $*" >&2; exit 1; }
+log() { echo "pr-review-post: $*" >&2; }
+
+DRY=""; YES=""
+FILE=""
+for a in "$@"; do
+  case "$a" in
+    --dry-run) DRY=1 ;;
+    --yes|-y) YES=1 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -*) die "unknown option: $a" ;;
+    *) FILE="$a" ;;
+  esac
+done
+
+[ -n "$FILE" ] || die "missing findings file. usage: pr-review-post <findings.json> [--dry-run] [--yes]"
+[ -f "$FILE" ] || die "no such file: $FILE"
+
+for t in az jq; do command -v "$t" >/dev/null || die "$t not found on PATH"; done
+[ -n "${PR_REVIEW_AZURE_CONFIG_DIR:-}" ] && export AZURE_CONFIG_DIR="$PR_REVIEW_AZURE_CONFIG_DIR"
+
+jq -e . "$FILE" >/dev/null 2>&1 || die "not valid JSON: $FILE"
+
+ORG="$(jq -r '.pr.org' "$FILE")"
+PROJECT="$(jq -r '.pr.project' "$FILE")"
+REPO_ID="$(jq -r '.pr.repositoryId' "$FILE")"
+PR_ID="$(jq -r '.pr.id' "$FILE")"
+ITER_FIRST="$(jq -r '.pr.iteration.first // empty' "$FILE")"
+ITER_SECOND="$(jq -r '.pr.iteration.second // empty' "$FILE")"
+for v in ORG PROJECT REPO_ID PR_ID; do
+  val="${!v}"
+  [ -n "$val" ] && [ "$val" != "null" ] || die ".pr.$v missing in $FILE"
+done
+
+TOTAL="$(jq '.findings | length' "$FILE")"
+TOPOST="$(jq '[.findings[] | select(.post != false)] | length' "$FILE")"
+
+echo "PR #$PR_ID  ($PROJECT / $(jq -r '.pr.repository' "$FILE"))" >&2
+echo "  $TOTAL findings, $TOPOST marked to post:" >&2
+jq -r '.findings[] | select(.post != false)
+       | "  [\(.severity)] \(.file):\(.lineStart)  \(.title)"' "$FILE" >&2
+echo >&2
+
+[ "$TOPOST" -gt 0 ] || { log "nothing to post"; exit 0; }
+
+if [ -z "$DRY" ] && [ -z "$YES" ]; then
+  printf 'Post %s comment(s) to PR #%s? [y/N] ' "$TOPOST" "$PR_ID" >&2
+  read -r ans
+  case "$ans" in y|Y|yes|YES) ;; *) die "aborted by user"; esac
+fi
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+post_thread() {
+  local payload_file="$1"
+  az devops invoke \
+    --area git --resource pullRequestThreads \
+    --route-parameters project="$PROJECT" repositoryId="$REPO_ID" pullRequestId="$PR_ID" \
+    --org "$ORG" --http-method POST --in-file "$payload_file" \
+    --api-version 7.1 -o json
+}
+
+post_reply() {
+  local thread_id="$1" payload_file="$2"
+  az devops invoke \
+    --area git --resource pullRequestThreadComments \
+    --route-parameters project="$PROJECT" repositoryId="$REPO_ID" pullRequestId="$PR_ID" threadId="$thread_id" \
+    --org "$ORG" --http-method POST --in-file "$payload_file" \
+    --api-version 7.1 -o json
+}
+
+N="$(jq '.findings | length' "$FILE")"
+posted=0
+for i in $(seq 0 $((N-1))); do
+  f="$(jq -c ".findings[$i]" "$FILE")"
+  [ "$(jq -r '.post // true' <<<"$f")" = "false" ] && continue
+
+  reply_to="$(jq -r '.replyToThreadId // empty' <<<"$f")"
+  title="$(jq -r '.title // .id // "finding"' <<<"$f")"
+
+  if [ -n "$reply_to" ] && [ "$reply_to" != "null" ]; then
+    # Reply to an existing reviewer thread.
+    jq -n --argjson f "$f" '{ parentCommentId: 0, content: $f.comment, commentType: 1 }' > "$TMP/p.json"
+    if [ -n "$DRY" ]; then
+      echo "--- reply to thread $reply_to ($title) ---"; cat "$TMP/p.json"; echo
+    else
+      post_reply "$reply_to" "$TMP/p.json" >/dev/null \
+        || die "failed to reply to thread $reply_to ($title)"
+      log "replied to thread $reply_to: $title"
+      posted=$((posted+1))
+    fi
+    continue
+  fi
+
+  # New thread. Anchor to code when a file/line is present; add iteration
+  # context when a changeTrackingId and iteration ids are available.
+  jq -n \
+    --argjson f "$f" \
+    --arg first "${ITER_FIRST:-}" \
+    --arg second "${ITER_SECOND:-}" '
+    {
+      comments: [ { parentCommentId: 0, content: $f.comment, commentType: 1 } ],
+      status: 1
+    }
+    + ( if ($f.file != null and $f.lineStart != null) then
+          { threadContext: {
+              filePath: $f.file,
+              rightFileStart: { line: $f.lineStart, offset: ($f.offsetStart // 1) },
+              rightFileEnd:   { line: ($f.lineEnd // $f.lineStart), offset: ($f.offsetEnd // 1) }
+          } }
+        else {} end )
+    + ( if ($f.changeTrackingId != null and $first != "" and $second != "") then
+          { pullRequestThreadContext: {
+              changeTrackingId: $f.changeTrackingId,
+              iterationContext: {
+                firstComparingIteration:  ($first  | tonumber),
+                secondComparingIteration: ($second | tonumber)
+              }
+          } }
+        else {} end )
+    ' > "$TMP/p.json"
+
+  if [ -n "$DRY" ]; then
+    echo "--- new thread ($title) ---"; cat "$TMP/p.json"; echo
+  else
+    resp="$(post_thread "$TMP/p.json")" || die "failed to post thread: $title"
+    tid="$(jq -r '.id // empty' <<<"$resp")"
+    [ -n "$tid" ] || die "post returned no thread id for: $title (response: $resp)"
+    log "posted thread $tid: $title"
+    posted=$((posted+1))
+  fi
+done
+
+if [ -n "$DRY" ]; then
+  log "dry-run complete; nothing posted ($TOPOST would post)"
+else
+  log "posted $posted comment(s) to PR #$PR_ID"
+fi
