@@ -18,6 +18,7 @@ in {
     ../nvf.nix
     ../vscode.nix
     ../ai
+    ../bin
   ];
 
   # Shared packages (cross-platform)

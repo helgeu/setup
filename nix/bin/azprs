@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+#
+# azprs - List MY open (active) Azure DevOps pull requests across ALL projects
+#         in a given organization, as a list of clickable links.
+#
+# Usage:
+#   azprs <org>                e.g.  azprs imdidev
+#   azprs <org> <creator>      override creator (defaults to az signed-in user)
+#
+# Options (env vars):
+#   AZPRS_CREATOR   creator email/id (overrides the az signed-in user)
+#   AZPRS_FORMAT    output format: links (default) | markdown | plain | json
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+ORG="${1:-}"
+[ -n "$ORG" ] || die "missing org. usage: azprs <org> [creator]"
+
+# Allow either a bare org name (imdidev) or a full URL.
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+
+# Resolve creator: 2nd arg > env var > az signed-in user.
+CREATOR="${2:-${AZPRS_CREATOR:-}}"
+if [ -z "$CREATOR" ]; then
+  CREATOR="$(az account show --query user.name -o tsv 2>/dev/null || true)"
+  [ -n "$CREATOR" ] || die "could not determine creator; pass it as 2nd arg or set AZPRS_CREATOR"
+fi
+
+FORMAT="${AZPRS_FORMAT:-links}"
+
+command -v az  >/dev/null || die "az CLI not found"
+command -v jq  >/dev/null || die "jq not found"
+
+# Get all projects in the org.
+projects="$(az devops project list --org "$ORG_URL" --query "value[].name" -o tsv 2>/dev/null)" \
+  || die "failed to list projects for $ORG_URL (are you authorized / logged in?)"
+[ -n "$projects" ] || die "no projects found in $ORG_URL"
+
+# Collect PRs from every project into one JSON array.
+all="[]"
+while IFS= read -r project; do
+  [ -n "$project" ] || continue
+  prs="$(az repos pr list \
+            --org "$ORG_URL" \
+            --project "$project" \
+            --creator "$CREATOR" \
+            --status active \
+            -o json 2>/dev/null || echo '[]')"
+  # Normalize each PR into {id, title, repo, project}.
+  norm="$(echo "$prs" | jq --arg proj "$project" '
+            [ .[] | {
+                id:      .pullRequestId,
+                title:   .title,
+                repo:    .repository.name,
+                project: $proj
+            } ]')"
+  all="$(jq -s 'add' <(echo "$all") <(echo "$norm"))"
+done <<< "$projects"
+
+count="$(echo "$all" | jq 'length')"
+
+# Build full objects with web URLs (url-encode project & repo segments).
+enriched="$(echo "$all" | jq --arg org "$ORG_URL" '
+  sort_by(.project, .repo, -.id)
+  | [ .[] | . + {
+      url: ($org + "/" + (.project|@uri) + "/_git/" + (.repo|@uri) + "/pullrequest/" + (.id|tostring))
+    } ]')"
+
+case "$FORMAT" in
+  json)
+    echo "$enriched"
+    ;;
+  markdown)
+    echo "## My open PRs in ${ORG} (${count})"
+    echo "$enriched" | jq -r '.[] | "- [\(.repo) #\(.id)](\(.url)) — \(.title)"'
+    ;;
+  plain)
+    echo "$enriched" | jq -r '.[] | "\(.repo) #\(.id)  \(.url)"'
+    ;;
+  links|*)
+    echo "My open PRs in ${ORG} (${count}):"
+    echo "$enriched" | jq -r '.[] | "  • \(.repo) #\(.id) — \(.title)\n    \(.url)"'
+    ;;
+esac
