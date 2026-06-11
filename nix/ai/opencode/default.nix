@@ -23,10 +23,21 @@ in
 {
   programs.rtk.opencode.enable = true;
 
-  # Disable TUI mouse capture so terminal-native click-to-select/copy works.
-  # opencode computes useMouse as: !OPENCODE_DISABLE_MOUSE && (config.mouse ?? true).
-  # The env var must be exactly "1" or "true" and overrides config unconditionally.
-  home.sessionVariables.OPENCODE_DISABLE_MOUSE = "1";
-
   home.file.".config/opencode/plugins/rtk.ts".source = rtkOpenCodePlugin;
+
+  # OpenCode config, incl. a local Ollama provider (OpenAI-compatible endpoint).
+  # Model keys MUST match the exact `ollama list` names so `opencode --model
+  # ollama/<key>` resolves. Launch via the `oc` helper script (see ../../bin).
+  home.file.".config/opencode/opencode.jsonc".text = builtins.toJSON {
+    "$schema" = "https://opencode.ai/config.json";
+    provider.ollama = {
+      npm = "@ai-sdk/openai-compatible";
+      name = "Ollama (local)";
+      options.baseURL = "http://localhost:11434/v1";
+      models = {
+        "qwen3.6:latest".name = "Qwen3.6 (local)";
+        "qwen3-coder:30b".name = "Qwen3 Coder 30B (local)";
+      };
+    };
+  };
 }

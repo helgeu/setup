@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# oc - launch opencode against a local Ollama model.
+#
+# Usage:
+#   oc                 # default: qwen3.6  (general)
+#   oc coder           # qwen3-coder:30b   (coding)
+#   oc <ollama-model>  # any installed ollama model id, e.g. oc qwen3:30b-a3b
+#
+# Any arguments after the model are passed straight through to opencode, e.g.:
+#   oc coder run "summarise this repo"
+#
+# Requires: ollama running locally (http://localhost:11434) with the model
+# pulled, and the "ollama" provider configured in opencode (managed via nix in
+# ai/opencode/default.nix).
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+model="${1:-qwen3.6:latest}"
+[ "$#" -gt 0 ] && shift
+
+# Friendly aliases -> exact ollama model ids.
+case "$model" in
+  default|general|qwen|qwen3.6) model="qwen3.6:latest" ;;
+  coder|code|next)              model="qwen3-coder:30b" ;;
+esac
+
+command -v opencode >/dev/null || die "opencode not found on PATH"
+command -v ollama   >/dev/null || die "ollama not found on PATH"
+
+# Make sure the ollama daemon is reachable before launching.
+if ! curl -fsS http://localhost:11434/api/version >/dev/null 2>&1; then
+  die "ollama is not responding on http://localhost:11434 - start it with 'ollama serve'"
+fi
+
+exec opencode --model "ollama/${model}" "$@"
