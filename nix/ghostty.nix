@@ -29,7 +29,7 @@ in {
       # Behavior
       mouse-hide-while-typing = true
       copy-on-select = clipboard
-      confirm-close-surface = false
+      confirm-close-surface = true
 
       # Visual
       window-decoration = true
