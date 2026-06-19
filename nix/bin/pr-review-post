@@ -96,7 +96,9 @@ N="$(jq '.findings | length' "$FILE")"
 posted=0
 for i in $(seq 0 $((N-1))); do
   f="$(jq -c ".findings[$i]" "$FILE")"
-  [ "$(jq -r '.post // true' <<<"$f")" = "false" ] && continue
+  # NB: do NOT use `.post // true` here - jq's `//` treats `false` as empty,
+  # so `false // true` => true and a `"post": false` finding would be posted.
+  [ "$(jq -r '.post' <<<"$f")" = "false" ] && continue
 
   reply_to="$(jq -r '.replyToThreadId // empty' <<<"$f")"
   title="$(jq -r '.title // .id // "finding"' <<<"$f")"
