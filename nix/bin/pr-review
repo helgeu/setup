@@ -181,8 +181,13 @@ MODEL_ARGS=()
 PROMPT="Use the pr-review skill. The verified PR context is in ${CTX} (read it; do not re-fetch PR metadata). The current working directory is a fresh, isolated worktree checked out at the PR source branch '${SRC_BRANCH}' (target branch '${TGT_BRANCH}'). Review Azure DevOps pull request #${PR_ID}. Write the structured findings JSON to ${FINDINGS}. Do NOT post any comments."
 
 log "running opencode pr-review agent (this can take a while)..."
-opencode run --agent pr-review --dir "$WT" "${MODEL_ARGS[@]}" "$PROMPT" \
-  || die "opencode run failed"
+if [ "${#MODEL_ARGS[@]}" -gt 0 ]; then
+  opencode run --agent pr-review --dir "$WT" "${MODEL_ARGS[@]}" "$PROMPT" \
+    || die "opencode run failed"
+else
+  opencode run --agent pr-review --dir "$WT" "$PROMPT" \
+    || die "opencode run failed"
+fi
 
 [ -s "$FINDINGS" ] || die "opencode finished but no findings file at $FINDINGS"
 
