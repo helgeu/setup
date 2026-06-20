@@ -18,6 +18,7 @@
 - **Never work around problems. Always fix the root cause.** Workarounds hide issues, create technical debt, and cause bigger problems later. Diagnose why something is broken and fix it properly.
 - **Never change configs randomly.** All configuration changes must be done through the nix setup at `~/git/github/setup/nix`. This ensures reproducibility and proper management.
 - **Trust the existing setup.** Before adding workarounds or overrides, try the operation first. The system is configured correctly - understand how it works before assuming it's broken.
+- **Keep shell commands RTK-rewritable.** RTK (the token-saving proxy) only rewrites simple, piped, and `&&`-chained commands. It passes through *unrewritten* any rtk-eligible command (`cat`, `grep`, `ls`, `find`, `git`, `curl`, …) buried inside a `for`/`while` loop, a `$(…)`/backtick substitution, `xargs`, or a large multi-statement block (upstream limitation: rtk-ai/rtk#1252). So prefer native file/search tools or atomic, single-purpose commands over packing inspection logic into compound shell blocks — otherwise the token savings are silently lost.
 
 ## Never Do (Absolute)
 
