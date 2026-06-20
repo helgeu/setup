@@ -23,6 +23,12 @@ in
 {
   programs.rtk.opencode.enable = true;
 
+  # Global rules for OpenCode. Same canonical, tool-neutral source that Claude
+  # Code gets as ~/.claude/CLAUDE.md (see ../shared.nix baseClaude). Emitting it
+  # explicitly as AGENTS.md means we no longer rely on OpenCode's implicit
+  # ~/.claude/CLAUDE.md fallback (which a future AGENTS.md would silently shadow).
+  home.file.".config/opencode/AGENTS.md".source = ../shared/global-rules.md;
+
   home.file.".config/opencode/plugins/rtk.ts".source = rtkOpenCodePlugin;
 
   # Headless PR-review agent (scoped permissions). Used by the `pr-review`

@@ -9,6 +9,6 @@ in {
 
   programs.rtk = {
     enable = true;
-    claudeCode.baseClaude = ./shared/CLAUDE.md.template;
+    claudeCode.baseClaude = ./shared/global-rules.md;
   };
 }

@@ -1,10 +1,19 @@
-# Global CLAUDE.md
+# Global agent rules
+
+<!-- Canonical, tool-neutral global instructions shared by all AI coding agents.
+     Claude Code consumes this as ~/.claude/CLAUDE.md (via RTK baseClaude, which
+     also appends the RTK command reference). OpenCode consumes the same file as
+     ~/.config/opencode/AGENTS.md. Keep this file free of tool-specific syntax
+     and do NOT write the RTK include token here: RTK skips appending its
+     reference if the base content already mentions it. Per-tool packaging lives
+     in ai/claude and ai/opencode. -->
 
 ## General
 
 - Be direct. Challenge bad ideas.
 - Ask, don't assume.
 - **Resolve ambiguity before acting.** When an instruction could lead to meaningfully different outcomes depending on interpretation, ask before acting.
+- **Kick off non-trivial tasks with a spec.** Before starting any ambiguous or multi-step task, use the `kickoff` skill: uncover the real goal, restate it as goal + small steps + done-criteria, and get approval before building. Don't jump to artifacts before understanding.
 - Never suggest manual work. Automate everything - create scripts, write code, handle it directly. Exception: sudo commands (password required).
 - **Never work around problems. Always fix the root cause.** Workarounds hide issues, create technical debt, and cause bigger problems later. Diagnose why something is broken and fix it properly.
 - **Never change configs randomly.** All configuration changes must be done through the nix setup at `~/git/github/setup/nix`. This ensures reproducibility and proper management.
