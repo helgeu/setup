@@ -54,3 +54,26 @@ echo ""
 echo "--- Flake Input Ages ---"
 echo "Run 'nix flake metadata' to check input ages manually."
 echo "(Automated age checking requires parsing lock file dates)"
+
+echo ""
+
+# 5. Check always-loaded instruction file size
+# global-rules.md is loaded in full every session by BOTH agents (Claude as
+# ~/.claude/CLAUDE.md, OpenCode as ~/.config/opencode/AGENTS.md), so it is a
+# permanent per-session context tax. Past the threshold, move conditional
+# domain sections into on-demand skills (progressive disclosure).
+echo "--- Instruction File Size (always-loaded context) ---"
+RULES="$FLAKE_DIR/ai/shared/global-rules.md"
+WARN_TOKENS=3500
+if [[ -f "$RULES" ]]; then
+    TOKENS=$(( $(wc -c < "$RULES") / 4 ))  # ~chars/4 estimate
+    echo "global-rules.md (→ CLAUDE.md + AGENTS.md): ~${TOKENS} tokens"
+    if (( TOKENS > WARN_TOKENS )); then
+        echo "⚠ Over ~${WARN_TOKENS} tokens — move conditional domain sections"
+        echo "  (ADO, Swift, Docker) into on-demand skills to trim per-session context."
+    else
+        echo "✓ Within budget (warn at ~${WARN_TOKENS} tokens)."
+    fi
+else
+    echo "⚠ global-rules.md not found at $RULES"
+fi
