@@ -35,15 +35,20 @@ If any of these are missing, stop and report — do not guess.
 
 ## Workflow
 
-1. Read the PR context file. Extract `org`, `project`, `repository`,
+1. If you need to run Azure DevOps CLI/REST calls directly, first verify login
+   with `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798`.
+   If no token is available, run `az login --allow-no-subscriptions` yourself
+   before continuing. When invoked by the `pr-review` script, this preflight has
+   already happened before the context file was generated.
+2. Read the PR context file. Extract `org`, `project`, `repository`,
    `repositoryId`, PR id, source/target branch.
-2. **File scope (mandatory):** use the iterations/changes REST API from the ADO
+3. **File scope (mandatory):** use the iterations/changes REST API from the ADO
    reference — never a raw `git diff` between branches. Capture, per changed
    file, its `changeTrackingId` and the iteration ids — the poster needs these
    to anchor comments.
-3. Fetch the linked work item (id from the PR title, e.g. `#80289`) and verify
+4. Fetch the linked work item (id from the PR title, e.g. `#80289`) and verify
    the code matches its requirements.
-4. Run the analysis phases from the playbook:
+5. Run the analysis phases from the playbook:
    - Phase 1 — best-practice analysis of every changed file
    - Phase 2 — compare with existing reviewer threads (read them via the
      `pullRequestThreads` API; mark overlaps so the poster can reply instead of
@@ -52,8 +57,8 @@ If any of these are missing, stop and report — do not guess.
    - Phase 5 — test-coverage verification
    - Phase 6 — the 5-category checklist
    - Phase 8 — documentation check
-5. Write the findings JSON (schema below) to the given output path.
-6. Optionally also write the Phase 9 observation markdown to
+6. Write the findings JSON (schema below) to the given output path.
+7. Optionally also write the Phase 9 observation markdown to
    `~/.claude/pr-review/PR-<id>-observation.md` (historical record). This is
    allowed; it is not a PR comment.
 

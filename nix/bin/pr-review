@@ -50,6 +50,16 @@ for t in az jq git opencode; do
   command -v "$t" >/dev/null || die "$t not found on PATH"
 done
 
+# --- auth preflight -----------------------------------------------------------
+# `az repos pr show` fails with an opaque devops-extension error when the active
+# Azure profile has no usable token. Fail early, and if this is an interactive
+# shell, let Azure CLI drive the login flow itself.
+if ! az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv >/dev/null 2>&1; then
+  log "Azure DevOps auth token not available; running az login"
+  az login --allow-no-subscriptions >/dev/null \
+    || die "az login failed; cannot continue without Azure DevOps credentials"
+fi
+
 # --- resolve org -------------------------------------------------------------
 ORG_IN="${2:-${PR_REVIEW_ORG:-}}"
 PARAM_DIR="$HOME/.claude/pr-review"
