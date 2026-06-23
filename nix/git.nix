@@ -35,6 +35,10 @@
 
         credential.helper = "manager";
         credential.useHttpPath = true;
+        # Always authenticate via the web browser (OAuth popup) — never device
+        # code, PAT or terminal. GitHub honours this explicitly; Azure DevOps
+        # already uses the Microsoft browser flow by default.
+        credential.gitHubAuthModes = "browser";
         core = {
           commentChar = ";";
           hooksPath = "${config.home.homeDirectory}/githooks";
