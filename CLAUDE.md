@@ -46,6 +46,11 @@ sudo ./scripts/switch.sh  # Build + activate (macOS)
 ./scripts/build.sh        # Build without activating
 ./scripts/update.sh       # Update flake inputs
 
+# Maintenance
+./scripts/cleanup-nix.sh            # Delete generations older than 14d + GC + optimise store
+./scripts/cleanup-nix.sh --all      # Delete all old generations (keep current only)
+./scripts/cleanup-nix.sh --dry-run  # Preview what would be freed
+
 # WSL
 sudo nixos-rebuild switch --flake .#wsl-work
 ```
