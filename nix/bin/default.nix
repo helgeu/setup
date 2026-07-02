@@ -6,6 +6,10 @@
 { ... }:
 {
   home.file = {
+    "bin/ado-create-tasks" = {
+      source = ./ado-create-tasks;
+      executable = true;
+    };
     "bin/azprs" = {
       source = ./azprs;
       executable = true;

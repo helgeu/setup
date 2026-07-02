@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+#
+# ado-create-tasks - create child Task work items under Azure DevOps user stories.
+#
+# Reads a tasks JSON (feature -> user stories -> FE/BE tasks), shows a summary,
+# and creates each task as a child Task of its user story. Re-runnable: a task
+# is skipped if a child with the exact same title already exists (idempotent).
+# Area/Iteration are inherited from each parent user story.
+#
+# Usage:
+#   ado-create-tasks <tasks.json> [--dry-run] [--yes]
+#   ado-create-tasks feature-66730-tasks.json --dry-run
+#   ado-create-tasks feature-66730-tasks.json --yes
+#
+# Options:
+#   --dry-run   print what would be created; create nothing
+#   --yes       skip the confirmation prompt
+#
+# JSON shape:
+#   {
+#     "org": "https://imdidev.visualstudio.com/",
+#     "project": "Bosettingsprosjekt",
+#     "taskType": "Task",
+#     "userStories": [
+#       { "id": 66731, "title": "...",
+#         "tasks": [ { "side": "FE|BE", "title": "FE: ...", "description": "..." } ] }
+#     ]
+#   }
+import json
+import subprocess
+import sys
+
+
+def die(msg):
+    print(f"ado-create-tasks: error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def log(msg):
+    print(f"ado-create-tasks: {msg}", file=sys.stderr)
+
+
+def az(args):
+    res = subprocess.run(["az"] + args, capture_output=True, text=True)
+    if res.returncode != 0:
+        die(f"az {' '.join(args)}\n{res.stderr.strip()}")
+    return res.stdout
+
+
+def main():
+    path = None
+    dry = False
+    yes = False
+    for a in sys.argv[1:]:
+        if a == "--dry-run":
+            dry = True
+        elif a in ("--yes", "-y"):
+            yes = True
+        elif a in ("-h", "--help"):
+            print(__doc__ if __doc__ else "see header")
+            sys.exit(0)
+        elif a.startswith("-"):
+            die(f"unknown option: {a}")
+        else:
+            path = a
+
+    if not path:
+        die("missing tasks file. usage: ado-create-tasks <tasks.json> [--dry-run] [--yes]")
+
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except Exception as e:
+        die(f"cannot read JSON {path}: {e}")
+
+    org = data["org"]
+    project = data["project"]
+    task_type = data.get("taskType", "Task")
+    stories = data["userStories"]
+
+    # Build plan: resolve parent area/iteration + existing children once per story.
+    plan = []
+    total = 0
+    skipped = 0
+    print(f"Feature #{data.get('feature')} - {data.get('featureTitle','')}  ({project})", file=sys.stderr)
+    for us in stories:
+        us_id = us["id"]
+        parent = json.loads(az([
+            "boards", "work-item", "show", "--id", str(us_id),
+            "--org", org, "--expand", "relations", "-o", "json",
+        ]))
+        # az --area/--iteration expect the full path including the project root,
+        # exactly as System.AreaPath/System.IterationPath are returned.
+        area_rel = parent["fields"].get("System.AreaPath", project)
+        iter_rel = parent["fields"].get("System.IterationPath", project)
+
+        # Collect existing child titles for idempotency.
+        child_ids = [
+            r["url"].rstrip("/").split("/")[-1]
+            for r in parent.get("relations", [])
+            if r.get("rel") == "System.LinkTypes.Hierarchy-Forward"
+        ]
+        existing_titles = set()
+        for cid in child_ids:
+            child = json.loads(az([
+                "boards", "work-item", "show", "--id", cid, "--org", org, "-o", "json",
+            ]))
+            existing_titles.add(child["fields"].get("System.Title", ""))
+
+        print(f"\n  US #{us_id}  {us['title']}", file=sys.stderr)
+        story_plan = {"id": us_id, "area_rel": area_rel, "iter_rel": iter_rel, "tasks": []}
+        for t in us["tasks"]:
+            exists = t["title"] in existing_titles
+            mark = "SKIP (exists)" if exists else "CREATE"
+            print(f"      [{mark}] {t['title']}", file=sys.stderr)
+            if exists:
+                skipped += 1
+                continue
+            story_plan["tasks"].append(t)
+            total += 1
+        plan.append(story_plan)
+
+    print(file=sys.stderr)
+    if total == 0:
+        log(f"nothing to create ({skipped} already exist)")
+        return
+    log(f"{total} task(s) to create, {skipped} skipped (already exist)")
+
+    if dry:
+        log("dry-run complete; nothing created")
+        return
+
+    if not yes:
+        ans = input(f"Create {total} task(s) across {len(stories)} user stories? [y/N] ")
+        if ans.strip().lower() not in ("y", "yes"):
+            die("aborted by user")
+
+    created = 0
+    for sp in plan:
+        for t in sp["tasks"]:
+            create_args = [
+                "boards", "work-item", "create",
+                "--title", t["title"],
+                "--type", task_type,
+                "--org", org, "--project", project,
+                "--description", t.get("description", ""),
+                "-o", "json",
+            ]
+            if sp["area_rel"]:
+                create_args += ["--area", sp["area_rel"]]
+            if sp["iter_rel"]:
+                create_args += ["--iteration", sp["iter_rel"]]
+            new = json.loads(az(create_args))
+            new_id = new["id"]
+            az([
+                "boards", "work-item", "relation", "add",
+                "--id", str(new_id), "--org", org,
+                "--relation-type", "parent", "--target-id", str(sp["id"]),
+                "-o", "none",
+            ])
+            log(f"created #{new_id} (parent #{sp['id']}): {t['title']}")
+            created += 1
+
+    log(f"created {created} task(s)")
+
+
+if __name__ == "__main__":
+    main()

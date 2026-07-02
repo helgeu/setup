@@ -21,7 +21,9 @@ When invoked by the `pr-review` script you receive, in the prompt:
 - The **checked-out worktree** is already the PR source branch, on a fresh tree
   with dependencies installed. Do not switch branches except for the metrics
   phase (and restore afterwards).
-- The **output path** for the findings JSON (`PR-<id>-findings.json`).
+- The **output path where you must create** the findings JSON, typically
+  `PR-<id>-findings.json`. This file is not expected to exist before the
+  review runs.
 
 If any of these are missing, stop and report — do not guess.
 
