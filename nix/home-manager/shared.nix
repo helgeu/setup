@@ -61,7 +61,10 @@ in {
   ] ++ lib.optionals isDarwin [
     # macOS-only
     xcodegen  # Swift project generation
-    alt-tab-macos
+    # alt-tab-macos: installed via Homebrew cask instead (system/shared.nix).
+    # The nixpkgs build is ad-hoc signed, which fails macOS TCC's stored
+    # Developer-ID code requirement for Screen Recording -> permission prompt
+    # loops forever. The official signed cask satisfies TCC and persists grants.
   ];
 
   home.sessionVariables = {

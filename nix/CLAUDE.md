@@ -15,7 +15,8 @@ Single source of truth for LSP server configs — shared by nvf and Claude Code.
 
 - **Brave Browser**: Installed via Homebrew (not Nix) for iCloud Passwords compatibility
 - **Ghostty**: Installed via Homebrew (not Nix) - nixpkgs only supports Linux
-- **macOS-only packages**: `xcodegen`, `alt-tab-macos`, `iterm2`, `ghostty`
+- **AltTab**: Installed via Homebrew cask `alt-tab` (not Nix). The nixpkgs `alt-tab-macos` is ad-hoc signed, which fails macOS TCC's stored Developer-ID code requirement for Screen Recording, causing an endless permission prompt loop.
+- **macOS-only packages**: `xcodegen`, `iterm2`, `ghostty`
 - **Config paths**: macOS uses `Library/Application Support/`, Linux uses `.config/`
 
 ## VS Code Extension Dependencies

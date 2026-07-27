@@ -71,6 +71,7 @@
       "mas"
     ];
     casks = [
+      "alt-tab"  # Official Developer-ID build; nixpkgs build is ad-hoc signed and loops TCC Screen Recording prompts
       "brave-browser"
       "ghostty"
     ];
