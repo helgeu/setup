@@ -33,7 +33,6 @@ in {
     # .NET development
     combinedDotnet
     # Shell tools
-    tmux
     delta
     fd
     ripgrep
@@ -83,6 +82,27 @@ in {
   programs.fzf = {
     enable = true;
     enableZshIntegration = true;
+  };
+
+  programs.tmux = {
+    enable = true;
+    mouse = true;            # click windows in the status bar, scroll, resize panes by drag
+    baseIndex = 1;           # windows start at 1 (matches prefix + 1)
+    terminal = "tmux-256color";
+    historyLimit = 50000;
+    extraConfig = ''
+      # Truecolor passthrough so Dracula looks right under Ghostty
+      set -ag terminal-overrides ",xterm-256color:RGB,ghostty:RGB"
+
+      # Keep the "tab" order tidy: renumber windows when one closes
+      set -g renumber-windows on
+
+      # Status bar reads like a tab strip (click a window to switch)
+      set -g status-style "bg=#282a36,fg=#f8f8f2"
+      set -g window-status-format         " #I:#W "
+      set -g window-status-current-format " #I:#W "
+      set -g window-status-current-style  "bg=#bd93f9,fg=#282a36,bold"
+    '';
   };
 
   programs.oh-my-posh = {
