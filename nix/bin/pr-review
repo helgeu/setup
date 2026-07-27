@@ -10,17 +10,39 @@
 # Review the JSON, edit/approve it, then publish with `pr-review-post`.
 #
 # Usage:
-#   pr-review <pr-id> [org]
+#   pr-review <pr-id> [org] [--model <model>]
 #   pr-review 22846
 #   pr-review 22846 imdidev
 #   pr-review 22846 https://dev.azure.com/imdidev
+#   pr-review 22846 --model github-copilot/claude-opus-4.8
+#   pr-review 22846 -m anthropic/claude-sonnet-4-5
+#   pr-review 22846 imdidev --model github-copilot/gpt-5
+#   PR_REVIEW_MODEL=github-copilot/gpt-5 pr-review 22846
+#
+# Options:
+#   -m, --model <model>    opencode model id for the review (overrides
+#                          PR_REVIEW_MODEL). Also accepts --model=<model>.
+#   --keep                 keep the worktree after the run
+#   -h, --help             show this help
 #
 # Options (env vars):
 #   PR_REVIEW_ORG          default org (bare name or URL) if not given as arg 2
 #   PR_REVIEW_REPO_ROOTS   colon-separated dirs to search for the local clone
 #                          (default: ~/ado)
-#   PR_REVIEW_MODEL        opencode model override, e.g. github-copilot/claude-opus-4.8
+#   PR_REVIEW_MODEL        opencode model override (see --model)
 #   PR_REVIEW_KEEP=1       keep the worktree after the run (default: remove it)
+#
+# Model selection (highest precedence first):
+#   1. --model / -m <model>   command-line flag
+#   2. PR_REVIEW_MODEL        environment variable
+#   3. opencode default       the pr-review agent's / opencode's configured model
+#
+# Model ids use opencode's provider/model format, e.g.:
+#   github-copilot/claude-opus-4.8
+#   github-copilot/gpt-5
+#   anthropic/claude-sonnet-4-5
+#   openai/gpt-5
+# List what's available with: opencode models
 #
 # Hard rule: this is a partly destructive operation (checkout/install), so it
 # ABORTS on any error and never continues past a failed step.
@@ -31,13 +53,22 @@ log() { echo "pr-review: $*" >&2; }
 
 # --- args --------------------------------------------------------------------
 KEEP="${PR_REVIEW_KEEP:-}"
+MODEL="${PR_REVIEW_MODEL:-}"
 ARGS=()
-for a in "$@"; do
-  case "$a" in
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --keep) KEEP=1 ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
-    *) ARGS+=("$a") ;;
+    -m|--model)
+      shift
+      [ "$#" -gt 0 ] || die "--model requires an argument, e.g. --model github-copilot/claude-opus-4.8"
+      MODEL="$1"
+      ;;
+    --model=*|-m=*) MODEL="${1#*=}" ;;
+    -h|--help) sed -n '2,48p' "$0"; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *) ARGS+=("$1") ;;
   esac
+  shift
 done
 set -- "${ARGS[@]}"
 
@@ -186,7 +217,12 @@ fi
 
 # --- run opencode (headless) -------------------------------------------------
 MODEL_ARGS=()
-[ -n "${PR_REVIEW_MODEL:-}" ] && MODEL_ARGS=(--model "$PR_REVIEW_MODEL")
+if [ -n "$MODEL" ]; then
+  MODEL_ARGS=(--model "$MODEL")
+  log "using model: $MODEL"
+else
+  log "using opencode default model (set --model or PR_REVIEW_MODEL to override)"
+fi
 
 PROMPT="Use the pr-review skill. The verified PR context is in ${CTX} (read it; do not re-fetch PR metadata). The current working directory is a fresh, isolated worktree checked out at the PR source branch '${SRC_BRANCH}' (target branch '${TGT_BRANCH}'). Review Azure DevOps pull request #${PR_ID}. Write the structured findings JSON to ${FINDINGS}. Do NOT post any comments."
 
