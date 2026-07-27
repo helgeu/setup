@@ -18,6 +18,10 @@
 #                          tmux window each, using an interactively chosen model
 #   -m, --model <model>    opencode model id to use for --review (skips the menu).
 #                          Also accepts --model=<model>.
+#       --variant <v>      reasoning-effort variant for --review (e.g. low,
+#                          medium, high, max). Skips the variant menu. Use
+#                          --variant default (or "") to force the provider
+#                          default. Also accepts --variant=<v>.
 #   -f, --format <fmt>     output format: links (default) | markdown | plain | json
 #                          (overrides FIND_PRS_FORMAT)
 #   -C, --dir <path>       act on the repo at <path> instead of the current dir
@@ -26,11 +30,15 @@
 # Options (env vars):
 #   FIND_PRS_FORMAT        default output format (see --format)
 #   FIND_PRS_MODEL         default model for --review (see --model)
+#   FIND_PRS_VARIANT       default variant for --review (see --variant)
 #
-# Model selection (for --review):
-#   You must choose exactly one model. If --model/FIND_PRS_MODEL is not set, an
-#   interactive numbered menu of the CURRENT github-copilot opus/gpt models
-#   (enumerated live from `opencode models`) is shown. Pick one to continue.
+# Model & variant selection (for --review):
+#   You must choose exactly one model, then one variant. If --model /
+#   FIND_PRS_MODEL is unset, an interactive numbered menu of the CURRENT
+#   github-copilot opus/gpt models (enumerated live from `opencode models`) is
+#   shown. A second menu then offers that model's variants plus a "default (no
+#   override)" option. Omitting --variant leaves it interactive; the provider
+#   default is used when you pick "default".
 #
 set -euo pipefail
 
@@ -40,6 +48,9 @@ log() { echo "find-prs: $*" >&2; }
 # --- args --------------------------------------------------------------------
 REVIEW=""
 MODEL="${FIND_PRS_MODEL:-}"
+VARIANT="${FIND_PRS_VARIANT:-}"
+VARIANT_SET=""
+[ -n "$VARIANT" ] && VARIANT_SET=1
 FORMAT="${FIND_PRS_FORMAT:-links}"
 DIR="."
 while [ "$#" -gt 0 ]; do
@@ -49,6 +60,10 @@ while [ "$#" -gt 0 ]; do
       shift; [ "$#" -gt 0 ] || die "--model requires an argument"
       MODEL="$1" ;;
     --model=*|-m=*) MODEL="${1#*=}" ;;
+    --variant)
+      shift; [ "$#" -gt 0 ] || die "--variant requires an argument"
+      VARIANT="$1"; VARIANT_SET=1 ;;
+    --variant=*) VARIANT="${1#*=}"; VARIANT_SET=1 ;;
     -f|--format)
       shift; [ "$#" -gt 0 ] || die "--format requires an argument"
       FORMAT="$1" ;;
@@ -57,7 +72,7 @@ while [ "$#" -gt 0 ]; do
       shift; [ "$#" -gt 0 ] || die "--dir requires an argument"
       DIR="$1" ;;
     --dir=*|-C=*) DIR="${1#*=}" ;;
-    -h|--help) sed -n '3,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *) die "unexpected argument: $1 (find-prs derives the repo from the current dir)" ;;
   esac
@@ -202,6 +217,56 @@ else
 fi
 log "reviewing with model: $MODEL"
 
+# Enumerate a model's reasoning-effort variants, live from opencode.
+model_variants() {
+  local m="$1" prov="${1%%/*}"
+  opencode models "$prov" --verbose 2>/dev/null | awk -v m="$m" '
+    $0==m {cap=1; depth=0; buf=""; next}
+    cap {
+      buf=buf $0 "\n"
+      n=gsub(/{/,"{"); depth+=n
+      c=gsub(/}/,"}"); depth-=c
+      if (depth==0 && buf ~ /}/) { print buf; exit }
+    }' | jq -r '.variants // {} | keys[]' 2>/dev/null
+}
+
+# Order variants from lightest to heaviest; append any unknown keys at the end.
+avail_variants=()
+while IFS= read -r v; do [ -n "$v" ] && avail_variants+=("$v"); done < <(model_variants "$MODEL")
+ordered=()
+for v in minimal none low medium high xhigh max; do
+  for a in "${avail_variants[@]}"; do [ "$a" = "$v" ] && ordered+=("$v"); done
+done
+for a in "${avail_variants[@]}"; do
+  case " ${ordered[*]} " in *" $a "*) ;; *) ordered+=("$a") ;; esac
+done
+
+# Choose exactly one variant (or the provider default).
+if [ -n "$VARIANT_SET" ]; then
+  case "$VARIANT" in
+    ""|default) VARIANT="" ;;
+    *)
+      ok=""
+      for a in "${ordered[@]}"; do [ "$a" = "$VARIANT" ] && ok=1 && break; done
+      [ -n "$ok" ] || die "variant '$VARIANT' not available for $MODEL. Options: default ${ordered[*]}"
+      ;;
+  esac
+elif [ "${#ordered[@]}" -eq 0 ]; then
+  log "$MODEL exposes no variants; using provider default"
+  VARIANT=""
+else
+  echo >&2
+  echo "Select the reasoning-effort variant for $MODEL:" >&2
+  PS3="variant # > "
+  menu=("default (provider default)" "${ordered[@]}")
+  select vchoice in "${menu[@]}"; do
+    [ -n "${vchoice:-}" ] || { echo "invalid choice; enter a number from the list" >&2; continue; }
+    case "$REPLY" in 1) VARIANT="" ;; *) VARIANT="$vchoice" ;; esac
+    break
+  done
+fi
+if [ -n "$VARIANT" ]; then log "using variant: $VARIANT"; else log "using provider default variant"; fi
+
 ids=()
 while IFS= read -r id; do ids+=("$id"); done < <(echo "$enriched" | jq -r '.[].id')
 
@@ -212,9 +277,10 @@ SESSION="prr-${REPO}-${stamp}"
 SESSION="${SESSION//[^A-Za-z0-9_-]/_}"
 
 launch_cmd() {
-  local id="$1"
-  printf 'pr-review %q %q --model %q; echo; echo "[find-prs: PR #%s review finished — press enter to close]"; read -r _; exec %q' \
-    "$id" "$ORG_NAME" "$MODEL" "$id" "${SHELL:-/bin/bash}"
+  local id="$1" vargs=""
+  [ -n "$VARIANT" ] && vargs="$(printf ' --variant %q' "$VARIANT")"
+  printf 'pr-review %q %q --model %q%s; echo; echo "[find-prs: PR #%s review finished — press enter to close]"; read -r _; exec %q' \
+    "$id" "$ORG_NAME" "$MODEL" "$vargs" "$id" "${SHELL:-/bin/bash}"
 }
 
 first="${ids[0]}"

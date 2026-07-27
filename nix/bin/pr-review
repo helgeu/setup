@@ -22,6 +22,9 @@
 # Options:
 #   -m, --model <model>    opencode model id for the review (overrides
 #                          PR_REVIEW_MODEL). Also accepts --model=<model>.
+#       --variant <v>      model reasoning-effort variant (e.g. low, medium,
+#                          high, max). Overrides PR_REVIEW_VARIANT. Omit to use
+#                          the provider default. Also accepts --variant=<v>.
 #   --keep                 keep the worktree after the run
 #   -h, --help             show this help
 #
@@ -30,6 +33,7 @@
 #   PR_REVIEW_REPO_ROOTS   colon-separated dirs to search for the local clone
 #                          (default: ~/ado)
 #   PR_REVIEW_MODEL        opencode model override (see --model)
+#   PR_REVIEW_VARIANT      opencode variant override (see --variant)
 #   PR_REVIEW_KEEP=1       keep the worktree after the run (default: remove it)
 #
 # Model selection (highest precedence first):
@@ -54,6 +58,7 @@ log() { echo "pr-review: $*" >&2; }
 # --- args --------------------------------------------------------------------
 KEEP="${PR_REVIEW_KEEP:-}"
 MODEL="${PR_REVIEW_MODEL:-}"
+VARIANT="${PR_REVIEW_VARIANT:-}"
 ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -64,7 +69,13 @@ while [ "$#" -gt 0 ]; do
       MODEL="$1"
       ;;
     --model=*|-m=*) MODEL="${1#*=}" ;;
-    -h|--help) sed -n '2,48p' "$0"; exit 0 ;;
+    --variant)
+      shift
+      [ "$#" -gt 0 ] || die "--variant requires an argument, e.g. --variant high"
+      VARIANT="$1"
+      ;;
+    --variant=*) VARIANT="${1#*=}" ;;
+    -h|--help) sed -n '2,52p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *) ARGS+=("$1") ;;
   esac
@@ -222,6 +233,10 @@ if [ -n "$MODEL" ]; then
   log "using model: $MODEL"
 else
   log "using opencode default model (set --model or PR_REVIEW_MODEL to override)"
+fi
+if [ -n "$VARIANT" ]; then
+  MODEL_ARGS+=(--variant "$VARIANT")
+  log "using variant: $VARIANT"
 fi
 
 PROMPT="Use the pr-review skill. The verified PR context is in ${CTX} (read it; do not re-fetch PR metadata). The current working directory is a fresh, isolated worktree checked out at the PR source branch '${SRC_BRANCH}' (target branch '${TGT_BRANCH}'). Review Azure DevOps pull request #${PR_ID}. Write the structured findings JSON to ${FINDINGS}. Do NOT post any comments."
