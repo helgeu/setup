@@ -134,7 +134,7 @@ prs_raw="$(az repos pr list \
 
 enriched="$(echo "$prs_raw" | jq \
   --arg org "$ORG_URL" --arg proj "$PROJECT" --arg repo "$REPO" '
-    [ .[] | {
+    [ .[] | select(.isDraft != true) | {
         id:     .pullRequestId,
         title:  .title,
         author: (.createdBy.displayName // "?"),
