@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+#
+# find-prs - List ALL active Azure DevOps pull requests for the repo you are
+#            currently in (any author), and optionally fan them out to a headless
+#            AI review: one tmux window per PR running `pr-review`.
+#
+# The repo/org/project are derived from the `origin` remote of the current git
+# clone (dev.azure.com, ssh v3, and legacy *.visualstudio.com forms).
+#
+# Usage:
+#   find-prs                      # list all active PRs for the current repo
+#   find-prs --format markdown    # list as a markdown checklist
+#   find-prs --review             # pick a model, then review every PR in tmux
+#   find-prs --review -m github-copilot/claude-opus-4.8   # skip the model menu
+#
+# Options:
+#   -r, --review           after listing, spawn `pr-review` for every PR, one
+#                          tmux window each, using an interactively chosen model
+#   -m, --model <model>    opencode model id to use for --review (skips the menu).
+#                          Also accepts --model=<model>.
+#   -f, --format <fmt>     output format: links (default) | markdown | plain | json
+#                          (overrides FIND_PRS_FORMAT)
+#   -C, --dir <path>       act on the repo at <path> instead of the current dir
+#   -h, --help             show this help
+#
+# Options (env vars):
+#   FIND_PRS_FORMAT        default output format (see --format)
+#   FIND_PRS_MODEL         default model for --review (see --model)
+#
+# Model selection (for --review):
+#   You must choose exactly one model. If --model/FIND_PRS_MODEL is not set, an
+#   interactive numbered menu of the CURRENT github-copilot opus/gpt models
+#   (enumerated live from `opencode models`) is shown. Pick one to continue.
+#
+set -euo pipefail
+
+die() { echo "find-prs: error: $*" >&2; exit 1; }
+log() { echo "find-prs: $*" >&2; }
+
+# --- args --------------------------------------------------------------------
+REVIEW=""
+MODEL="${FIND_PRS_MODEL:-}"
+FORMAT="${FIND_PRS_FORMAT:-links}"
+DIR="."
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -r|--review) REVIEW=1 ;;
+    -m|--model)
+      shift; [ "$#" -gt 0 ] || die "--model requires an argument"
+      MODEL="$1" ;;
+    --model=*|-m=*) MODEL="${1#*=}" ;;
+    -f|--format)
+      shift; [ "$#" -gt 0 ] || die "--format requires an argument"
+      FORMAT="$1" ;;
+    --format=*|-f=*) FORMAT="${1#*=}" ;;
+    -C|--dir)
+      shift; [ "$#" -gt 0 ] || die "--dir requires an argument"
+      DIR="$1" ;;
+    --dir=*|-C=*) DIR="${1#*=}" ;;
+    -h|--help) sed -n '2,39p' "$0"; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *) die "unexpected argument: $1 (find-prs derives the repo from the current dir)" ;;
+  esac
+  shift
+done
+
+# --- tools -------------------------------------------------------------------
+for t in az jq git; do
+  command -v "$t" >/dev/null || die "$t not found on PATH"
+done
+
+# --- derive org/project/repo from the origin remote --------------------------
+[ -d "$DIR" ] || die "no such directory: $DIR"
+git -C "$DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  || die "not a git repository: $DIR"
+REMOTE="$(git -C "$DIR" remote get-url origin 2>/dev/null || true)"
+[ -n "$REMOTE" ] || die "no 'origin' remote in $DIR"
+
+# %XX-decode a URL path segment (project/repo names may contain spaces etc.).
+urldecode() { printf '%b' "${1//%/\\x}"; }
+
+ORG_NAME=""; PROJECT=""; REPO=""
+case "$REMOTE" in
+  *ssh.dev.azure.com*)
+    # git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
+    tail="${REMOTE#*ssh.dev.azure.com:}"; tail="${tail#v3/}"
+    IFS='/' read -r ORG_NAME PROJECT REPO <<< "$tail"
+    ;;
+  *dev.azure.com*)
+    # https://[user@]dev.azure.com/{org}/{project}/_git/{repo}
+    tail="${REMOTE#*dev.azure.com/}"
+    ORG_NAME="${tail%%/*}"
+    rest="${tail#*/}"
+    PROJECT="${rest%%/_git/*}"
+    REPO="${rest##*/_git/}"
+    ;;
+  *.visualstudio.com*)
+    # https://{org}.visualstudio.com/{project}/_git/{repo}
+    ORG_NAME="${REMOTE#*://}"; ORG_NAME="${ORG_NAME%%.visualstudio.com*}"
+    tail="${REMOTE#*.visualstudio.com/}"
+    PROJECT="${tail%%/_git/*}"
+    REPO="${tail##*/_git/}"
+    ;;
+  *)
+    die "origin is not an Azure DevOps remote: $REMOTE"
+    ;;
+esac
+
+ORG_NAME="$(urldecode "$ORG_NAME")"
+PROJECT="$(urldecode "${PROJECT%/}")"
+REPO="$(urldecode "${REPO%/}")"; REPO="${REPO%.git}"
+[ -n "$ORG_NAME" ] && [ -n "$PROJECT" ] && [ -n "$REPO" ] \
+  || die "could not parse org/project/repo from remote: $REMOTE"
+
+ORG_URL="https://dev.azure.com/${ORG_NAME}"
+log "repo '$REPO' in project '$PROJECT' (org '$ORG_NAME')"
+
+# --- auth preflight ----------------------------------------------------------
+if ! az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+     --query accessToken -o tsv >/dev/null 2>&1; then
+  log "Azure DevOps auth token not available; running az login"
+  az login --allow-no-subscriptions >/dev/null \
+    || die "az login failed; cannot continue without Azure DevOps credentials"
+fi
+
+# --- fetch active PRs for this repo (any author) -----------------------------
+prs_raw="$(az repos pr list \
+             --org "$ORG_URL" \
+             --project "$PROJECT" \
+             --repository "$REPO" \
+             --status active \
+             -o json 2>/dev/null)" \
+  || die "az repos pr list failed for '$REPO' in '$PROJECT' (auth? wrong repo?)"
+
+enriched="$(echo "$prs_raw" | jq \
+  --arg org "$ORG_URL" --arg proj "$PROJECT" --arg repo "$REPO" '
+    [ .[] | {
+        id:     .pullRequestId,
+        title:  .title,
+        author: (.createdBy.displayName // "?"),
+        source: (.sourceRefName | sub("^refs/heads/"; "")),
+        target: (.targetRefName | sub("^refs/heads/"; "")),
+        repo:   $repo,
+        url:    ($org + "/" + ($proj|@uri) + "/_git/" + ($repo|@uri)
+                 + "/pullrequest/" + (.pullRequestId|tostring))
+      } ]
+    | sort_by(-.id)')"
+
+count="$(echo "$enriched" | jq 'length')"
+
+case "$FORMAT" in
+  json)
+    echo "$enriched"
+    ;;
+  markdown)
+    echo "## Active PRs in ${REPO} (${count})"
+    echo "$enriched" | jq -r '.[] |
+      "- [ ] [#\(.id)](\(.url)) — \(.title)  _(\(.author), \(.source) → \(.target))_"'
+    ;;
+  plain)
+    echo "$enriched" | jq -r '.[] | "#\(.id)\t\(.title)\t\(.url)"'
+    ;;
+  links|*)
+    echo "Active PRs in ${REPO} (${count}):"
+    echo "$enriched" | jq -r '.[] |
+      "  • #\(.id) — \(.title)  (\(.author), \(.source) → \(.target))\n    \(.url)"'
+    ;;
+esac
+
+# --- review mode: one tmux window per PR -------------------------------------
+[ -n "$REVIEW" ] || exit 0
+
+if [ "$count" -eq 0 ]; then
+  log "no active PRs to review"
+  exit 0
+fi
+
+command -v tmux >/dev/null     || die "--review needs tmux on PATH"
+command -v pr-review >/dev/null || die "--review needs pr-review on PATH"
+
+# Enumerate the current github-copilot opus/gpt models, live.
+mapfile -t MODELS < <(opencode models 2>/dev/null \
+  | grep -E '^github-copilot/' \
+  | grep -Ei 'opus|gpt' \
+  | sort)
+[ "${#MODELS[@]}" -gt 0 ] || die "no github-copilot opus/gpt models found via 'opencode models'"
+
+# Choose exactly one model.
+if [ -n "$MODEL" ]; then
+  ok=""
+  for m in "${MODELS[@]}"; do [ "$m" = "$MODEL" ] && ok=1 && break; done
+  [ -n "$ok" ] || die "model '$MODEL' is not an available copilot opus/gpt model. Options: ${MODELS[*]}"
+else
+  echo >&2
+  echo "Select the model for reviewing $count PR(s) in '$REPO':" >&2
+  PS3="model # > "
+  select choice in "${MODELS[@]}"; do
+    [ -n "${choice:-}" ] && { MODEL="$choice"; break; }
+    echo "invalid choice; enter a number from the list" >&2
+  done
+  [ -n "$MODEL" ] || die "no model selected"
+fi
+log "reviewing with model: $MODEL"
+
+ids=()
+while IFS= read -r id; do ids+=("$id"); done < <(echo "$enriched" | jq -r '.[].id')
+
+# One tmux session, one window per PR. Windows stay open (exec $SHELL) so you
+# can read each review after it finishes.
+stamp="$(date +%H%M%S)"
+SESSION="prr-${REPO}-${stamp}"
+SESSION="${SESSION//[^A-Za-z0-9_-]/_}"
+
+launch_cmd() {
+  local id="$1"
+  printf 'pr-review %q %q --model %q; echo; echo "[find-prs: PR #%s review finished — press enter to close]"; read -r _; exec %q' \
+    "$id" "$ORG_NAME" "$MODEL" "$id" "${SHELL:-/bin/bash}"
+}
+
+first="${ids[0]}"
+tmux new-session -d -s "$SESSION" -n "PR-${first}" "$(launch_cmd "$first")" \
+  || die "failed to create tmux session $SESSION"
+for id in "${ids[@]:1}"; do
+  tmux new-window -t "$SESSION" -n "PR-${id}" "$(launch_cmd "$id")"
+done
+
+log "spawned ${#ids[@]} pr-review window(s) in tmux session '$SESSION'"
+if [ -n "${TMUX:-}" ]; then
+  tmux switch-client -t "$SESSION"
+else
+  tmux attach -t "$SESSION"
+fi

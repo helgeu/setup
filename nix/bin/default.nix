@@ -14,6 +14,10 @@
       source = ./azprs;
       executable = true;
     };
+    "bin/find-prs" = {
+      source = ./find-prs;
+      executable = true;
+    };
     "bin/oc" = {
       source = ./oc;
       executable = true;
