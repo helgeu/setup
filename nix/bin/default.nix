@@ -22,6 +22,10 @@
       source = ./oc;
       executable = true;
     };
+    "bin/pr-model-select" = {
+      source = ./pr-model-select;
+      executable = true;
+    };
     "bin/pr-review" = {
       source = ./pr-review;
       executable = true;

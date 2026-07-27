@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# pr-model-select - interactively choose a github-copilot opus/gpt model and a
+#                   reasoning-effort variant, live from `opencode models`.
+#
+# Shared chooser used by `pr-review` and `find-prs` so both offer the identical
+# menus. Prints the result as a single tab-separated line to STDOUT:
+#
+#     <model>\t<variant>
+#
+# where <variant> may be empty (meaning "provider default", no --variant). All
+# prompts, menus and logs go to STDERR so stdout stays machine-readable.
+#
+# Usage:
+#   sel="$(pr-model-select [--prompt <text>] [--model <m>] [--variant <v>])" || exit 1
+#   model="${sel%%$'\t'*}"
+#   variant="${sel#*$'\t'}"
+#
+# Options:
+#   --prompt <text>   header shown above the model menu
+#   --model <m>       preselect the model (validated; skips the model menu)
+#   --variant <v>     preselect the variant (validated; skips the variant menu).
+#                     Use "default" or "" to force the provider default.
+#   -h, --help        show this help
+#
+# A model MUST be chosen (interactively or via --model). If neither --model is
+# given nor a TTY is available, this fails rather than guessing.
+set -euo pipefail
+
+die() { echo "pr-model-select: error: $*" >&2; exit 1; }
+log() { echo "pr-model-select: $*" >&2; }
+
+PROMPT="Select a model:"
+MODEL=""
+VARIANT=""
+VARIANT_SET=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prompt) shift; [ "$#" -gt 0 ] || die "--prompt requires an argument"; PROMPT="$1" ;;
+    --prompt=*) PROMPT="${1#*=}" ;;
+    --model)  shift; [ "$#" -gt 0 ] || die "--model requires an argument"; MODEL="$1" ;;
+    --model=*) MODEL="${1#*=}" ;;
+    --variant) shift; [ "$#" -gt 0 ] || die "--variant requires an argument"; VARIANT="$1"; VARIANT_SET=1 ;;
+    --variant=*) VARIANT="${1#*=}"; VARIANT_SET=1 ;;
+    -h|--help) sed -n '3,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+  shift
+done
+
+command -v opencode >/dev/null || die "opencode not found on PATH"
+command -v jq       >/dev/null || die "jq not found on PATH"
+
+# --- pick the model ----------------------------------------------------------
+mapfile -t MODELS < <(opencode models 2>/dev/null \
+  | grep -E '^github-copilot/' \
+  | grep -Ei 'opus|gpt' \
+  | sort)
+[ "${#MODELS[@]}" -gt 0 ] || die "no github-copilot opus/gpt models found via 'opencode models'"
+
+if [ -n "$MODEL" ]; then
+  ok=""
+  for m in "${MODELS[@]}"; do [ "$m" = "$MODEL" ] && ok=1 && break; done
+  [ -n "$ok" ] || die "model '$MODEL' is not an available copilot opus/gpt model. Options: ${MODELS[*]}"
+else
+  [ -t 0 ] || die "no --model given and no TTY for the interactive menu"
+  echo >&2
+  echo "$PROMPT" >&2
+  PS3="model # > "
+  select choice in "${MODELS[@]}"; do
+    [ -n "${choice:-}" ] && { MODEL="$choice"; break; }
+    echo "invalid choice; enter a number from the list" >&2
+  done
+  [ -n "$MODEL" ] || die "no model selected"
+fi
+
+# --- pick the variant --------------------------------------------------------
+# Enumerate a model's reasoning-effort variants, live from opencode.
+model_variants() {
+  local m="$1" prov="${1%%/*}"
+  opencode models "$prov" --verbose 2>/dev/null | awk -v m="$m" '
+    $0==m {cap=1; depth=0; buf=""; next}
+    cap {
+      buf=buf $0 "\n"
+      n=gsub(/{/,"{"); depth+=n
+      c=gsub(/}/,"}"); depth-=c
+      if (depth==0 && buf ~ /}/) { print buf; exit }
+    }' | jq -r '.variants // {} | keys[]' 2>/dev/null
+}
+
+# Order variants lightest -> heaviest; append any unknown keys at the end.
+avail_variants=()
+while IFS= read -r v; do [ -n "$v" ] && avail_variants+=("$v"); done < <(model_variants "$MODEL")
+ordered=()
+for v in minimal none low medium high xhigh max; do
+  for a in "${avail_variants[@]}"; do [ "$a" = "$v" ] && ordered+=("$v"); done
+done
+for a in "${avail_variants[@]}"; do
+  case " ${ordered[*]} " in *" $a "*) ;; *) ordered+=("$a") ;; esac
+done
+
+if [ -n "$VARIANT_SET" ]; then
+  case "$VARIANT" in
+    ""|default) VARIANT="" ;;
+    *)
+      ok=""
+      for a in "${ordered[@]}"; do [ "$a" = "$VARIANT" ] && ok=1 && break; done
+      [ -n "$ok" ] || die "variant '$VARIANT' not available for $MODEL. Options: default ${ordered[*]}"
+      ;;
+  esac
+elif [ "${#ordered[@]}" -eq 0 ]; then
+  log "$MODEL exposes no variants; using provider default"
+  VARIANT=""
+elif [ ! -t 0 ]; then
+  log "no TTY for the variant menu; using provider default for $MODEL"
+  VARIANT=""
+else
+  echo >&2
+  echo "Select the reasoning-effort variant for $MODEL:" >&2
+  PS3="variant # > "
+  menu=("default (provider default)" "${ordered[@]}")
+  select vchoice in "${menu[@]}"; do
+    [ -n "${vchoice:-}" ] || { echo "invalid choice; enter a number from the list" >&2; continue; }
+    case "$REPLY" in 1) VARIANT="" ;; *) VARIANT="$vchoice" ;; esac
+    break
+  done
+fi
+
+printf '%s\t%s\n' "$MODEL" "$VARIANT"
