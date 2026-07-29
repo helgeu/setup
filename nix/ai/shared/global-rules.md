@@ -10,6 +10,12 @@
 
 ## General
 
+> **Helper scripts:** Before hand-rolling `az`/`jq`/`git`/PR/backlog logic, check
+> `~/.claude/scripts-reference.md` — a task→script map for the custom tools on
+> this machine (`find-prs`, `azprs`, `pr-review`, `pr-review-post`, `ado-my-items`,
+> `ado-create-tasks`, `oc`, and the PowerShell ADO backlog toolkit). Prefer an
+> existing script over improvising.
+
 - Be direct. Challenge bad ideas.
 - Ask, don't assume.
 - **Resolve ambiguity before acting.** When an instruction could lead to meaningfully different outcomes depending on interpretation, ask before acting.

@@ -29,6 +29,10 @@ in
   # ~/.claude/CLAUDE.md fallback (which a future AGENTS.md would silently shadow).
   home.file.".config/opencode/AGENTS.md".source = ../shared/global-rules.md;
 
+  # Task→script map for the custom helper tools (see ../shared/scripts-reference.md).
+  # Symlinked for both tools; global-rules.md points at the ~/.claude/ copy.
+  home.file.".config/opencode/scripts-reference.md".source = ../shared/scripts-reference.md;
+
   home.file.".config/opencode/plugins/rtk.ts".source = rtkOpenCodePlugin;
 
   # Headless PR-review agent (scoped permissions). Used by the `pr-review`

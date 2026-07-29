@@ -35,6 +35,7 @@ in {
     ".claude/.lsp.json".source = lspServers.claudeLspJson;
     ".claude/statusline-command.sh".source = ./statusline-command.sh;
     ".claude/ado-cli-reference.md".source = ./ado-cli-reference.md;
+    ".claude/scripts-reference.md".source = ../shared/scripts-reference.md;
     ".claude/pr-review.md".source = ./pr-review.md;
     ".claude/skills/pr-review/SKILL.md".source = ./skills/pr-review/SKILL.md;
     ".claude/skills/kickoff/SKILL.md".source = ./skills/kickoff/SKILL.md;
