@@ -36,9 +36,10 @@ source and rebuild.
   without `cd`. `--review [-m <model>] [--variant <v>]` spawns one `pr-review`
   tmux window per PR. Skips drafts. Auto-runs `az login` if the token is stale.
 - **`azprs <org> [creator]`** — *my* active PRs across *every* project in an org
-  (creator defaults to the `az` signed-in user). Same `--format` options via
-  `AZPRS_FORMAT`. Use this for "check all my PRs", not `find-prs` (which is
-  single-repo).
+  (creator defaults to the `az` signed-in user). Output format via `-f/--format`
+  (`links|markdown|plain|json`) or `AZPRS_FORMAT`; creator via `-c/--creator` or a
+  second bare arg. Unknown flags now error instead of being swallowed as the
+  creator. Use this for "check all my PRs", not `find-prs` (which is single-repo).
 - **`pr-review <id> [org] [-m <model>] [--variant <v>] [--keep]`** — maps a PR
   id to its local clone under `~/ado` (override with `PR_REVIEW_REPO_ROOTS`),
   checks the source branch out in a fresh **isolated worktree** (never touches
