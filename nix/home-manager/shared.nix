@@ -32,6 +32,7 @@ in {
 
     # .NET development
     combinedDotnet
+    temurin-bin-21  # JDK 21 (LTS) for dotnet-sonarscanner; Java 17 is deprecated as a scanner runtime
     # Shell tools
     delta
     fd

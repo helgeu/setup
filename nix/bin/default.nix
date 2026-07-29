@@ -10,6 +10,10 @@
       source = ./ado-create-tasks;
       executable = true;
     };
+    "bin/ado-my-items" = {
+      source = ./ado-my-items;
+      executable = true;
+    };
     "bin/azprs" = {
       source = ./azprs;
       executable = true;
@@ -32,6 +36,10 @@
     };
     "bin/pr-review-post" = {
       source = ./pr-review-post;
+      executable = true;
+    };
+    "bin/sonar-scan" = {
+      source = ./sonar-scan;
       executable = true;
     };
   };

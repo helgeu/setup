@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#
+# ado-my-items - List open work items assigned to someone in an Azure DevOps
+#                project (everything assigned to them that isn't Closed/Removed).
+#
+# Replicates the saved ADO query "My items":
+#   assigned to <assignee> AND state not in (Closed, Removed, Resolved,
+#   Ready for Production), ordered by ID.
+#
+# Usage:
+#   ado-my-items                                  # defaults: urholm / Devkunt / @me
+#   ado-my-items -o myorg -p MyProject           # any org/project, still @me
+#   ado-my-items -a someone@example.com          # someone else's items
+#   ado-my-items -f json                         # raw work-item JSON (pipe to jq)
+#
+# Options:
+#   -o, --org        org name (myorg) or full URL   [default: urholm]
+#   -p, --project    project name                    [default: Devkunt]
+#   -a, --assignee   assignee email/id, or @me       [default: @me]
+#   -f, --format     table (default) | json
+#   -h, --help       show this help
+#
+# Auth: uses the current `az login` session.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ORG="urholm"
+PROJECT="Devkunt"
+ASSIGNEE="@me"
+FORMAT="table"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)      ORG="${2:-}"; shift 2 ;;
+    -p|--project)  PROJECT="${2:-}"; shift 2 ;;
+    -a|--assignee) ASSIGNEE="${2:-}"; shift 2 ;;
+    -f|--format)   FORMAT="${2:-}"; shift 2 ;;
+    -h|--help)     usage 0 ;;
+    *)             die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]     || die "missing org"
+[ -n "$PROJECT" ] || die "missing project"
+
+# Allow either a bare org name (imdidev) or a full URL.
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+
+command -v az >/dev/null || die "az CLI not found"
+command -v jq >/dev/null || die "jq not found"
+
+# @me is a WIQL macro (unquoted); any other assignee is a quoted string literal.
+if [ "$ASSIGNEE" = "@me" ]; then
+  ASSIGNEE_CLAUSE="@me"
+else
+  ASSIGNEE_CLAUSE="'${ASSIGNEE//\'/\'\'}'"   # escape single quotes for WIQL
+fi
+
+WIQL="select [System.Id],[System.WorkItemType],[System.Title],[System.State] \
+from WorkItems \
+where [System.TeamProject]='${PROJECT}' and [System.AssignedTo]=${ASSIGNEE_CLAUSE} \
+      and not [System.State] in ('Closed','Removed','Resolved','Ready for Production') \
+order by [System.Id]"
+
+items="$(az boards query --org "$ORG_URL" --project "$PROJECT" --wiql "$WIQL" -o json 2>/dev/null)" \
+  || die "query failed (are you logged in? run: az login)"
+
+# Normalise to {id, type, title, state, url}.
+rows="$(echo "$items" | jq --arg base "$ORG_URL/$PROJECT/_workitems/edit/" '
+  [ .[] | {
+      id:    .id,
+      type:  .fields."System.WorkItemType",
+      title: .fields."System.Title",
+      state: .fields."System.State",
+      url:   ($base + (.id|tostring))
+  } ]')"
+
+count="$(echo "$rows" | jq 'length')"
+
+case "$FORMAT" in
+  json)
+    echo "$rows"
+    ;;
+  table|*)
+    echo "Open work items for ${ASSIGNEE} in ${PROJECT} (${count}):"
+    echo "$rows" | jq -r '.[] | "  • #\(.id) [\(.type)/\(.state)] \(.title)\n    \(.url)"'
+    ;;
+esac

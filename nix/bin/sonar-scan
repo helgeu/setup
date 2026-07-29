@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# sonar-scan - Run the full SonarCloud analysis locally, before pushing.
+#
+# Generic across every imdidev repo: the SonarCloud project key and org are
+# derived from the current git `origin` remote (like `find-prs`), so you can run
+# it from any clone with no arguments.
+#
+# The local `dotnet build` only runs the Roslyn analyzers (IDExxxx / Sxxxx
+# enabled by default). Security Hotspots (e.g. S5122 permissive CORS) and other
+# rules from the *server-side* quality profile are ONLY evaluated by the scanner
+# that runs in the pipeline. This script reproduces that scan locally so you
+# catch those findings before the PR bot does.
+#
+# Requires:
+#   - A SonarCloud token, resolved from $SONAR_TOKEN or the macOS keychain
+#     (see "Token resolution" below). Generate at
+#     https://sonarcloud.io/account/security. Never commit it.
+#   - A Java runtime (dotnet-sonarscanner dependency) and the `dotnet-sonarscanner`
+#     tool (from the repo's dotnet tool manifest, or installed globally).
+#
+# Usage:
+#   sonar-scan                     # key derived from origin, token from keychain
+#   sonar-scan -C /path/to/repo    # scan another clone without cd
+#   SONAR_TOKEN=xxxxx sonar-scan
+#
+# Per-repo overrides (optional): drop a `.sonar-scan.conf` at the repo root.
+# It is sourced as bash and may set any of:
+#   SONAR_PROJECT_KEY   SONAR_ORG
+#   SONAR_EXCLUSIONS    SONAR_COVERAGE_EXCLUSIONS
+# Example .sonar-scan.conf:
+#   SONAR_EXCLUSIONS="**/Migrations/**,**/SeedData*.cs,src/frontend/**"
+#
+# Results upload under the current git branch name (branch analysis), so the
+# main dashboard is not polluted. Open the analysis at:
+#   https://sonarcloud.io/project/issues?id=<key>&branch=<branch>
+
+log() { printf '%s\n' "$*" >&2; }
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+# --- args --------------------------------------------------------------------
+DIR="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -C|--dir) DIR="${2:?-C requires a path}"; shift 2 ;;
+    -h|--help) sed -n '4,40p' "$0"; exit 0 ;;
+    *) die "unexpected argument: $1 (sonar-scan derives the project from the current repo)" ;;
+  esac
+done
+
+HOST="https://sonarcloud.io"
+
+# --- locate repo root --------------------------------------------------------
+[ -d "$DIR" ] || die "no such directory: $DIR"
+git -C "$DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  || die "not a git repository: $DIR"
+repo_root="$(git -C "$DIR" rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# --- derive org/repo from the origin remote (same parsing as find-prs) -------
+REMOTE="$(git remote get-url origin 2>/dev/null || true)"
+[ -n "$REMOTE" ] || die "no 'origin' remote in $repo_root"
+
+# %XX-decode a URL path segment (project/repo names may contain spaces etc.).
+urldecode() { printf '%b' "${1//%/\\x}"; }
+
+ORG_NAME=""; REPO=""
+case "$REMOTE" in
+  *ssh.dev.azure.com*)
+    # git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
+    tail="${REMOTE#*ssh.dev.azure.com:}"; tail="${tail#v3/}"
+    IFS='/' read -r ORG_NAME _PROJECT REPO <<< "$tail"
+    ;;
+  *dev.azure.com*)
+    # https://[user@]dev.azure.com/{org}/{project}/_git/{repo}
+    tail="${REMOTE#*dev.azure.com/}"
+    ORG_NAME="${tail%%/*}"
+    REPO="${tail##*/_git/}"
+    ;;
+  *.visualstudio.com*)
+    # https://{org}.visualstudio.com/{project}/_git/{repo}
+    ORG_NAME="${REMOTE#*://}"; ORG_NAME="${ORG_NAME%%.visualstudio.com*}"
+    REPO="${REMOTE##*/_git/}"
+    ;;
+  *)
+    die "origin is not an Azure DevOps remote: $REMOTE"
+    ;;
+esac
+
+ORG_NAME="$(urldecode "$ORG_NAME")"
+REPO="$(urldecode "${REPO%/}")"; REPO="${REPO%.git}"
+[ -n "$ORG_NAME" ] && [ -n "$REPO" ] \
+  || die "could not parse org/repo from remote: $REMOTE"
+
+# SonarCloud defaults: org == ADO org name, key == "<org>_<repo>".
+SONAR_ORG="${SONAR_ORG:-$ORG_NAME}"
+SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-${ORG_NAME}_${REPO}}"
+
+# Repo-agnostic exclusion defaults. `**/Migrations/**` matches both
+# `src/Infrastructure.Migrations/Migrations/**` and `Infrastructure.Migrations/Migrations/**`.
+SONAR_EXCLUSIONS="${SONAR_EXCLUSIONS:-**/Migrations/**,**/SeedData*.cs,**/frontend/**}"
+SONAR_COVERAGE_EXCLUSIONS="${SONAR_COVERAGE_EXCLUSIONS:-**/Migrations/**,**/Program.cs}"
+
+# --- optional per-repo overrides ---------------------------------------------
+if [ -f ".sonar-scan.conf" ]; then
+  log ">> Loading per-repo overrides from .sonar-scan.conf"
+  # shellcheck disable=SC1091
+  . "./.sonar-scan.conf"
+fi
+
+# --- token resolution --------------------------------------------------------
+#   1. $SONAR_TOKEN environment variable.
+#   2. macOS keychain entry (service "sonarcloud-token", your login account).
+# Store it once (never committed) with:
+#   security add-generic-password -U -s sonarcloud-token -a "$USER" -w '<token>'
+KEYCHAIN_SERVICE="sonarcloud-token"
+if [ -z "${SONAR_TOKEN:-}" ] && command -v security >/dev/null 2>&1; then
+  SONAR_TOKEN="$(security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$USER" -w 2>/dev/null || true)"
+fi
+if [ -z "${SONAR_TOKEN:-}" ]; then
+  log "error: no SonarCloud token found (env SONAR_TOKEN or keychain)."
+  log "1) Generate a token: https://sonarcloud.io/account/security"
+  log "2) Store it once in the keychain:"
+  log "     security add-generic-password -U -s $KEYCHAIN_SERVICE -a \"\$USER\" -w '<token>'"
+  log "   (or run: SONAR_TOKEN=xxxxx sonar-scan)"
+  exit 1
+fi
+
+command -v dotnet >/dev/null 2>&1 || die "dotnet not on PATH"
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+results_dir="$(mktemp -d)"
+
+# The SonarScanner for .NET (v8+) aborts if a root sonar-project.properties
+# exists - but that file belongs to a *frontend* CLI scan (separate project
+# key). Move it aside for the duration of this backend scan and always restore.
+fe_props="sonar-project.properties"
+fe_props_bak=""
+if [ -f "$fe_props" ]; then
+  fe_props_bak="$(mktemp)"
+  cp "$fe_props" "$fe_props_bak"
+  rm -f "$fe_props"
+fi
+
+cleanup() {
+  rm -rf "$results_dir"
+  [ -n "$fe_props_bak" ] && mv "$fe_props_bak" "$fe_props"
+}
+trap cleanup EXIT
+
+log ">> Repo '$REPO' (org '$ORG_NAME')"
+log ">> SonarCloud project '$SONAR_PROJECT_KEY', branch '$branch'"
+log ">> exclusions:          $SONAR_EXCLUSIONS"
+log ">> coverage exclusions: $SONAR_COVERAGE_EXCLUSIONS"
+
+log ">> Restoring dotnet tools (dotnet-sonarscanner)..."
+dotnet tool restore
+
+log ">> Beginning SonarCloud analysis..."
+dotnet sonarscanner begin \
+  /k:"$SONAR_PROJECT_KEY" \
+  /o:"$SONAR_ORG" \
+  /d:sonar.token="$SONAR_TOKEN" \
+  /d:sonar.host.url="$HOST" \
+  /d:sonar.branch.name="$branch" \
+  /d:sonar.cs.opencover.reportsPaths="$results_dir/**/coverage.opencover.xml" \
+  /d:sonar.exclusions="$SONAR_EXCLUSIONS" \
+  /d:sonar.coverage.exclusions="$SONAR_COVERAGE_EXCLUSIONS"
+
+log ">> Building..."
+dotnet build -c Release --no-incremental
+
+log ">> Testing with coverage..."
+dotnet test -c Release --no-build \
+  --logger trx \
+  --results-directory "$results_dir" \
+  --collect:"XPlat Code Coverage" \
+  -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+log ">> Ending SonarCloud analysis (uploading + waiting for quality gate)..."
+dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+log ">> Done. Review findings at:"
+log "   $HOST/project/issues?id=$SONAR_PROJECT_KEY&branch=$branch"
+log "   $HOST/project/security_hotspots?id=$SONAR_PROJECT_KEY&branch=$branch"
