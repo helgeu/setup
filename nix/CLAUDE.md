@@ -10,6 +10,7 @@ Single source of truth for LSP server configs — shared by nvf and Claude Code.
 
 - **Verify side effects** - App configs (VS Code extensions, Brave extensions, etc.) can be wiped by Nix if managed declaratively. Always check what Nix will manage vs what the user manages manually
 - **Update todo** - Only mark done after user confirms working
+- **Stage/commit before rebuild** - This is a flake; `nix`/`darwin-rebuild`/`home-manager` only see files tracked by git. **New (untracked) files are invisible to the build** — a fresh script under `bin/` won't be picked up until it's at least `git add`ed. Always `git add` (ideally commit) new/changed files *before* telling the user to run `sudo ./scripts/switch.sh`, or the switch will silently build the old tree.
 
 ## Special Cases
 
