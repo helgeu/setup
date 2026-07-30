@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# standup — answer the three standup questions from the local opencode session DB:
+#   1. What did I do?          (last working day's sessions, grouped by repo)
+#   2. What am I planning?     (open todos: in_progress first, then pending)
+#   3. Any blockers?           (open todos whose text looks blocked)
+#
+# A standup is a MEETING FRAME, not a date window. `standup` / `standup today`
+# means "the standup for today's meeting": what I did *yesterday* (since the
+# last standup) + what I plan to do *today* + blockers.
+#
+# The other modes are raw activity recaps ("what did I literally do over X"):
+#   standup yesterday       # just yesterday's sessions
+#   standup week            # last 7 days
+#   standup --days N        # last N days
+# In every mode PLAN and BLOCKERS are the current open todos (not window-scoped).
+#
+# It only reads the local DB. Cross-referencing with ADO (work items, PRs,
+# pipelines) is left to the `standup` skill, which calls the ADO helper scripts.
+#
+#   standup [today|yesterday|week|--days N] [--json]
+
+set -euo pipefail
+
+DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode-stable.db}"
+MODE="standup"
+JSON=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    today|standup) MODE="standup"; shift ;;
+    yesterday)     MODE="yesterday"; shift ;;
+    week)          MODE="week"; shift ;;
+    --days)        MODE="days:$2"; shift 2 ;;
+    --days=*)      MODE="days:${1#*=}"; shift ;;
+    --json)        JSON=1; shift ;;
+    -h|--help)     sed -n '2,22p' "$0"; exit 0 ;;
+    *) echo "standup: unknown arg '$1'" >&2; exit 2 ;;
+  esac
+done
+
+[ -f "$DB" ] || { echo "standup: opencode DB not found at $DB" >&2; exit 1; }
+
+python3 - "$DB" "$MODE" "$JSON" <<'PY'
+import sys, json, time, sqlite3, datetime as dt
+
+db, mode, want_json = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+c = sqlite3.connect(db)
+
+now = dt.datetime.now()
+midnight = dt.datetime(now.year, now.month, now.day)
+today_str = now.strftime("%A %Y-%m-%d")           # authoritative; never guessed
+ms = lambda d: int(time.mktime(d.timetuple()) * 1000)
+fd = lambda d: d.strftime("%a %Y-%m-%d")
+
+def sessions(since, until):
+    return [dict(zip(("updated", "directory", "title"), r)) for r in c.execute(
+        "SELECT datetime(time_updated/1000,'unixepoch','localtime'),directory,title "
+        "FROM session WHERE parent_id IS NULL AND time_updated>=? AND time_updated<? "
+        "ORDER BY time_updated DESC", (since, until))]
+
+# --- DID window depends on the mode ---
+if mode == "standup":
+    # "since last standup" = the most recent PRIOR day that has activity
+    # (yesterday, or skip back over quiet days/weekends up to 14 days).
+    did, did_label = [], None
+    for back in range(1, 15):
+        day = midnight - dt.timedelta(days=back)
+        s = sessions(ms(day), ms(day + dt.timedelta(days=1)))
+        if s:
+            did, did_label = s, f"{fd(day)}" + (" (yesterday)" if back == 1 else " (last active day)")
+            break
+    if did_label is None:
+        did_label = "no recent activity"
+elif mode == "yesterday":
+    day = midnight - dt.timedelta(days=1)
+    did = sessions(ms(day), ms(day + dt.timedelta(days=1)))
+    did_label = f"{fd(day)} (yesterday)"
+elif mode.startswith("days:"):
+    n = int(mode.split(":", 1)[1])
+    did = sessions(ms(now - dt.timedelta(days=n)), ms(now + dt.timedelta(days=1)))
+    did_label = f"last {n} days ({fd(now - dt.timedelta(days=n))} to {fd(now)})"
+else:  # week
+    did = sessions(ms(now - dt.timedelta(days=7)), ms(now + dt.timedelta(days=1)))
+    did_label = f"this week ({fd(now - dt.timedelta(days=7))} to {fd(now)})"
+
+# --- PLAN + BLOCKERS = open todos from recently-active sessions ---
+# (open todos from stale/abandoned sessions are dropped so "plan" stays current;
+#  4-day window covers a long weekend without resurfacing ancient scaffolding.)
+plan_since = ms(now - dt.timedelta(days=4))
+todos = [dict(zip(("status", "session", "content"), r)) for r in c.execute(
+    "SELECT t.status,s.title,t.content FROM todo t JOIN session s ON s.id=t.session_id "
+    "WHERE t.status IN ('pending','in_progress') AND s.time_updated>=? "
+    "ORDER BY (t.status='in_progress') DESC, s.time_updated DESC, t.position",
+    (plan_since,))]
+blockers = [t for t in todos if any(k in t["content"].upper()
+            for k in ("BLOCK", "WAITING", "AVVENT"))]
+
+if want_json:
+    print(json.dumps({"today": today_str, "did_window": did_label,
+                      "did": did, "plan": todos, "blockers": blockers},
+                     ensure_ascii=False, indent=2))
+    sys.exit(0)
+
+print(f"== Standup — {today_str} ==\n")
+print(f"-- Did ({did_label}) --")
+for s in did:
+    print(f"  {s['updated'][11:16]}  [{s['directory'].split('/')[-1]}]  {s['title']}")
+if not did:
+    print("  (nothing)")
+print("\n-- Plan (open todos) --")
+for t in todos:
+    print(f"  ({t['status']}) {t['content']}")
+    print(f"       \u21b3 {t['session']}")
+if not todos:
+    print("  (no open todos)")
+print("\n-- Blockers --")
+for t in blockers:
+    print(f"  ! {t['content']}")
+    print(f"       \u21b3 {t['session']}")
+if not blockers:
+    print("  (none)")
+PY

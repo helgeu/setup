@@ -42,6 +42,10 @@
       source = ./sonar-scan;
       executable = true;
     };
+    "bin/standup" = {
+      source = ./standup;
+      executable = true;
+    };
   };
 
   # Ensure ~/bin is on PATH everywhere.

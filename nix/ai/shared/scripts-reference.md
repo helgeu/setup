@@ -21,6 +21,7 @@ source and rebuild.
 | List open work items assigned to me (or someone) | `ado-my-items` | Defaults `urholm`/`Devkunt`/`@me`; `-o -p -a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
+| Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
 | Create one ADO work item (optionally parent-linked) | `New-AdoWorkItem.ps1` | `-Config <org>-<project> -Type -Title [-ParentId -Tags]`. |
 | Seed an Epic/Feature hierarchy from a backlog JSON | `Import-AdoBacklog.ps1` | Idempotent; `-Backlog file.json [-WhatIf]`. |
 | Pull the live board to `backlog.json` + `Backlog.md` | `Export-AdoBacklog.ps1` | ADO is master; generated files, never hand-edit. |
