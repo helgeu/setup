@@ -18,26 +18,29 @@
 #   ManualValidation task will NOT appear in the pending-approvals list; you must
 #   go through the timeline to get its identifier.)
 #
+# GUARDRAIL - approving a deploy is a deliberate, confirm-first action:
+#   Never auto-select "the latest run" and never assume the org/project/pipeline/
+#   stage. Everything must be explicit. If any of it isn't clear from the human,
+#   STOP and ask - do not guess. This tool deliberately has NO defaults for
+#   org/project/pipeline/build/stage, resolves nothing implicitly, and refuses to
+#   act when a stage matches more than one waiting gate.
+#
 # Usage:
-#   ado-approve-deploy --build <id> --stage test              # approve one gate
-#   ado-approve-deploy --pipeline 517 --branch main --stage test
-#   ado-approve-deploy --pipeline "Saksbehandling - Backend - Build&Release" \
-#                      --stage test                           # latest run on any branch
-#   ado-approve-deploy --build <id> --list                    # show waiting gates
-#   ado-approve-deploy --build <id> --stage qa --reject -m "not ready"
+#   ado-approve-deploy -o <org> -p <project> --build <id> --stage test   # approve one gate
+#   ado-approve-deploy -o <org> -p <project> --build <id> --list         # show waiting gates
+#   ado-approve-deploy -o <org> -p <project> --build <id> --stage qa --reject -m "not ready"
+#   # --pipeline resolves to a run only via the *explicit* --build you then pass;
+#   # this tool will not pick a run for you.
 #
 # The --stage value is matched case-insensitively as a substring against the
 # parent stage display name of each waiting ManualValidation (e.g. the stage
 # "Validate deploy to test environment" matches --stage test). If more than one
 # waiting gate matches, the command refuses to act unless --all is given.
 #
-# Options:
-#   -o, --org        org name (imdidev) or full URL     [default: imdidev]
-#   -p, --project    project name                        [default: Bosettingsprosjekt]
-#       --build      build/run id to act on
-#       --pipeline   pipeline id or name (used to find the latest run when
-#                    --build is omitted)
-#       --branch     branch filter for --pipeline lookup (e.g. main)
+# Options (org, project and build are REQUIRED - no defaults):
+#   -o, --org        org name or full URL                (required)
+#   -p, --project    project name                        (required)
+#       --build      build/run id to act on              (required)
 #   -s, --stage      stage/env substring to approve (e.g. test, qa, prod)
 #       --list       list waiting ManualValidation gates and exit
 #       --reject     reject instead of approve
@@ -54,11 +57,9 @@ set -euo pipefail
 die() { echo "error: $*" >&2; exit 1; }
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
 
-ORG="imdidev"
-PROJECT="Bosettingsprosjekt"
+ORG=""
+PROJECT=""
 BUILD=""
-PIPELINE=""
-BRANCH=""
 STAGE=""
 LIST=0
 ACTION="approved"
@@ -71,8 +72,6 @@ while [ $# -gt 0 ]; do
     -o|--org)      ORG="${2:-}"; shift 2 ;;
     -p|--project)  PROJECT="${2:-}"; shift 2 ;;
     --build)       BUILD="${2:-}"; shift 2 ;;
-    --pipeline)    PIPELINE="${2:-}"; shift 2 ;;
-    --branch)      BRANCH="${2:-}"; shift 2 ;;
     -s|--stage)    STAGE="${2:-}"; shift 2 ;;
     --list)        LIST=1; shift ;;
     --reject)      ACTION="rejected"; shift ;;
@@ -87,6 +86,12 @@ done
 command -v az >/dev/null || die "az CLI not found"
 command -v jq >/dev/null || die "jq not found"
 command -v curl >/dev/null || die "curl not found"
+
+# Everything explicit - no defaults, no implicit run selection. If a required
+# input is missing, fail loudly rather than guessing.
+[ -n "$ORG" ]     || die "missing --org (required; no default)"
+[ -n "$PROJECT" ] || die "missing --project (required; no default)"
+[ -n "$BUILD" ]   || die "missing --build <id> (required; this tool never picks a run for you)"
 
 case "$ORG" in
   http*://*) ORG_URL="${ORG%/}"; ORG_NAME="$(basename "$ORG_URL")" ;;
@@ -117,25 +122,6 @@ adorest() { # method url [body]
     curl -sf -u ":$TOKEN" -X "$method" "$url"
   fi
 }
-
-# Resolve the build id from a pipeline id/name if not given directly.
-if [ -z "$BUILD" ]; then
-  [ -n "$PIPELINE" ] || die "provide --build <id> or --pipeline <id|name>"
-  local_def_id="$PIPELINE"
-  case "$PIPELINE" in
-    ''|*[!0-9]*)  # non-numeric -> resolve name to id
-      local_def_id="$(az pipelines list --org "$ORG_URL" --project "$PROJECT" -o json 2>/dev/null \
-        | jq -r --arg n "$PIPELINE" 'map(select(.name==$n)) | .[0].id // empty')"
-      [ -n "$local_def_id" ] || die "no pipeline named '$PIPELINE'"
-      ;;
-  esac
-  runs_url="${BASE}/build/builds?definitions=${local_def_id}&\$top=25&queryOrder=queueTimeDescending&${API}"
-  [ -n "$BRANCH" ] && runs_url="${runs_url}&branchName=refs/heads/${BRANCH}"
-  BUILD="$(adorest GET "$runs_url" | jq -r '.value[0].id // empty')" \
-    || die "could not list runs for pipeline $local_def_id"
-  [ -n "$BUILD" ] || die "no runs found for pipeline $local_def_id${BRANCH:+ on $BRANCH}"
-  echo "resolved latest run: build $BUILD${BRANCH:+ (branch $BRANCH)}" >&2
-fi
 
 # Pull the timeline and index parent stage names for each record.
 timeline="$(adorest GET "${BASE}/build/builds/${BUILD}/timeline?${API}")" \

@@ -171,14 +171,19 @@ Inline comments need TWO top-level objects:
 
 ## Approving a ManualValidation gate (promote dev → test/qa/prod)
 
-**Use the `ado-approve-deploy` script** — it does everything below in one call:
+> **GUARDRAIL — deploy approvals are deliberate, confirm-first actions.** Never
+> auto-select "the latest run", never assume the org/project/pipeline/stage.
+> Resolve the exact build id + stage explicitly. **If any of that isn't crystal
+> clear from the human, STOP and ask — do not guess.** The tooling has no
+> defaults for these on purpose.
+
+**Use the `ado-approve-deploy` script** — it does the identifier/PATCH dance below in one call. Org, project and build are **required** (no defaults); it will never pick a run for you:
 ```bash
-ado-approve-deploy --build <id> --stage test        # approve the test gate
-ado-approve-deploy --build <id> --list              # list waiting gates
-ado-approve-deploy --pipeline 517 --branch main --stage test
-ado-approve-deploy --build <id> --stage qa --reject -m "not ready"
+ado-approve-deploy -o <org> -p <project> --build <id> --list          # list waiting gates
+ado-approve-deploy -o <org> -p <project> --build <id> --stage test    # approve the test gate
+ado-approve-deploy -o <org> -p <project> --build <id> --stage qa --reject -m "not ready"
 ```
-Defaults org=`imdidev`, project=`Bosettingsprosjekt`. `--stage` is a case-insensitive substring of the stage display name (e.g. `test` matches "Validate deploy to test environment").
+`--stage` is a case-insensitive substring of the stage display name (e.g. `test` matches "Validate deploy to test environment"). It refuses to act if more than one waiting gate matches (pass `--all` only when you truly mean all). Finding *which* build is waiting at the gate is a separate, manual step — inspect runs (including in-progress; see the Pipelines section) and pass that id explicitly.
 
 **The gotcha (why this is non-obvious):** a `ManualValidation@0` task pausing an agentless (`pool: server`) job is **NOT** resumable through any `distributedtask/.../manualvalidations` route — every variant 404s with *"controller not found"* (the resource does not exist in the `distributedtask` area on dev.azure.com). It also does **not** appear in the `pipelines/approvals?state=pending` list. It is resumed through the **Approvals-Update** API, keyed by the timeline record's **`identifier`** (NOT its `id`):
 
