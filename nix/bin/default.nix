@@ -6,6 +6,10 @@
 { ... }:
 {
   home.file = {
+    "bin/ado-approve-deploy" = {
+      source = ./ado-approve-deploy;
+      executable = true;
+    };
     "bin/ado-create-tasks" = {
       source = ./ado-create-tasks;
       executable = true;

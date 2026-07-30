@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+#
+# ado-approve-deploy - Approve (or reject) a ManualValidation gate in an Azure
+#                      DevOps YAML pipeline so a waiting stage can proceed
+#                      (e.g. promote the latest dev deploy to the test stage).
+#
+# Background (the hard-won bit):
+#   A `ManualValidation@0` task pauses a stage on an agentless (pool: server)
+#   job. There is NO `distributedtask/.../manualvalidations` REST route - every
+#   guess 404s with "controller not found". The task is actually resumed via the
+#   Approvals-Update API, using the timeline record's `identifier` (NOT its `id`)
+#   as the approvalId:
+#     1. GET  build timeline -> find the ManualValidation record that is
+#        state=inProgress under the stage you want; take its `.identifier`.
+#     2. PATCH _apis/pipelines/approvals?api-version=7.1-preview.1
+#          [ { "approvalId": "<identifier>", "status": "approved", "comment": "" } ]
+#   (Environment "Approvals & checks" also live in pipelines/approvals, but a
+#   ManualValidation task will NOT appear in the pending-approvals list; you must
+#   go through the timeline to get its identifier.)
+#
+# Usage:
+#   ado-approve-deploy --build <id> --stage test              # approve one gate
+#   ado-approve-deploy --pipeline 517 --branch main --stage test
+#   ado-approve-deploy --pipeline "Saksbehandling - Backend - Build&Release" \
+#                      --stage test                           # latest run on any branch
+#   ado-approve-deploy --build <id> --list                    # show waiting gates
+#   ado-approve-deploy --build <id> --stage qa --reject -m "not ready"
+#
+# The --stage value is matched case-insensitively as a substring against the
+# parent stage display name of each waiting ManualValidation (e.g. the stage
+# "Validate deploy to test environment" matches --stage test). If more than one
+# waiting gate matches, the command refuses to act unless --all is given.
+#
+# Options:
+#   -o, --org        org name (imdidev) or full URL     [default: imdidev]
+#   -p, --project    project name                        [default: Bosettingsprosjekt]
+#       --build      build/run id to act on
+#       --pipeline   pipeline id or name (used to find the latest run when
+#                    --build is omitted)
+#       --branch     branch filter for --pipeline lookup (e.g. main)
+#   -s, --stage      stage/env substring to approve (e.g. test, qa, prod)
+#       --list       list waiting ManualValidation gates and exit
+#       --reject     reject instead of approve
+#   -m, --message    approval/rejection comment          [default: auto]
+#       --all        act on every matching waiting gate (not just a unique one)
+#       --dry-run    print what would be approved, change nothing
+#   -h, --help       show this help
+#
+# Auth: uses the current `az login` session (needs Queue builds permission on
+# the pipeline). Runs `az login` automatically only if there is no valid token.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ORG="imdidev"
+PROJECT="Bosettingsprosjekt"
+BUILD=""
+PIPELINE=""
+BRANCH=""
+STAGE=""
+LIST=0
+ACTION="approved"
+MESSAGE=""
+ALL=0
+DRYRUN=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)      ORG="${2:-}"; shift 2 ;;
+    -p|--project)  PROJECT="${2:-}"; shift 2 ;;
+    --build)       BUILD="${2:-}"; shift 2 ;;
+    --pipeline)    PIPELINE="${2:-}"; shift 2 ;;
+    --branch)      BRANCH="${2:-}"; shift 2 ;;
+    -s|--stage)    STAGE="${2:-}"; shift 2 ;;
+    --list)        LIST=1; shift ;;
+    --reject)      ACTION="rejected"; shift ;;
+    -m|--message)  MESSAGE="${2:-}"; shift 2 ;;
+    --all)         ALL=1; shift ;;
+    --dry-run)     DRYRUN=1; shift ;;
+    -h|--help)     usage 0 ;;
+    *)             die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+command -v az >/dev/null || die "az CLI not found"
+command -v jq >/dev/null || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}"; ORG_NAME="$(basename "$ORG_URL")" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}"; ORG_NAME="$ORG" ;;
+esac
+BASE="${ORG_URL}/${PROJECT}/_apis"
+API="api-version=7.1"
+APPROVE_API="api-version=7.1-preview.1"
+
+# ADO resource id for token acquisition.
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+
+get_token() {
+  az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null
+}
+TOKEN="$(get_token || true)"
+if [ -z "${TOKEN:-}" ]; then
+  echo "no valid az token, running az login..." >&2
+  az login >/dev/null || die "az login failed"
+  TOKEN="$(get_token)" || die "could not obtain access token"
+fi
+
+adorest() { # method url [body]
+  local method="$1" url="$2" body="${3:-}"
+  if [ -n "$body" ]; then
+    curl -sf -u ":$TOKEN" -X "$method" -H "Content-Type: application/json" -d "$body" "$url"
+  else
+    curl -sf -u ":$TOKEN" -X "$method" "$url"
+  fi
+}
+
+# Resolve the build id from a pipeline id/name if not given directly.
+if [ -z "$BUILD" ]; then
+  [ -n "$PIPELINE" ] || die "provide --build <id> or --pipeline <id|name>"
+  local_def_id="$PIPELINE"
+  case "$PIPELINE" in
+    ''|*[!0-9]*)  # non-numeric -> resolve name to id
+      local_def_id="$(az pipelines list --org "$ORG_URL" --project "$PROJECT" -o json 2>/dev/null \
+        | jq -r --arg n "$PIPELINE" 'map(select(.name==$n)) | .[0].id // empty')"
+      [ -n "$local_def_id" ] || die "no pipeline named '$PIPELINE'"
+      ;;
+  esac
+  runs_url="${BASE}/build/builds?definitions=${local_def_id}&\$top=25&queryOrder=queueTimeDescending&${API}"
+  [ -n "$BRANCH" ] && runs_url="${runs_url}&branchName=refs/heads/${BRANCH}"
+  BUILD="$(adorest GET "$runs_url" | jq -r '.value[0].id // empty')" \
+    || die "could not list runs for pipeline $local_def_id"
+  [ -n "$BUILD" ] || die "no runs found for pipeline $local_def_id${BRANCH:+ on $BRANCH}"
+  echo "resolved latest run: build $BUILD${BRANCH:+ (branch $BRANCH)}" >&2
+fi
+
+# Pull the timeline and index parent stage names for each record.
+timeline="$(adorest GET "${BASE}/build/builds/${BUILD}/timeline?${API}")" \
+  || die "could not fetch timeline for build $BUILD (does it exist? are you logged in?)"
+
+# Waiting gates: ManualValidation task records in state=inProgress, annotated
+# with the display name of their nearest ancestor Stage.
+gates="$(echo "$timeline" | jq '
+  (.records) as $r
+  | ($r | map({(.id): .}) | add) as $byId
+  | def stageName($rec):
+      ($rec.parentId) as $pid
+      | if $pid == null then null
+        else ($byId[$pid]) as $p
+          | if $p.type == "Stage" then $p.name else stageName($p) end
+        end;
+  [ $r[]
+    | select(.name == "ManualValidation" and .state == "inProgress")
+    | { identifier: .identifier, recordId: .id, stage: stageName(.) } ]
+')"
+
+waiting_count="$(echo "$gates" | jq 'length')"
+
+if [ "$LIST" = 1 ] || [ -z "$STAGE" ]; then
+  echo "Build $BUILD - waiting ManualValidation gates (${waiting_count}):"
+  echo "$gates" | jq -r '.[] | "  • stage: \(.stage)\n    approvalId: \(.identifier)"'
+  [ -z "$STAGE" ] && [ "$LIST" != 1 ] && die "specify --stage <env> to approve (or --list)"
+  exit 0
+fi
+
+# Filter by stage substring (case-insensitive).
+matches="$(echo "$gates" | jq --arg s "$STAGE" '
+  [ .[] | select((.stage // "") | ascii_downcase | contains($s | ascii_downcase)) ]')"
+match_count="$(echo "$matches" | jq 'length')"
+
+[ "$match_count" -gt 0 ] || die "no waiting ManualValidation gate matching stage '$STAGE' in build $BUILD (try --list)"
+if [ "$match_count" -gt 1 ] && [ "$ALL" != 1 ]; then
+  echo "$matches" | jq -r '.[] | "  • \(.stage)  (approvalId \(.identifier))"' >&2
+  die "$match_count gates match '$STAGE'; pass --all to act on all of them"
+fi
+
+[ -n "$MESSAGE" ] || MESSAGE="${ACTION^} via ado-approve-deploy"
+
+body="$(echo "$matches" | jq -c --arg status "$ACTION" --arg comment "$MESSAGE" \
+  'map({approvalId: .identifier, status: $status, comment: $comment})')"
+
+if [ "$DRYRUN" = 1 ]; then
+  echo "[dry-run] would PATCH ${BASE}/pipelines/approvals" >&2
+  echo "$body" | jq .
+  exit 0
+fi
+
+resp="$(adorest PATCH "${BASE}/pipelines/approvals?${APPROVE_API}" "$body")" \
+  || die "approvals PATCH failed"
+
+echo "$resp" | jq -r --arg action "$ACTION" '
+  .value[]?
+  | "\($action): \(.instructions // "(gate)")  ->  status=\(.status)"'

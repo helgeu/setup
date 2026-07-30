@@ -20,6 +20,7 @@ source and rebuild.
 | Choose an opencode model + reasoning variant interactively | `pr-model-select` | Shared chooser used by `find-prs`/`pr-review`; rarely called directly. |
 | List open work items assigned to me (or someone) | `ado-my-items` | Defaults `urholm`/`Devkunt`/`@me`; `-o -p -a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
+| Approve a pipeline ManualValidation gate (promote dev→test/qa/prod) | `ado-approve-deploy --build <id> --stage test` | Resumes a paused `ManualValidation@0` stage. `--list`, `--pipeline`, `--branch`, `--reject`, `--dry-run`. Defaults imdidev/Bosettingsprosjekt. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
 | Create one ADO work item (optionally parent-linked) | `New-AdoWorkItem.ps1` | `-Config <org>-<project> -Type -Title [-ParentId -Tags]`. |
@@ -64,6 +65,14 @@ source and rebuild.
 - **`ado-create-tasks <tasks.json>` (python)** — creates child Tasks under user
   stories; inherits parent Area/Iteration; idempotent by title. `--dry-run`,
   `--yes`. JSON shape documented in the script header.
+- **`ado-approve-deploy` (bash)** — approves/rejects a paused
+  `ManualValidation@0` gate so a deploy stage proceeds (e.g. promote the latest
+  dev deploy to test). `--build <id>` or `--pipeline <id|name> [--branch main]`
+  to find the latest run; `--stage <substr>` (test/qa/prod), `--list`,
+  `--reject`, `-m`, `--dry-run`. The non-obvious bit it encapsulates: resume the
+  task via the **Approvals-Update** API keyed by the timeline record's
+  `identifier` (there is no `distributedtask/manualvalidations` route). Details
+  in `ado-cli-reference.md` → "Approving a ManualValidation gate".
 - **PowerShell backlog toolkit (`~/.claude/ado/*.ps1`)** — all take
   `-Config <org>-<project>` matching a file in `~/.claude/ado/configs/`
   (nix-generated). `New-AdoWorkItem`, `Import-AdoBacklog` (seed, `-WhatIf`),

@@ -136,6 +136,72 @@ Inline comments need TWO top-level objects:
 - **CRITICAL:** `filePath` + `rightFileStart`/`rightFileEnd` go in `threadContext`, NOT `pullRequestThreadContext` (silently fails there).
 - `changeTrackingId` comes from the iteration-changes API. Delete a bad thread via `pullRequestThreadComments` with its `commentId`.
 
+## Pipelines, builds & deployments
+
+**API version is `7.1-preview`** for `az devops invoke` build calls — *not* `7.1-preview.3` (errors with `could not convert string to float: '7.1.3'`).
+
+**Before concluding "the latest commit was never built / deployed" — and before queuing anything:**
+
+1. **`az pipelines runs list` hides in-progress runs.** The default (and `--top N`) returns the latest **completed** runs only, so a currently-running CI build is silently excluded — you'll wrongly see an older completed build as "latest." **Always also check `--status inProgress`** (or `--status all`), or look at the pipeline's latest run in the UI:
+   ```bash
+   az pipelines runs list --org "$ORG" --project "$PROJ" --pipeline-ids <id> \
+     --status inProgress --query "[].{id:id,num:buildNumber,src:sourceVersion}" -o tsv
+   ```
+   CI (`reason=individualCI`) usually already triggered a build on merge — find it before starting your own.
+
+2. **A red overall build often deployed fine — check per-stage results, not the top-level result.** A failing late stage (smoke-test/e2e) is typically non-blocking; the deploy stage before it can have succeeded. A failing *build/push* stage (e.g. Trivy CVE gate) means nothing was pushed → all deploy stages skipped.
+   ```bash
+   az devops invoke --org "$ORG" --area build --resource timeline \
+     --route-parameters project=$PROJ buildId=<id> --api-version 7.1-preview -o json \
+   | jq -r '.records[] | select(.type=="Stage") | "\(.order)\t\(.state)/\(.result // "-")\t\(.name)"' | sort -n
+   ```
+
+3. **`Validate deploy to <env>` stages are manual approval gates,** not failures. A stage in `inProgress` with everything after it `pending` usually means it's **waiting for an approval**, not stuck. Check/act on approvals instead of re-running. See "Approving a ManualValidation gate" below for the exact recipe.
+
+4. **Trivy High/Critical gate** publishes CVEs as *test results*; get which package/CVE via the test API (the build log only says "test failures detected"):
+   ```bash
+   az devops invoke --org "$ORG" --area test --resource ResultsByBuild \
+     --route-parameters project=$PROJ --api-version 7.1-preview \
+     --query-parameters buildId=<id> outcomes=Failed -o json \
+   | jq -r '.value[] | "\(.automatedTestName)  <-  \(.automatedTestStorage)"'
+   ```
+   `automatedTestStorage` is the vulnerable package (e.g. `Microsoft.NETCore.App.Runtime…-9.0.16`), so the fix is usually a base-image/runtime bump in the Dockerfile.
+
+5. **Don't queue builds to "deploy the latest."** Deploys are driven by the pipeline reaching its deploy/approval stages. Queue only if there genuinely is no in-progress/pending run for the target commit — and confirm with the human first.
+
+## Approving a ManualValidation gate (promote dev → test/qa/prod)
+
+**Use the `ado-approve-deploy` script** — it does everything below in one call:
+```bash
+ado-approve-deploy --build <id> --stage test        # approve the test gate
+ado-approve-deploy --build <id> --list              # list waiting gates
+ado-approve-deploy --pipeline 517 --branch main --stage test
+ado-approve-deploy --build <id> --stage qa --reject -m "not ready"
+```
+Defaults org=`imdidev`, project=`Bosettingsprosjekt`. `--stage` is a case-insensitive substring of the stage display name (e.g. `test` matches "Validate deploy to test environment").
+
+**The gotcha (why this is non-obvious):** a `ManualValidation@0` task pausing an agentless (`pool: server`) job is **NOT** resumable through any `distributedtask/.../manualvalidations` route — every variant 404s with *"controller not found"* (the resource does not exist in the `distributedtask` area on dev.azure.com). It also does **not** appear in the `pipelines/approvals?state=pending` list. It is resumed through the **Approvals-Update** API, keyed by the timeline record's **`identifier`** (NOT its `id`):
+
+1. Get the build timeline; find the `ManualValidation` record that is `state=inProgress` under the stage you want, and read its `.identifier`:
+   ```bash
+   TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+   curl -s -u ":$TOKEN" \
+     "https://dev.azure.com/imdidev/Bosettingsprosjekt/_apis/build/builds/<id>/timeline?api-version=7.1" \
+   | jq -r '.records[] | select(.name=="ManualValidation" and .state=="inProgress")
+            | {identifier, recordId:.id, parentId}'
+   ```
+   The stage name is on the nearest ancestor `type=="Stage"` record (walk `parentId`). Beware: a single run can have several `ManualValidation` records waiting at once (test **and** qa **and** prod) — pick the right one by stage.
+
+2. PATCH the approvals API with that `identifier` as `approvalId` (note the array body and the `-preview.1` version):
+   ```bash
+   curl -s -u ":$TOKEN" -X PATCH -H "Content-Type: application/json" \
+     -d '[{"approvalId":"<identifier>","status":"approved","comment":"Promote to test"}]' \
+     "https://dev.azure.com/imdidev/Bosettingsprosjekt/_apis/pipelines/approvals?api-version=7.1-preview.1"
+   ```
+   `status` is `approved` or `rejected`. A 200 with `.value[].status=="approved"` means the stage will now proceed. Requires **Queue builds** permission on the pipeline.
+
+**Do not confuse** this with environment "Approvals & checks" (also under `pipelines/approvals`): those *do* show up in the pending-approvals list and carry a `pipeline.owner.id` (the buildId). ManualValidation-task gates do not — you must go through the timeline. The PATCH endpoint is the same for both.
+
 ## Scripts (`~/.claude/ado/`, PowerShell)
 
 The toolkit reads the org/project config above. Planned/available:
