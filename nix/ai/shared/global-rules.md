@@ -29,6 +29,7 @@
 - **Never change configs randomly.** All configuration changes must be done through the nix setup at `~/git/github/setup/nix`. This ensures reproducibility and proper management.
 - **Trust the existing setup.** Before adding workarounds or overrides, try the operation first. The system is configured correctly - understand how it works before assuming it's broken.
 - **Keep shell commands RTK-rewritable.** RTK (the token-saving proxy) only rewrites simple, piped, and `&&`-chained commands. It passes through *unrewritten* any rtk-eligible command (`cat`, `grep`, `ls`, `find`, `git`, `curl`, …) buried inside a `for`/`while` loop, a `$(…)`/backtick substitution, `xargs`, or a large multi-statement block (upstream limitation: rtk-ai/rtk#1252). So prefer native file/search tools or atomic, single-purpose commands over packing inspection logic into compound shell blocks — otherwise the token savings are silently lost.
+- **Search with the dedicated grep tool or `rg`, never `grep --include`.** RTK rewrites `grep`→`rg`, so grep-only flags break: `grep --include=<glob>` fails (rg has no `--include`; it maps toward `-E` → "unknown encoding", and unquoted globs get eaten by the shell). Prefer the agent's grep/glob tools. If you must shell out, use ripgrep glob syntax: `rg -g '*.ts' <pattern>` (quote the glob), and `rg --files -g '<glob>'` to list files.
 
 ## Editing files
 
