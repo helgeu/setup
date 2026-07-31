@@ -22,8 +22,11 @@ When invoked by the `pr-review` script you receive, in the prompt:
   with dependencies installed. Do not switch branches except for the metrics
   phase (and restore afterwards).
 - The **output path where you must create** the findings JSON, typically
-  `PR-<id>-findings.json`. This file is not expected to exist before the
-  review runs.
+  `PR-<id>-findings.json`. This file is an **output you create at the end** — it
+  is *not* an input. Do **not** search the filesystem for it (or any other
+  "input" files) before starting, and never block on it being missing. The only
+  inputs are the context file and the worktree above; if those are present, get
+  the diff/threads/work-item from ADO and start reviewing immediately.
 
 If any of these are missing, stop and report — do not guess.
 

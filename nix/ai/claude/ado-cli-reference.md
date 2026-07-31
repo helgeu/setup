@@ -42,7 +42,7 @@ export AZURE_CONFIG_DIR=$(jq -r .azureConfigDir "$CFG")
 
 ## Authentication
 
-Authenticate per machine with `az login` (browser or `--use-device-code`). Then set defaults:
+Authenticate per machine with `az login` (interactive browser). **Device-code login (`--use-device-code`) does not work in this environment — don't use it; use the browser flow.** Then set defaults:
 ```bash
 az devops configure --defaults organization="$ORG" project="$PROJ"
 ```
