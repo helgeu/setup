@@ -108,16 +108,6 @@ if [ -z "$MODEL" ] && [ -t 0 ] && command -v pr-model-select >/dev/null; then
   fi
 fi
 
-# --- auth preflight -----------------------------------------------------------
-# `az repos pr show` fails with an opaque devops-extension error when the active
-# Azure profile has no usable token. Fail early, and if this is an interactive
-# shell, let Azure CLI drive the login flow itself.
-if ! az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv >/dev/null 2>&1; then
-  log "Azure DevOps auth token not available; running az login"
-  az login --allow-no-subscriptions >/dev/null \
-    || die "az login failed; cannot continue without Azure DevOps credentials"
-fi
-
 # --- resolve org -------------------------------------------------------------
 ORG_IN="${2:-${PR_REVIEW_ORG:-}}"
 PARAM_DIR="$HOME/.claude/pr-review"
@@ -139,6 +129,25 @@ case "$ORG_IN" in
   http*://*) ORG="${ORG_IN%/}" ;;
   *)         ORG="https://dev.azure.com/${ORG_IN}" ;;
 esac
+
+# --- auth preflight -----------------------------------------------------------
+# `az repos pr show` fails with an opaque devops-extension error when the active
+# Azure token is rejected by the org. A stale/wrong-identity token still MINTS
+# fine, so a plain `az account get-access-token` check passes and the failure
+# only surfaces mid-run. Instead, prove the token actually AUTHENTICATES against
+# this org via connectionData; if not, re-run az login. In a non-interactive
+# shell az login will fail fast with a clear message.
+auth_ok() {
+  az rest --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+    --url "$ORG/_apis/connectionData?api-version=7.1" 2>/dev/null \
+    | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+}
+if ! auth_ok; then
+  log "Azure DevOps token not accepted by $ORG (stale token or wrong identity); running az login"
+  az login --allow-no-subscriptions >/dev/null \
+    || die "az login failed; cannot continue without Azure DevOps credentials"
+  auth_ok || die "still not authenticated against $ORG after az login (are you a member of this org? signed in as the right account?)"
+fi
 
 # --- fetch PR metadata (PR -> repo mapping) ----------------------------------
 mkdir -p "$PARAM_DIR"
