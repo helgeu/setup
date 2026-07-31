@@ -8,6 +8,13 @@ Source of truth: `~/git/github/setup/nix/bin` (bash/python, symlinked into
 `~/.claude/ado`). Never edit the `~/bin` or `~/.claude` copies — edit the nix
 source and rebuild.
 
+> **ADO: prefer these scripts over hand-rolled `az`.** They bake in the auth
+> preflight (`connectionData` check + `az login` retry — a token that *mints*
+> can still be rejected by the org) and correct output handling. Only drop to
+> raw `az` when no script fits, and first follow the auth preflight + jq gotchas
+> in `~/.claude/ado-cli-reference.md` (never `az … 2>&1 | jq`; `az rest` needs
+> `--resource`).
+
 ## Pick a script by task
 
 | I want to… | Use | Notes |
