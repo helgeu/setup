@@ -19,12 +19,23 @@
 - Be direct. Challenge bad ideas.
 - Ask, don't assume.
 - **Resolve ambiguity before acting.** When an instruction could lead to meaningfully different outcomes depending on interpretation, ask before acting.
+- **Locate before you read; never guess paths.** Resolve real file paths with a search/glob first — do not fabricate or guess filenames, casing, or directory layout. (Repos here are typically flat: don't assume a `src/` folder.) If a path isn't found, search for it once and use the real result; don't retry invented variations.
+- **Never fabricate URLs.** Only use URLs the user gave you, that appear in local files, or that you obtained from a search/API. If you don't know a URL, search for it — never guess. Always hand back full, clickable links to PRs, work items, builds, and docs so they can be opened directly.
+- **Be surgical. Scope down.** Deliver the smallest change that solves the ask; don't bundle speculative refactors, extra features, or ELI5 padding. When a suggestion grows large, cut it back and confirm scope before proceeding.
+- **Don't ask for what you can fetch.** If data is reachable via a tool/CLI/API you already have (e.g. Azure DevOps via `az`), retrieve it yourself instead of asking the user to paste it. Reserve questions for genuine decisions, not lookups.
 - **Kick off non-trivial tasks with a spec.** Before starting any ambiguous or multi-step task, use the `kickoff` skill: uncover the real goal, restate it as goal + small steps + done-criteria, and get approval before building. Don't jump to artifacts before understanding.
 - Never suggest manual work. Automate everything - create scripts, write code, handle it directly. Exception: sudo commands (password required).
 - **Never work around problems. Always fix the root cause.** Workarounds hide issues, create technical debt, and cause bigger problems later. Diagnose why something is broken and fix it properly.
 - **Never change configs randomly.** All configuration changes must be done through the nix setup at `~/git/github/setup/nix`. This ensures reproducibility and proper management.
 - **Trust the existing setup.** Before adding workarounds or overrides, try the operation first. The system is configured correctly - understand how it works before assuming it's broken.
 - **Keep shell commands RTK-rewritable.** RTK (the token-saving proxy) only rewrites simple, piped, and `&&`-chained commands. It passes through *unrewritten* any rtk-eligible command (`cat`, `grep`, `ls`, `find`, `git`, `curl`, …) buried inside a `for`/`while` loop, a `$(…)`/backtick substitution, `xargs`, or a large multi-statement block (upstream limitation: rtk-ai/rtk#1252). So prefer native file/search tools or atomic, single-purpose commands over packing inspection logic into compound shell blocks — otherwise the token savings are silently lost.
+
+## Editing files
+
+- **Never add a trailing newline to any file.** Files must not end with a trailing blank line. Do not introduce EOF newlines, and never add blank lines the change does not require. This is a hard, standing rule — never re-litigate it.
+- **Never reformat or re-indent lines you are not functionally changing.** Touch only what the task requires; gratuitous whitespace/format churn is noise.
+- **Read a file before editing or overwriting it.** Never edit blind.
+- **Make edit anchors unique and non-empty.** Give the match enough surrounding context to be unambiguous, and never submit an edit whose new content is identical to the old (a no-op edit is an error).
 
 ## Never Do (Absolute)
 
@@ -87,12 +98,30 @@ kubeconfig
   - Switch to existing: `git switch branch-name`
 - Branch prefix must match commit type: `feat/`, `fix/`, `docs/`, `refactor/`, etc.
 
+### Before you start (mandatory)
+
+1. **Fetch latest and start fresh.** Before any git work, sync and branch from an up-to-date default branch:
+   ```bash
+   git fetch origin
+   git switch main && git pull --ff-only      # or the repo's default branch
+   git switch -c <type>/branch-name
+   ```
+   Never start work on a stale branch or one whose state you haven't verified.
+2. **Never build on a dirty or untrusted branch.** If the current branch carries unrelated or uncertain changes, do not pile onto it — start over from a fresh branch off updated `main` and drop the old work. When in doubt, redo from `main`.
+3. **Commit checkpoints.** Commit each working increment before switching context or continuing, so nothing is lost and state stays inspectable. If asked "did you commit / branch?", the answer must already be yes.
+
 ### Workflow
 
-1. Create branch: `git switch -c <type>/branch-name`
+1. Start fresh from updated default branch (see above): `git switch -c <type>/branch-name`
 2. Make changes
-3. Run tests (must pass)
+3. **Verify locally before committing (see next section) — build, tests, lint, analyzers must pass**
 4. Commit
+
+### Verify before commit/push (mandatory)
+
+- **Run the project's full local checks BEFORE you commit or push** — build, tests, formatter/linter (e.g. prettier/eslint), and static analyzers (SonarCloud rules, Roslynator). Prove they pass locally.
+- **Never push and let the pipeline find failures.** Pipeline round-trips are slow and expensive; a red build that a local run would have caught is a process failure.
+- For .NET specifics — running SonarCloud/Roslynator analyzers locally, wiring analyzers via `Directory.Build.props`/`.editorconfig`, and common `Sxxxx` rule gotchas — see `~/.claude/dotnet-reference.md`.
 
 ### Commits
 
@@ -163,6 +192,8 @@ Examples:
 ## Azure DevOps
 
 > **CLI Reference:** Before any `az boards` work, read `~/.claude/ado-cli-reference.md` for flag rules, bulk patterns, and gotchas.
+
+- **Never guess the org or project.** Load them from the ADO config files (`~/.claude/ado/configs/<org>-<project>.json`); the org URL is always `https://dev.azure.com/<org>`. Do not confuse similarly named orgs/projects. If the target is ambiguous or not configured, the final fallback is to **ask "which ADO org / project?"** — never assume.
 
 ### User Stories
 

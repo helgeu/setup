@@ -129,6 +129,7 @@ Field rules:
 ## Rules
 
 - **Never post comments** — emit JSON only.
+- **Only emit findings anchored to files/lines that exist in the PR.** Every finding's `file` and `lineStart`/`lineEnd` must correspond to an entry in the iteration `changeEntries` and a line on the right (PR) side of that file's diff. Never emit a finding for a file the PR doesn't touch or a line outside the changed range — dangling references to non-existent files/lines are a hard failure.
 - **Never flag "missing trailing newline"** — not a valid finding.
 - Read-only against ADO: `show`, `pullRequestThreads` GET, iteration-changes
   GET, work-item `show`. No writes.
