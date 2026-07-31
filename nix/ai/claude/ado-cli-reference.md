@@ -59,6 +59,47 @@ az devops configure --defaults organization="$ORG" project="$PROJ"
   TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
   ```
 
+### Auth preflight (MANDATORY before any ad-hoc `az`)
+
+**Minting a token is not proof of access.** A stale or wrong-identity token
+still mints fine, so `az account get-access-token` succeeds — then the org
+rejects it mid-run with an opaque `TF400813 … not authorized` or *"you need to
+run the login command"*. This is the single biggest cause of ADO flakiness.
+**Prove the token actually authenticates against the target org** via
+`connectionData`, and re-login if not:
+
+```bash
+ORG="https://dev.azure.com/<org>"        # never guessed — from the config file
+export AZURE_CONFIG_DIR=<from config>    # correct identity; skip and you get TF400813
+
+auth_ok() {
+  az rest --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+    --url "$ORG/_apis/connectionData?api-version=7.1" 2>/dev/null \
+  | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+}
+if ! auth_ok; then
+  az login --allow-no-subscriptions >/dev/null || { echo "az login failed" >&2; exit 1; }
+  auth_ok || { echo "still not authenticated against $ORG (right account? member of org?)" >&2; exit 1; }
+fi
+```
+
+The helper scripts already bake this in — **prefer them over hand-rolled `az`**:
+`find-prs`, `pr-review`, `ado-my-items`, `ado-approve-deploy` (see
+`~/.claude/scripts-reference.md`). Only drop to raw `az` when no script fits, and
+run the preflight above first.
+
+## Parsing `az` / REST output with `jq`
+
+`jq: parse error: Invalid numeric literal…` almost always means **jq was fed
+non-JSON**, not a bad filter. Two causes, both avoidable:
+
+- **Never `az … 2>&1 | jq`.** `2>&1` merges stderr (CLI-upgrade notices, preview
+  warnings, errors) into the JSON stream and jq chokes on the first non-JSON
+  line. Keep stderr off the pipe: `az … -o json | jq …` (let warnings go to the
+  terminal), or `2>/dev/null` if they're noisy.
+- **`az rest` against `dev.azure.com` needs `--resource 499b84ac-1321-427f-aa17-267ca6975798`.** Without it az returns an **HTML sign-in page** instead of JSON (`<html>… Object moved …/_signin`) → jq parse error. (Same GUID as the token/preflight above.)
+- For simple field extraction prefer `--query '<JMESPath>' -o tsv` and skip jq entirely — no parse-error surface at all.
+
 ## Command flag rules
 
 | Command | `--org` | `--project` | Notes |
