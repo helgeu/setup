@@ -116,6 +116,35 @@ Standup format, short bullets, Norwegian or English to match the user:
 **Blokkere:** …or "ingen"…
 ```
 
-Offer to write next-steps into the user's todo file
-(`~/Documents/IMDI/todo-2026.md`) when they ask — high-level, self-explanatory
-items with ADO links, not internal codes.
+## Step 4 — keep `~/Documents/IMDI/todo-2026.md` in order (STANDING ORDER)
+
+This is a **standing order**, not an on-request favour: every time you run a
+standup, reconcile this file so it stays an accurate, tidy, high-level backlog.
+Do it as part of the standup and then show the user a short summary of what you
+changed (or "already in order — no changes").
+
+What the file is: the user's **durable, high-level** work backlog — real work
+items, follow-ups, and initiatives, written so they can be read aloud, each with
+an ADO link where one exists. What it is **not**: a mirror of every open todo in
+the session DB. Keep judgment in the loop.
+
+Reconciliation rules (apply only to the active section, e.g. "Å gjøre videre";
+never touch dated historical sections like "Juni"):
+
+- **Remove/close done work.** If a plan item is finished or was cancelled (e.g. a
+  todo flipped to `completed`/`cancelled`, a PR merged, a work item closed), check
+  it off (`[x]`) or drop it — don't leave stale open items.
+- **Add newly-surfaced durable items** from `plan`/`blockers` that belong here:
+  standing work, follow-ups, product decisions, spikes. Write them high-level and
+  self-explanatory with ADO links — **never** internal codes (no "P3", "B404-7",
+  session names, file:line lists).
+- **Do NOT add transient noise.** Exclude PR-review chores, individual
+  commit/push/gitleaks steps, SonarCloud re-checks, one-off experiments, and
+  abandoned discussions. When in doubt whether something is durable, ask.
+- **Don't duplicate.** If the item is already there (possibly worded
+  differently), leave the existing wording; don't add a second copy.
+- **Preserve format.** Norwegian, `- [ ]`/`- [x]` checkboxes, nested sub-items,
+  ADO links in the existing `[title](url)` style. Match surrounding style.
+
+Because this needs judgment (durable vs transient, dedup, wording), it lives in
+this skill, not in the `standup` script. Reconcile, then report the delta.
