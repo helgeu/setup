@@ -74,7 +74,7 @@ export AZURE_CONFIG_DIR=<from config>    # correct identity; skip and you get TF
 
 auth_ok() {
   az rest --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-    --url "$ORG/_apis/connectionData?api-version=7.1" 2>/dev/null \
+    --url "$ORG/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
   | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
 }
 if ! auth_ok; then
