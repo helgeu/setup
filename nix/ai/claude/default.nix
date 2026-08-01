@@ -44,6 +44,7 @@ in {
     ".claude/agents/pr-review.md".source = ./agents/pr-review.md;
     ".claude/agents/azure-app-triage.md".source = ./agents/azure-app-triage.md;
     ".claude/ado/Ado.Common.ps1".source = ./ado/Ado.Common.ps1;
+    ".claude/ado/backlog.schema.json".source = ./ado/backlog.schema.json;
     ".claude/ado/New-AdoWorkItem.ps1".source = ./ado/New-AdoWorkItem.ps1;
     ".claude/ado/Import-AdoBacklog.ps1".source = ./ado/Import-AdoBacklog.ps1;
     ".claude/ado/Set-AdoBacklogOrder.ps1".source = ./ado/Set-AdoBacklogOrder.ps1;

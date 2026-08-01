@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 # Idempotently seed an Epic/Feature hierarchy from a backlog JSON file.
 #   Import-AdoBacklog.ps1 -Config <org>-<project> -Backlog ./backlog.json [-WhatIf]
-# Backlog schema: { "epics": [ { code,title,tags,description, features:[ {title,tags,description} ] } ] }
+# Backlog schema: { "epics": [ { title,tags,description, features:[ {title,tags,description} ] } ] }
+# Full schema + field semantics: ~/.claude/ado/backlog.schema.json (see ado-cli-reference.md)
 param(
     [Parameter(Mandatory)][string]$Config,
     [Parameter(Mandatory)][string]$Backlog,

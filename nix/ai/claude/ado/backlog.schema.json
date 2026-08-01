@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://urholm.local/schemas/ado-backlog.schema.json",
+  "title": "ADO backlog",
+  "description": "Epic/Feature hierarchy consumed by Import-AdoBacklog.ps1 and Set-AdoBacklogOrder.ps1, and produced by Export-AdoBacklog.ps1. ADO is the source of truth; the JSON is generated. Work items are matched by exact System.Title, which is therefore the idempotency key and must be unique and stable across runs.",
+  "type": "object",
+  "required": ["epics"],
+  "additionalProperties": false,
+  "properties": {
+    "generatedFrom": {
+      "type": "string",
+      "description": "Written by Export-AdoBacklog as '<organizationUrl>/<project>'. Informational only; ignored on import."
+    },
+    "epics": {
+      "type": "array",
+      "description": "Epics in backlog order. Array order = backlog order for Set-AdoBacklogOrder (top of file = top of backlog / lowest StackRank).",
+      "items": { "$ref": "#/$defs/epic" }
+    }
+  },
+  "$defs": {
+    "epic": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "ADO work item id. Written by Export; ignored on import (matching is by title)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "System.Title. The idempotency key: an epic with this exact title is reused, not recreated. Must be unique across the project."
+        },
+        "tags": {
+          "type": "string",
+          "description": "System.Tags, semicolon-separated (e.g. 'MVP; backend'). Applied on create only."
+        },
+        "state": {
+          "type": "string",
+          "description": "System.State. Written by Export; ignored on import."
+        },
+        "description": {
+          "type": "string",
+          "description": "System.Description (plain text on import; HTML is stripped to plain text on export). Applied on create only."
+        },
+        "features": {
+          "type": "array",
+          "description": "Child Features in backlog order within this epic.",
+          "items": { "$ref": "#/$defs/feature" }
+        }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "ADO work item id. Written by Export; ignored on import (matching is by title)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "System.Title. Idempotency key for the feature; must be unique across the project (matching is global by title, not scoped to the parent epic)."
+        },
+        "tags": {
+          "type": "string",
+          "description": "System.Tags, semicolon-separated. Applied on create only."
+        },
+        "state": {
+          "type": "string",
+          "description": "System.State. Written by Export; ignored on import."
+        },
+        "description": {
+          "type": "string",
+          "description": "System.Description. Applied on create only."
+        }
+      }
+    }
+  }
+}
