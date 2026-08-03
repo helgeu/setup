@@ -44,6 +44,23 @@ in
   # ollama/<key>` resolves. Launch via the `oc` helper script (see ../../bin).
   home.file.".config/opencode/opencode.jsonc".text = builtins.toJSON {
     "$schema" = "https://opencode.ai/config.json";
+    # External-directory allowlist. Only applies to paths OUTSIDE the current
+    # workspace root (e.g. when cwd is a project like ~/ado/<repo> and the agent
+    # needs a sibling repo, ~/.claude configs, or a temp file). Deny by default,
+    # allow the trees actually worked in. NOTE: opencode uses LAST-match-wins and
+    # builtins.toJSON sorts keys, so "*" (deny) sorts before every "/…"/"~…"
+    # allow — giving the broad fallback first and the specific allows last, as
+    # required. Keep every allow pattern starting with "/" or "~".
+    permission.external_directory = {
+      "*" = "deny";
+      "~/ado/**" = "allow";
+      "~/git/**" = "allow";
+      "~/.claude/**" = "allow";
+      "~/.config/opencode/**" = "allow";
+      "/var/folders/**" = "allow";
+      "/tmp/**" = "allow";
+      "/nix/store/**" = "allow";
+    };
     provider.ollama = {
       npm = "@ai-sdk/openai-compatible";
       name = "Ollama (local)";
