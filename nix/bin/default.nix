@@ -18,6 +18,14 @@
       source = ./ado-my-items;
       executable = true;
     };
+    "bin/ado-prs-chart" = {
+      source = ./ado-prs-chart;
+      executable = true;
+    };
+    "bin/ado-prs-export" = {
+      source = ./ado-prs-export;
+      executable = true;
+    };
     "bin/azprs" = {
       source = ./azprs;
       executable = true;

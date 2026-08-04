@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""Export Azure DevOps pull requests to CSV.
+
+The script exports pull requests for every Git repo in a project, or every Git
+repo across an organization when no project is specified. Default start date is
+October 1 of last year.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import csv
+import datetime as dt
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any
+
+
+API_VERSION = "7.1"
+ADO_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"
+
+
+class AdoRequestError(RuntimeError):
+    def __init__(self, status_code: int, reason: str, url: str, body: str) -> None:
+        super().__init__(f"ADO request failed: {status_code} {reason}\n{url}\n{body}")
+        self.status_code = status_code
+        self.reason = reason
+        self.url = url
+        self.body = body
+
+
+def default_since() -> str:
+    today = dt.date.today()
+    return f"{today.year - 1}-10-01"
+
+
+def parse_date(value: str) -> dt.datetime:
+    try:
+        return dt.datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("date must use YYYY-MM-DD format") from exc
+
+
+def parse_ado_datetime(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    if "." in normalized:
+        prefix, suffix = normalized.split(".", 1)
+        timezone_start = min(
+            [index for index in (suffix.find("+"), suffix.find("-")) if index != -1]
+            or [len(suffix)]
+        )
+        fraction = suffix[:timezone_start][:6].ljust(6, "0")
+        timezone = suffix[timezone_start:]
+        normalized = f"{prefix}.{fraction}{timezone}"
+    return dt.datetime.fromisoformat(normalized)
+
+
+class AzureDevOpsClient:
+    def __init__(self, organization: str, pat: str | None, bearer_token: str | None) -> None:
+        self.organization = organization
+        if pat:
+            auth_value = f"Basic {base64.b64encode(f':{pat}'.encode('utf-8')).decode('ascii')}"
+        elif bearer_token:
+            auth_value = f"Bearer {bearer_token}"
+        else:
+            raise ValueError("Missing authentication token")
+
+        self.headers = {
+            "Accept": "application/json",
+            "Authorization": auth_value,
+        }
+        self.base_url = f"https://dev.azure.com/{organization}"
+
+    def get(self, path: str, params: dict[str, str], project: str | None = None) -> dict[str, Any]:
+        query = urllib.parse.urlencode({**params, "api-version": API_VERSION})
+        encoded_project = urllib.parse.quote(project, safe="") if project else ""
+        project_segment = f"/{encoded_project}" if encoded_project else ""
+        url = f"{self.base_url}{project_segment}/_apis/{path}?{query}"
+        request = urllib.request.Request(url, headers=self.headers)
+
+        try:
+            with urllib.request.urlopen(request) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+
+    def list_projects(self) -> list[dict[str, Any]]:
+        projects: list[dict[str, Any]] = []
+        continuation_token = ""
+
+        while True:
+            params = {"$top": "100"}
+            if continuation_token:
+                params["continuationToken"] = continuation_token
+
+            query = urllib.parse.urlencode({**params, "api-version": API_VERSION})
+            url = f"{self.base_url}/_apis/projects?{query}"
+            request = urllib.request.Request(url, headers=self.headers)
+
+            try:
+                with urllib.request.urlopen(request) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    projects.extend(payload.get("value", []))
+                    continuation_token = response.headers.get("x-ms-continuationtoken", "")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+
+            if not continuation_token:
+                return projects
+
+    def list_repositories(self, project: str) -> list[dict[str, Any]]:
+        payload = self.get("git/repositories", {}, project)
+        return payload.get("value", [])
+
+    def list_pull_requests(self, project: str, repository_id: str) -> list[dict[str, Any]]:
+        pull_requests: list[dict[str, Any]] = []
+        skip = 0
+        top = 100
+
+        while True:
+            payload = self.get(
+                f"git/repositories/{repository_id}/pullrequests",
+                {
+                    "searchCriteria.status": "all",
+                    "$top": str(top),
+                    "$skip": str(skip),
+                },
+                project,
+            )
+            batch = payload.get("value", [])
+            pull_requests.extend(batch)
+            if len(batch) < top:
+                return pull_requests
+            skip += top
+
+
+def write_csv(rows: list[dict[str, str]], output_path: str) -> None:
+    fieldnames = [
+        "date",
+        "created_at",
+        "closed_at",
+        "project",
+        "repository",
+        "pull_request_id",
+        "title",
+        "status",
+        "created_by",
+        "created_by_email",
+        "source_branch",
+        "target_branch",
+        "url",
+    ]
+    with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def build_rows(
+    client: AzureDevOpsClient,
+    projects: list[str],
+    since: dt.datetime,
+    verbose: bool,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+
+    for project in projects:
+        repositories = client.list_repositories(project)
+
+        for repo in repositories:
+            repo_id = repo["id"]
+            repo_name = repo["name"]
+            if verbose:
+                print(f"Fetching PRs for {project}/{repo_name}", file=sys.stderr)
+
+            try:
+                pull_requests = client.list_pull_requests(project, repo_id)
+            except AdoRequestError as exc:
+                if exc.status_code in {403, 404}:
+                    print(
+                        f"Skipping inaccessible repo {project}/{repo_name}: {exc.status_code} {exc.reason}",
+                        file=sys.stderr,
+                    )
+                    continue
+                raise
+
+            for pr in pull_requests:
+                created_at = parse_ado_datetime(pr.get("creationDate"))
+                if created_at is None or created_at < since:
+                    continue
+
+                created_by = pr.get("createdBy", {})
+                closed_at = parse_ado_datetime(pr.get("closedDate"))
+                web_url = pr.get("repository", {}).get("webUrl", "")
+                pr_url = f"{web_url}/pullrequest/{pr.get('pullRequestId')}" if web_url else pr.get("url", "")
+
+                rows.append(
+                    {
+                        "date": created_at.date().isoformat(),
+                        "created_at": created_at.isoformat(),
+                        "closed_at": closed_at.isoformat() if closed_at else "",
+                        "project": project,
+                        "repository": repo_name,
+                        "pull_request_id": str(pr.get("pullRequestId", "")),
+                        "title": pr.get("title", ""),
+                        "status": pr.get("status", ""),
+                        "created_by": created_by.get("displayName", ""),
+                        "created_by_email": created_by.get("uniqueName", ""),
+                        "source_branch": pr.get("sourceRefName", "").removeprefix("refs/heads/"),
+                        "target_branch": pr.get("targetRefName", "").removeprefix("refs/heads/"),
+                        "url": pr_url,
+                    }
+                )
+
+    rows.sort(key=lambda row: (row["date"], row["created_by"].lower(), row["project"], row["repository"], row["pull_request_id"]))
+    return rows
+
+
+def get_azure_cli_token() -> str | None:
+    try:
+        result = subprocess.run(
+            [
+                "az",
+                "account",
+                "get-access-token",
+                "--resource",
+                ADO_RESOURCE,
+                "--query",
+                "accessToken",
+                "-o",
+                "tsv",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+
+    token = result.stdout.strip()
+    return token or None
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Export Azure DevOps PRs for all repos to CSV.")
+    parser.add_argument("--organization", required=True, help="Azure DevOps organization name")
+    parser.add_argument("--project", help="Azure DevOps project name. Omit to export all projects in the organization.")
+    parser.add_argument(
+        "--pat",
+        default=os.environ.get("AZURE_DEVOPS_EXT_PAT") or os.environ.get("ADO_PAT"),
+        help="Azure DevOps PAT. Defaults to AZURE_DEVOPS_EXT_PAT or ADO_PAT. If omitted, tries Azure CLI login.",
+    )
+    parser.add_argument(
+        "--since",
+        type=parse_date,
+        default=parse_date(default_since()),
+        help=f"Only include PRs created on/after this date. Default: {default_since()}.",
+    )
+    parser.add_argument("--output", default="ado_prs.csv", help="CSV output path. Default: ado_prs.csv")
+    parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
+    args = parser.parse_args()
+
+    bearer_token = None if args.pat else get_azure_cli_token()
+    if not args.pat and not bearer_token:
+        print("Missing authentication. Pass --pat, set AZURE_DEVOPS_EXT_PAT/ADO_PAT, or sign in with az.", file=sys.stderr)
+        return 2
+
+    client = AzureDevOpsClient(args.organization, args.pat, bearer_token)
+    projects = [args.project] if args.project else [project["name"] for project in client.list_projects()]
+    rows = build_rows(client, projects, args.since, args.verbose)
+    write_csv(rows, args.output)
+    print(f"Wrote {len(rows)} PR rows to {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

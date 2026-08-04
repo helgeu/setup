@@ -42,6 +42,7 @@ in {
     fnm
 
     # Dev tools
+    (python3.withPackages (ps: [ ps.xlsxwriter ]))  # ado-prs-export/chart
     pandoc
     texliveBasic  # Needed for pandoc PDF output
     powershell

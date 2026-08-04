@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Create an Excel workbook with weekly PR charts per person."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime as dt
+import re
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import xlsxwriter
+
+
+def parse_date(value: str) -> dt.date:
+    return dt.date.fromisoformat(value[:10])
+
+
+def week_label(date: dt.date) -> str:
+    iso_year, iso_week, _ = date.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+def week_start(date: dt.date) -> dt.date:
+    return date - dt.timedelta(days=date.weekday())
+
+
+def safe_sheet_name(name: str, used_names: set[str]) -> str:
+    sanitized = re.sub(r"[\\/*?:\[\]]", " ", name).strip() or "Unknown"
+    sanitized = re.sub(r"\s+", " ", sanitized)
+    base = sanitized[:31]
+    candidate = base
+    index = 2
+
+    while candidate.lower() in used_names:
+        suffix = f" {index}"
+        candidate = f"{base[:31 - len(suffix)]}{suffix}"
+        index += 1
+
+    used_names.add(candidate.lower())
+    return candidate
+
+
+def load_counts(csv_path: Path) -> tuple[list[dict[str, str]], dict[str, Counter[str]], dict[str, dt.date]]:
+    rows: list[dict[str, str]] = []
+    counts: dict[str, Counter[str]] = defaultdict(Counter)
+    week_starts: dict[str, dt.date] = {}
+
+    with csv_path.open(newline="", encoding="utf-8") as csv_file:
+        reader = csv.DictReader(csv_file)
+        for row in reader:
+            created_date = parse_date(row["date"])
+            person = row.get("created_by") or row.get("created_by_email") or "Unknown"
+            label = week_label(created_date)
+
+            rows.append(row)
+            counts[person][label] += 1
+            week_starts[label] = week_start(created_date)
+
+    return rows, counts, week_starts
+
+
+def write_raw_sheet(workbook: xlsxwriter.Workbook, rows: list[dict[str, str]]) -> None:
+    worksheet = workbook.add_worksheet("Raw PRs")
+    if not rows:
+        worksheet.write(0, 0, "No PR rows found")
+        return
+
+    headers = list(rows[0].keys())
+    header_format = workbook.add_format({"bold": True, "bg_color": "#D9EAF7", "border": 1})
+
+    for column, header in enumerate(headers):
+        worksheet.write(0, column, header, header_format)
+
+    for row_index, row in enumerate(rows, start=1):
+        for column, header in enumerate(headers):
+            worksheet.write(row_index, column, row.get(header, ""))
+
+    worksheet.autofilter(0, 0, len(rows), len(headers) - 1)
+    worksheet.freeze_panes(1, 0)
+    worksheet.set_column(0, len(headers) - 1, 18)
+    worksheet.set_column(headers.index("title"), headers.index("title"), 60)
+    worksheet.set_column(headers.index("url"), headers.index("url"), 80)
+
+
+def write_summary_sheet(
+    workbook: xlsxwriter.Workbook,
+    counts: dict[str, Counter[str]],
+    weeks: list[str],
+) -> None:
+    worksheet = workbook.add_worksheet("Weekly Summary")
+    header_format = workbook.add_format({"bold": True, "bg_color": "#D9EAD3", "border": 1})
+    number_format = workbook.add_format({"num_format": "0"})
+
+    headers = ["Person", "Total PRs", "Avg PRs/week", *weeks]
+    for column, header in enumerate(headers):
+        worksheet.write(0, column, header, header_format)
+
+    people = sorted(counts, key=lambda person: (-sum(counts[person].values()), person.lower()))
+    for row_index, person in enumerate(people, start=1):
+        worksheet.write(row_index, 0, person)
+        worksheet.write_number(row_index, 1, sum(counts[person].values()), number_format)
+        average = sum(counts[person].values()) / len(weeks) if weeks else 0
+        worksheet.write_number(row_index, 2, average, workbook.add_format({"num_format": "0.00"}))
+        for column, week in enumerate(weeks, start=3):
+            worksheet.write_number(row_index, column, counts[person][week], number_format)
+
+    worksheet.autofilter(0, 0, len(people), len(headers) - 1)
+    worksheet.freeze_panes(1, 2)
+    worksheet.set_column(0, 0, 28)
+    worksheet.set_column(1, len(headers) - 1, 12)
+
+
+def write_person_sheets(
+    workbook: xlsxwriter.Workbook,
+    counts: dict[str, Counter[str]],
+    weeks: list[str],
+) -> None:
+    used_names = {"raw prs", "weekly summary"}
+    header_format = workbook.add_format({"bold": True, "bg_color": "#FCE5CD", "border": 1})
+    number_format = workbook.add_format({"num_format": "0"})
+
+    for person in sorted(counts):
+        worksheet = workbook.add_worksheet(safe_sheet_name(person, used_names))
+        worksheet.write(0, 0, "Week", header_format)
+        worksheet.write(0, 1, "PRs", header_format)
+        worksheet.write(0, 2, "Average", header_format)
+        worksheet.write(0, 3, "4-week moving avg", header_format)
+        average = sum(counts[person].values()) / len(weeks) if weeks else 0
+        weekly_values = [counts[person][week] for week in weeks]
+
+        for row_index, week in enumerate(weeks, start=1):
+            moving_average_start = max(0, row_index - 4)
+            moving_average_values = weekly_values[moving_average_start:row_index]
+            moving_average = sum(moving_average_values) / len(moving_average_values)
+
+            worksheet.write(row_index, 0, week)
+            worksheet.write_number(row_index, 1, counts[person][week], number_format)
+            worksheet.write_number(row_index, 2, average, workbook.add_format({"num_format": "0.00"}))
+            worksheet.write_number(row_index, 3, moving_average, workbook.add_format({"num_format": "0.00"}))
+
+        chart = workbook.add_chart({"type": "column"})
+        chart.add_series(
+            {
+                "name": "PRs",
+                "categories": [worksheet.name, 1, 0, len(weeks), 0],
+                "values": [worksheet.name, 1, 1, len(weeks), 1],
+                "fill": {"color": "#4472C4"},
+                "border": {"color": "#2F5597"},
+            }
+        )
+        average_chart = workbook.add_chart({"type": "line"})
+        average_chart.add_series(
+            {
+                "name": "Average",
+                "categories": [worksheet.name, 1, 0, len(weeks), 0],
+                "values": [worksheet.name, 1, 2, len(weeks), 2],
+                "line": {"color": "#ED7D31", "width": 2.5},
+                "marker": {"type": "none"},
+            }
+        )
+        chart.combine(average_chart)
+        moving_average_chart = workbook.add_chart({"type": "line"})
+        moving_average_chart.add_series(
+            {
+                "name": "4-week moving avg",
+                "categories": [worksheet.name, 1, 0, len(weeks), 0],
+                "values": [worksheet.name, 1, 3, len(weeks), 3],
+                "line": {"color": "#70AD47", "width": 2.5, "dash_type": "dash"},
+                "marker": {"type": "none"},
+            }
+        )
+        chart.combine(moving_average_chart)
+        chart.set_title({"name": f"PRs per week - {person}"})
+        chart.set_x_axis({"name": "Week"})
+        chart.set_y_axis({"name": "PRs", "major_unit": 1})
+        chart.set_legend({"position": "bottom"})
+        chart.set_size({"width": 980, "height": 420})
+
+        worksheet.insert_chart("D2", chart)
+        worksheet.freeze_panes(1, 0)
+        worksheet.set_column(0, 0, 12)
+        worksheet.set_column(1, 1, 10)
+        worksheet.set_column(2, 2, 10)
+        worksheet.set_column(3, 3, 18)
+
+
+def create_workbook(csv_path: Path, output_path: Path) -> None:
+    rows, counts, week_starts = load_counts(csv_path)
+    weeks = sorted(week_starts, key=lambda week: week_starts[week])
+
+    workbook = xlsxwriter.Workbook(output_path)
+    try:
+        write_summary_sheet(workbook, counts, weeks)
+        write_person_sheets(workbook, counts, weeks)
+        write_raw_sheet(workbook, rows)
+    finally:
+        workbook.close()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Create weekly PR Excel charts from ado_prs.csv.")
+    parser.add_argument("--input", default="ado_prs.csv", help="Input PR CSV path. Default: ado_prs.csv")
+    parser.add_argument("--output", default="ado_prs_weekly.xlsx", help="Output XLSX path. Default: ado_prs_weekly.xlsx")
+    args = parser.parse_args()
+
+    csv_path = Path(args.input)
+    output_path = Path(args.output)
+    create_workbook(csv_path, output_path)
+    print(f"Wrote {output_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

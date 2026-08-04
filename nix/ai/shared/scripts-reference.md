@@ -24,6 +24,8 @@ source and rebuild.
 | List **my** open PRs across **all** projects in an org | `azprs <org>` | e.g. `azprs urholm`. Not repo-bound; spans the whole org. |
 | AI-review a single PR by id (produces JSON findings, posts nothing) | `pr-review <id> [org]` | Isolated worktree + clean install, then the opencode `pr-review` agent. |
 | Publish reviewed findings to the PR | `pr-review-post <findings.json>` | Reads the JSON `pr-review` wrote; supports `--dry-run` / `--yes`. |
+| Export every PR in a project/org to CSV | `ado-prs-export --organization <org> [--project <p>]` | Auth via `az` login or `--pat`. `--since YYYY-MM-DD` (default Oct 1 last year); omit `--project` for the whole org. Writes `ado_prs.csv`. |
+| Build a per-person weekly PR chart workbook | `ado-prs-chart --input ado_prs.csv` | Excel workbook: summary + one column-chart sheet per person (avg + 4-week moving avg). Feed it an `ado-prs-export` CSV. |
 | Choose an opencode model + reasoning variant interactively | `pr-model-select` | Shared chooser used by `find-prs`/`pr-review`; rarely called directly. |
 | List open work items assigned to me (or someone) | `ado-my-items` | Defaults `urholm`/`Devkunt`/`@me`; `-o -p -a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
@@ -63,6 +65,23 @@ source and rebuild.
 - **`oc [model] [opencode args…]`** — opencode against local Ollama. Aliases:
   `oc`/`oc general` → qwen3.6, `oc coder` → qwen3-coder:30b. Requires
   `ollama serve` reachable on :11434.
+
+### PR analytics (`~/bin`, python)
+
+Two-step pipeline for "PRs per person" charts. Export once, then chart. Both
+run under the nix-provided `python3` (which bundles `xlsxwriter`).
+
+- **`ado-prs-export --organization <org> [--project <p>] [--since YYYY-MM-DD] [--output ado_prs.csv] [--pat <pat>] [--verbose]`**
+  — walks every Git repo in a project (or every repo in the whole org when
+  `--project` is omitted) and dumps all PRs (any status) to CSV: date, author,
+  repo, title, branches, url, etc. Auth via `az` login (default) or a PAT
+  (`--pat` / `AZURE_DEVOPS_EXT_PAT` / `ADO_PAT`). `--since` defaults to Oct 1 of
+  last year. Skips repos it can't read (403/404).
+- **`ado-prs-chart [--input ado_prs.csv] [--output ado_prs_weekly.xlsx]`** —
+  turns an export CSV into an Excel workbook: a **Weekly Summary** matrix (per
+  person: total, avg/week, week-by-week), **one sheet per person** with a
+  column chart of PRs/week combined with average + 4-week-moving-average lines,
+  and a **Raw PRs** sheet. Buckets by ISO week off the `date` column.
 
 ### ADO work items
 
