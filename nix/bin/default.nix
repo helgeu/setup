@@ -30,12 +30,20 @@
       source = ./azprs;
       executable = true;
     };
+    "bin/copilot-usage" = {
+      source = ./copilot-usage;
+      executable = true;
+    };
     "bin/find-prs" = {
       source = ./find-prs;
       executable = true;
     };
     "bin/oc" = {
       source = ./oc;
+      executable = true;
+    };
+    "bin/opencode-cost" = {
+      source = ./opencode-cost;
       executable = true;
     };
     "bin/pr-model-select" = {

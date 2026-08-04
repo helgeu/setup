@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+#
+# opencode-cost - Per-day cost of your local opencode usage.
+#
+# Reads the local opencode SQLite DB and reports cost + token totals grouped by
+# day. This is opencode's OWN estimate: cost = tokens x opencode's built-in
+# model price table (list price). It is NOT what GitHub Copilot bills you - for
+# the authoritative Copilot credits/$ figure use `copilot-usage`. The two differ
+# because opencode prices at raw model list rates while Copilot meters in AI
+# credits, and opencode only sees opencode sessions (not other editors).
+#
+# Usage:
+#   opencode-cost                 # per-day, last 14 days
+#   opencode-cost --days 30       # per-day, last 30 days
+#   opencode-cost --month 2026-08 # a specific calendar month
+#   opencode-cost --by-model      # group the window by model instead of day
+#   opencode-cost --json          # raw rows as JSON
+#
+# Options:
+#   -d, --days N     window size in days           [default: 14]
+#   -m, --month YM   calendar month YYYY-MM (overrides --days)
+#       --by-model   group by model, not by day
+#       --json       emit JSON instead of a table
+#   -h, --help       show this help
+#
+import argparse
+import json
+import os
+import sqlite3
+import sys
+
+DB = os.environ.get("OPENCODE_DB", os.path.expanduser(
+    "~/.local/share/opencode/opencode-stable.db"))
+
+
+def die(msg, code=1):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def query(where, group_expr, group_label):
+    sql = f"""
+        SELECT {group_expr} AS grp,
+               COUNT(*) AS sessions,
+               COALESCE(SUM(cost),0) AS cost,
+               COALESCE(SUM(tokens_input),0) AS tok_in,
+               COALESCE(SUM(tokens_output),0) AS tok_out
+        FROM session
+        WHERE parent_id IS NULL AND {where}
+        GROUP BY grp ORDER BY grp DESC
+    """
+    con = sqlite3.connect(DB)
+    try:
+        rows = con.execute(sql).fetchall()
+    finally:
+        con.close()
+    return [
+        {group_label: r[0], "sessions": r[1], "cost": round(r[2], 2),
+         "tokens_in": r[3], "tokens_out": r[4]}
+        for r in rows
+    ]
+
+
+def human(n):
+    for unit in ("", "K", "M", "B"):
+        if abs(n) < 1000:
+            return f"{n:.0f}{unit}" if unit else f"{n:.0f}"
+        n /= 1000
+    return f"{n:.1f}T"
+
+
+def render(rows, label):
+    if not rows:
+        print("no opencode sessions in that window.")
+        return
+    width = max(len(label), max(len(str(r[label])) for r in rows))
+    hdr = f"{label:<{width}}  {'sessions':>8}  {'cost $':>10}  {'tok in':>8}  {'tok out':>8}"
+    print(hdr)
+    print("-" * len(hdr))
+    tot_c = tot_s = tot_i = tot_o = 0
+    for r in rows:
+        print(f"{str(r[label]):<{width}}  {r['sessions']:>8}  {r['cost']:>10.2f}  "
+              f"{human(r['tokens_in']):>8}  {human(r['tokens_out']):>8}")
+        tot_c += r["cost"]; tot_s += r["sessions"]
+        tot_i += r["tokens_in"]; tot_o += r["tokens_out"]
+    print("-" * len(hdr))
+    print(f"{'TOTAL':<{width}}  {tot_s:>8}  {tot_c:>10.2f}  "
+          f"{human(tot_i):>8}  {human(tot_o):>8}")
+    print()
+    print("opencode list-price estimate (opencode sessions only); not the GitHub")
+    print("Copilot bill - see `copilot-usage` for authoritative credits/$.")
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("-d", "--days", type=int, default=14)
+    p.add_argument("-m", "--month", default=None)
+    p.add_argument("--by-model", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-h", "--help", action="store_true")
+    args = p.parse_args()
+
+    if args.help:
+        with open(__file__) as fh:
+            for line in fh.readlines()[2:]:
+                if line.startswith("import "):
+                    break
+                if line.startswith("#"):
+                    print(line.rstrip("\n").lstrip("#").lstrip())
+        return
+
+    if not os.path.exists(DB):
+        die(f"opencode DB not found at {DB}")
+
+    local_date = "date(time_updated/1000,'unixepoch','localtime')"
+    if args.month:
+        try:
+            y, mo = args.month.split("-")
+            start = f"{int(y):04d}-{int(mo):02d}-01"
+            nxt = f"{int(y)+(int(mo)//12):04d}-{int(mo)%12+1:02d}-01"
+        except ValueError:
+            die("--month must be YYYY-MM")
+        where = f"{local_date} >= '{start}' AND {local_date} < '{nxt}'"
+    else:
+        where = f"time_updated >= strftime('%s','now','-{args.days} days')*1000"
+
+    if args.by_model:
+        group_expr = "json_extract(model,'$.id')"
+        label = "model"
+    else:
+        group_expr = local_date
+        label = "day"
+
+    rows = query(where, group_expr, label)
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        render(rows, label)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+#
+# copilot-usage - Show YOUR GitHub Copilot usage / premium-request (AI credit)
+#                 consumption for the current billing period.
+#
+# Uses the same internal endpoint the Copilot CLI/IDE use for the in-product
+# quota display:
+#
+#   GET https://api.<host>/copilot_internal/user
+#
+# This is the only *self-serve* source for your own usage: the documented
+# billing API (enterprises/.../settings/billing/...) requires an enterprise
+# owner / billing-manager role, which regular members don't have. This endpoint
+# just needs your existing `gh` auth (the Copilot seat you already have) - no
+# PAT, no extra scope.
+#
+# NOTE: copilot_internal is undocumented/internal. Reading your own quota is
+# low-risk, but the schema can change without notice; the script degrades
+# gracefully and `--json` always shows the raw payload.
+#
+# Usage:
+#   copilot-usage                 # your usage this period
+#   copilot-usage --json          # raw API JSON (pipe to jq)
+#   copilot-usage -H github.com   # query a different gh host
+#
+# Options:
+#   -H, --host   gh hostname to query        [default: itera.ghe.com]
+#       --json   print raw API JSON, no table
+#   -h, --help   show this help
+#
+# Auth: your active `gh` session for the host (gh auth login -h <host>).
+#
+import argparse
+import json
+import subprocess
+import sys
+
+DEFAULT_HOST = "itera.ghe.com"
+CREDIT_USD = 0.01  # 1 GitHub AI credit = $0.01 USD (per GitHub billing docs)
+
+
+def die(msg, code=1):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def fetch_user(host):
+    proc = subprocess.run(
+        ["gh", "api", "--hostname", host, "copilot_internal/user"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        err = proc.stderr.strip() or proc.stdout.strip()
+        if "401" in err or "Bad credentials" in err:
+            die(f"not authenticated for {host}.  run: gh auth login -h {host}")
+        if "404" in err:
+            die("copilot_internal/user not found - no Copilot seat on this host,\n"
+                f"  or wrong host. try: copilot-usage -H github.com")
+        die(err)
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        die(f"could not parse response: {exc}")
+
+
+def fmt_num(n):
+    return f"{n:,.0f}" if float(n).is_integer() else f"{n:,.1f}"
+
+
+def render(d):
+    plan = d.get("copilot_plan", "?")
+    sku = d.get("access_type_sku", "?")
+    reset = d.get("quota_reset_date_utc") or d.get("quota_reset_date") or "?"
+    orgs = ", ".join(o.get("login", "") for o in d.get("organization_list", [])) or "-"
+    token_based = d.get("token_based_billing")
+
+    print(f"Copilot usage for {d.get('login','?')}")
+    print("-" * 60)
+    print(f"plan          : {plan}  ({sku})")
+    print(f"org(s)        : {orgs}")
+    print(f"billing model : {'token / AI credits' if token_based else 'premium requests'}")
+    print(f"quota resets  : {reset}")
+    print("-" * 60)
+
+    snaps = d.get("quota_snapshots", {}) or {}
+    if not snaps:
+        print("no quota snapshots returned.")
+        return
+
+    # Prefer premium_interactions; show every finite/used category.
+    order = ["premium_interactions", "chat", "completions"]
+    keys = order + [k for k in snaps if k not in order]
+    shown = False
+    total_credits = 0
+    for key in keys:
+        s = snaps.get(key)
+        if not s:
+            continue
+        credits = s.get("credits_used")
+        ent = s.get("entitlement", 0)
+        rem = s.get("quota_remaining", 0)
+        unlimited = s.get("unlimited")
+        total_credits += credits or 0
+
+        # In token-based billing, entitlement/remaining are 0 and the real
+        # figure is credits_used; in legacy billing it's entitlement/remaining.
+        if credits:
+            usd = credits * CREDIT_USD
+            line = f"{fmt_num(credits)} credits  (~${usd:,.2f} gross)"
+            if unlimited:
+                line += "  [overage-billed]"
+        elif ent:
+            used = ent - rem
+            pct = s.get("percent_remaining", 0)
+            line = (f"{fmt_num(used)} / {fmt_num(ent)} used  "
+                    f"({fmt_num(rem)} left, {pct:.0f}% remaining)")
+        elif unlimited:
+            line = "unlimited (no usage recorded)"
+        else:
+            line = "0"
+        over = s.get("overage_count") or 0
+        if over:
+            line += f"  [+{fmt_num(over)} overage]"
+
+        print(f"{key:<22}: {line}")
+        shown = True
+
+    if not shown:
+        print("no usage categories found; use --json to inspect raw data.")
+        return
+
+    if total_credits:
+        print("-" * 60)
+        print(f"{'TOTAL':<22}: {fmt_num(total_credits)} credits  "
+              f"~${total_credits * CREDIT_USD:,.2f} gross")
+        print()
+        print("gross = all credits used x $0.01. Actual billed = credits over your")
+        print("plan's included allowance; see the billing dashboard for the net $.")
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("-H", "--host", default=DEFAULT_HOST)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-h", "--help", action="store_true")
+    args = p.parse_args()
+
+    if args.help:
+        with open(__file__) as fh:
+            for line in fh.readlines()[2:]:
+                if line.startswith("import "):
+                    break
+                if line.startswith("#"):
+                    print(line.rstrip("\n").lstrip("#").lstrip())
+        return
+
+    data = fetch_user(args.host)
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        render(data)
+
+
+if __name__ == "__main__":
+    main()
