@@ -51,13 +51,36 @@ Map the data to the standup answers:
 Do **not** just dump the raw lists — synthesize. Give a tight, grouped,
 high-level recap with specifics (PR/work-item numbers) the user can read aloud.
 
-## Step 2 — enrich from Azure DevOps (when it adds signal)
+But do **not** present yet — the session-DB status is a hint, not the truth. A
+todo can still say `pending`/`in_progress` after its PR merged or its work item
+closed. Go through Step 2 first and let live state re-classify the lists.
 
-Only when the user wants live status (open PRs, whether a build is green, work
-item state). Use the existing helper scripts first
-(`~/.claude/scripts-reference.md`): `azprs <org>` for my open PRs, `ado-my-items`
-for assigned work items, `find-prs` inside a repo. Drop to raw `az` for
-pipeline/build detail.
+## Step 2 — verify against live state, then reclassify (MANDATORY)
+
+This runs **every** standup, before you present anything. The goal: nothing lands
+in **Gjort/Neste/Blokkere** on the strength of a stale local todo. Reconcile the
+draft lists against Azure DevOps *all around* first.
+
+For every draft item that carries a PR or work-item number (or is clearly tied to
+one), confirm its live state and move it if reality disagrees:
+
+- **PR merged / completed, or work item Closed/Resolved** → move the item from
+  **Neste** into **Gjort**, and flip the corresponding local todo to `completed`
+  (so it doesn't resurface next time).
+- **Blocker whose blocking PR/WI is now resolved** → drop it from **Blokkere**
+  (into Gjort if it was the user's own work, otherwise just remove).
+- **Item you were about to call "done" whose PR is still active, in draft, or has
+  a red required build** → keep it in **Neste**/in-progress and say why (e.g.
+  "venter på review", "build rød — Trivy CVE").
+- **Anything with no PR/WI to check** → leave as the session DB reported it.
+
+Only after this pass do the lists reflect what's actually done vs outstanding.
+
+### Tools for the check
+
+Use the existing helper scripts first (`~/.claude/scripts-reference.md`):
+`azprs <org>` for my open/merged PRs, `ado-my-items` for assigned work-item
+state, `find-prs` inside a repo. Drop to raw `az` for pipeline/build detail.
 
 ### `az boards` / `az devops invoke` gotchas (learned the hard way)
 
@@ -108,13 +131,33 @@ whereas a failing build/push stage (e.g. Trivy CVE) means nothing deployed.
 
 ## Step 3 — present it
 
-Standup format, short bullets, Norwegian or English to match the user:
+Output a **Teams-pasteable, flat plain-text** block: it must survive a raw
+copy-paste into the Teams compose box. That means:
+
+- **Plain-word headers** on their own line (`Gjort`, `Neste`, `Blokkere`) — no
+  markdown `**bold**` and no `#` headings (Teams shows literal asterisks / breaks
+  on paste).
+- **Single-level `•` bullets only** — no nesting, no `-`/`*` (Teams auto-converts
+  `-` into its own re-nested list). Collapse sub-items into one line each.
+- One blank line between the three sections; keep each bullet to a single line
+  with PR/WI numbers inline.
+- Put the whole thing in a fenced code block so the user copies it verbatim.
+- Norwegian or English to match the user; order Neste as in_progress first, then
+  pending.
 
 ```
-**Gjort:** …grouped, with PR/WI numbers…
-**Neste:** …in_progress first, then pending…
-**Blokkere:** …or "ingen"…
+Gjort (<did_window>)
+• …grouped, with PR/WI numbers, one line each…
+
+Neste
+• …in_progress first, then pending…
+
+Blokkere
+• …or "ingen"…
 ```
+
+After the block, remind once: paste with **Ctrl/⌘+Shift+V** (paste without
+formatting) for the cleanest result.
 
 ## Step 4 — keep `~/Documents/IMDI/todo-2026.md` in order (STANDING ORDER)
 
@@ -122,6 +165,14 @@ This is a **standing order**, not an on-request favour: every time you run a
 standup, reconcile this file so it stays an accurate, tidy, high-level backlog.
 Do it as part of the standup and then show the user a short summary of what you
 changed (or "already in order — no changes").
+
+**Reconcile from the Step 2 verified state, not the raw session DB.** By the time
+you reach here you've already confirmed live PR/work-item/build status and
+reclassified Gjort/Neste/Blokkere — the todo file must reflect *that* verified
+picture. Anything Step 2 moved into Gjort (PR merged, WI closed, blocker
+resolved) gets checked off / dropped here too; anything it kept in Neste stays
+open. Never mark an item done in this file on the strength of a local todo status
+you haven't verified against ADO.
 
 What the file is: the user's **durable, high-level** work backlog — real work
 items, follow-ups, and initiatives, written so they can be read aloud, each with
@@ -131,9 +182,9 @@ the session DB. Keep judgment in the loop.
 Reconciliation rules (apply only to the active section, e.g. "Å gjøre videre";
 never touch dated historical sections like "Juni"):
 
-- **Remove/close done work.** If a plan item is finished or was cancelled (e.g. a
-  todo flipped to `completed`/`cancelled`, a PR merged, a work item closed), check
-  it off (`[x]`) or drop it — don't leave stale open items.
+- **Remove/close done work.** If a plan item is finished or was cancelled (a todo
+  flipped to `completed`/`cancelled`, or Step 2 confirmed a PR merged / work item
+  closed), check it off (`[x]`) or drop it — don't leave stale open items.
 - **Add newly-surfaced durable items** from `plan`/`blockers` that belong here:
   standing work, follow-ups, product decisions, spikes. Write them high-level and
   self-explanatory with ADO links — **never** internal codes (no "P3", "B404-7",
