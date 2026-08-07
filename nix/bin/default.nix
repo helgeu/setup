@@ -62,6 +62,10 @@
       source = ./sonar-scan;
       executable = true;
     };
+    "bin/spike-factfind" = {
+      source = ./spike-factfind;
+      executable = true;
+    };
     "bin/standup" = {
       source = ./standup;
       executable = true;

@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+#
+# spike-factfind - headless AI fact-finding pass for an Azure DevOps SPIKE work
+# item.
+#
+# A spike is a time-boxed INVESTIGATION whose output is knowledge, not code.
+# This script runs the machine-answerable half: it checks the target repo out at
+# `origin/main` in a fresh, ISOLATED git worktree (never touches your working
+# tree or branches), then runs opencode (the `spike` agent) to produce a
+# structured findings DRAFT plus an evidence-backed QUESTION LIST for a human
+# interview.
+#
+# It does NOT mutate the work item, post anything, push, or commit. The findings
+# draft and questions are written under ~/.claude/spikes/<id>/ for you to review
+# and then interview against.
+#
+# Usage:
+#   spike-factfind <work-item-id> [org] [options]
+#   spike-factfind 83918
+#   spike-factfind 83918 imdidev
+#   spike-factfind 83918 --repo bosetting-backend
+#   spike-factfind 83918 -m github-copilot/gpt-5.5 --variant xhigh
+#
+# Options:
+#   -m, --model <model>    opencode model id (default: github-copilot/gpt-5.5).
+#                          Overrides SPIKE_MODEL. Also accepts --model=<model>.
+#       --variant <v>      model reasoning-effort variant (default: xhigh).
+#                          Overrides SPIKE_VARIANT. Use "default"/"" for the
+#                          provider default. Also accepts --variant=<v>.
+#       --repo <name>      repo to investigate (default: bosetting-backend).
+#                          Overrides SPIKE_REPO. Also accepts --repo=<name>.
+#       --restore          run `dotnet restore` in the worktree before the run
+#                          (off by default; investigation is read-only).
+#       --keep             keep the worktree after the run (default: remove it).
+#   -h, --help             show this help
+#
+# Env vars:
+#   SPIKE_ORG          default org (bare name or URL) if not given as arg 2
+#                      (default: imdidev)
+#   SPIKE_REPO         default repo to investigate (see --repo)
+#   SPIKE_REPO_ROOTS   colon-separated dirs to search for the local clone
+#                      (default: ~/ado)
+#   SPIKE_MODEL        opencode model override (see --model)
+#   SPIKE_VARIANT      opencode variant override (see --variant)
+#   SPIKE_KEEP=1       keep the worktree after the run
+#
+# Hard rule: partly destructive (checkout/restore), so it ABORTS on any error and
+# never continues past a failed step.
+set -euo pipefail
+
+die() { echo "spike-factfind: error: $*" >&2; exit 1; }
+log() { echo "spike-factfind: $*" >&2; }
+
+# --- args --------------------------------------------------------------------
+KEEP="${SPIKE_KEEP:-}"
+MODEL="${SPIKE_MODEL:-github-copilot/gpt-5.5}"
+VARIANT="${SPIKE_VARIANT:-xhigh}"
+REPO_NAME="${SPIKE_REPO:-bosetting-backend}"
+RESTORE=""
+ARGS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --keep) KEEP=1 ;;
+    --restore) RESTORE=1 ;;
+    -m|--model)
+      shift; [ "$#" -gt 0 ] || die "--model requires an argument"; MODEL="$1" ;;
+    --model=*|-m=*) MODEL="${1#*=}" ;;
+    --variant)
+      shift; [ "$#" -gt 0 ] || die "--variant requires an argument"; VARIANT="$1" ;;
+    --variant=*) VARIANT="${1#*=}" ;;
+    --repo)
+      shift; [ "$#" -gt 0 ] || die "--repo requires an argument"; REPO_NAME="$1" ;;
+    --repo=*) REPO_NAME="${1#*=}" ;;
+    -h|--help) sed -n '2,56p' "$0"; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *) ARGS+=("$1") ;;
+  esac
+  shift
+done
+set -- "${ARGS[@]:-}"
+
+WI_ID="${1:-}"
+[ -n "$WI_ID" ] || die "missing work-item id. usage: spike-factfind <id> [org]"
+[[ "$WI_ID" =~ ^[0-9]+$ ]] || die "work-item id must be numeric, got: $WI_ID"
+
+case "$VARIANT" in default) VARIANT="" ;; esac
+
+# --- tools -------------------------------------------------------------------
+for t in az jq git opencode; do
+  command -v "$t" >/dev/null || die "$t not found on PATH"
+done
+
+# --- resolve org -------------------------------------------------------------
+ORG_IN="${2:-${SPIKE_ORG:-imdidev}}"
+case "$ORG_IN" in
+  http*://*) ORG="${ORG_IN%/}" ;;
+  *)         ORG="https://dev.azure.com/${ORG_IN}" ;;
+esac
+
+# --- auth preflight ----------------------------------------------------------
+# A stale/wrong-identity token still MINTS fine, so prove it AUTHENTICATES
+# against this org via connectionData; if not, re-run az login.
+auth_ok() {
+  az rest --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+    --url "$ORG/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+    | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+}
+if ! auth_ok; then
+  log "Azure DevOps token not accepted by $ORG; running az login"
+  az login --allow-no-subscriptions >/dev/null \
+    || die "az login failed; cannot continue without Azure DevOps credentials"
+  auth_ok || die "still not authenticated against $ORG after az login"
+fi
+
+# --- output dir + work-item context ------------------------------------------
+OUTDIR="$HOME/.claude/spikes/$WI_ID"
+mkdir -p "$OUTDIR"
+CTX="$OUTDIR/context.json"
+FINDINGS="$OUTDIR/findings-draft.md"
+QUESTIONS="$OUTDIR/questions.json"
+RUNLOG="$OUTDIR/run.log"
+
+log "fetching work item #$WI_ID from $ORG"
+az boards work-item show --org "$ORG" --id "$WI_ID" \
+  --query "{id:id, type:fields.\"System.WorkItemType\", state:fields.\"System.State\", assignedTo:fields.\"System.AssignedTo\".uniqueName, title:fields.\"System.Title\", description:fields.\"System.Description\", acceptanceCriteria:fields.\"Microsoft.VSTS.Common.AcceptanceCriteria\"}" \
+  -o json > "$CTX" \
+  || die "az boards work-item show failed for #$WI_ID (auth? wrong org? wrong id?)"
+
+WI_TITLE="$(jq -r '.title // ""' "$CTX")"
+log "#$WI_ID: $WI_TITLE"
+
+# --- locate the local clone --------------------------------------------------
+IFS=':' read -r -a ROOTS <<< "${SPIKE_REPO_ROOTS:-$HOME/ado}"
+repo_lc="$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')"
+REPO=""
+for root in "${ROOTS[@]}"; do
+  [ -d "$root" ] || continue
+  for d in "$root"/*; do
+    [ -d "$d/.git" ] || [ -f "$d/.git" ] || continue
+    url="$(git -C "$d" remote get-url origin 2>/dev/null || true)"
+    [ -n "$url" ] || continue
+    url_lc="$(echo "$url" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$url_lc" == *"/_git/$repo_lc" ]] || [[ "$url_lc" == *"/$repo_lc" ]] || [[ "$url_lc" == *"/_git/$repo_lc/"* ]]; then
+      REPO="$d"; break 2
+    fi
+  done
+done
+[ -n "$REPO" ] || die "no local clone of '$REPO_NAME' found under: ${ROOTS[*]} (set SPIKE_REPO_ROOTS or --repo)"
+log "local clone: $REPO"
+
+# --- fresh, isolated worktree at origin/main ---------------------------------
+REPO_PARENT="$(dirname "$REPO")"
+REPO_BASE="$(basename "$REPO")"
+WT="$REPO_PARENT/${REPO_BASE}-worktrees/spike-${WI_ID}"
+
+cleanup() {
+  if [ -n "${WT:-}" ] && [ -d "$WT" ] && [ -z "$KEEP" ]; then
+    log "removing worktree $WT"
+    git -C "$REPO" worktree remove --force "$WT" 2>/dev/null || true
+  elif [ -n "$KEEP" ] && [ -d "${WT:-}" ]; then
+    log "keeping worktree $WT (--keep)"
+  fi
+}
+trap cleanup EXIT
+
+if [ -e "$WT" ]; then
+  log "stale worktree at $WT - removing"
+  git -C "$REPO" worktree remove --force "$WT" || die "could not remove stale worktree $WT"
+fi
+mkdir -p "$(dirname "$WT")"
+
+log "fetching origin/main"
+git -C "$REPO" fetch --quiet origin main || die "git fetch origin main failed"
+MAIN_COMMIT="$(git -C "$REPO" rev-parse origin/main)" || die "could not resolve origin/main"
+
+log "creating isolated worktree at $WT (detached @ ${MAIN_COMMIT:0:12})"
+git -C "$REPO" worktree add --quiet --detach "$WT" "$MAIN_COMMIT" \
+  || die "git worktree add failed"
+
+# record the investigated commit into the context for traceability
+tmp_ctx="$(mktemp)"
+jq --arg c "$MAIN_COMMIT" --arg r "$REPO_NAME" \
+  '. + {investigatedCommit: $c, repo: $r}' "$CTX" > "$tmp_ctx" && mv "$tmp_ctx" "$CTX"
+
+# --- optional restore --------------------------------------------------------
+if [ -n "$RESTORE" ]; then
+  command -v dotnet >/dev/null || die "--restore given but dotnet not on PATH"
+  log "dotnet restore ($WT)"
+  (cd "$WT" && dotnet restore) || die "dotnet restore failed"
+fi
+
+# --- run opencode (headless) -------------------------------------------------
+MODEL_ARGS=(--model "$MODEL")
+log "using model: $MODEL"
+if [ -n "$VARIANT" ]; then
+  MODEL_ARGS+=(--variant "$VARIANT")
+  log "using variant: $VARIANT"
+fi
+
+PROMPT="You are running the spike fact-find for Azure DevOps work item #${WI_ID} ('${WI_TITLE}'). The verified work-item context (id, title, description, acceptance criteria) is in ${CTX} — read it first; do not re-fetch it. The current working directory is a fresh, isolated worktree checked out at origin/main of the '${REPO_NAME}' repository. Investigate the code/DB to gather evidence for this spike. Write findings-draft.md and questions.json into ${OUTDIR}, following your agent instructions exactly. Non-interactive: capture every unresolved decision in questions.json with evidence — never ask, never block."
+
+log "running opencode spike agent (this can take a while); tee -> $RUNLOG"
+opencode run --agent spike --dir "$WT" "${MODEL_ARGS[@]}" "$PROMPT" 2>&1 | tee "$RUNLOG" \
+  || die "opencode run failed (see $RUNLOG)"
+
+[ -s "$FINDINGS" ]  || die "opencode finished but no findings draft at $FINDINGS"
+[ -s "$QUESTIONS" ] || die "opencode finished but no questions file at $QUESTIONS"
+
+echo
+log "done. spike fact-find outputs:"
+echo "  findings : $FINDINGS"
+echo "  questions: $QUESTIONS"
+echo "  context  : $CTX"
+echo "  run log  : $RUNLOG"
+log "next: review the questions, then run the interview to resolve them."
