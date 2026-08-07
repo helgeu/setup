@@ -24,6 +24,7 @@ permission:
     "az boards work-item delete*": deny
   external_directory:
     "*": deny
+    "~/ado/**": allow
     "~/.claude/**": allow
 ---
 
