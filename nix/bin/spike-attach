@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# spike-attach - attach a file to an Azure DevOps work item (upload + link).
+#
+# `az boards`/`az devops invoke` cannot upload a raw (non-JSON) file, so this
+# wraps the REST API: it uploads the file to the attachments store and links it
+# to the work item as an AttachedFile relation. Used to put spike findings
+# "on the spike" (see the `spike-factfind` workflow), but works for any work
+# item + file.
+#
+# Idempotent: skips upload if an AttachedFile with the same name is already
+# linked (override with --force).
+#
+# Usage:
+#   spike-attach <work-item-id> <file> [org] [options]
+#   spike-attach 83918 ~/.claude/spikes/83918/findings.md
+#   spike-attach 83918 findings.md imdidev --name 83918-findings.md
+#
+# Options:
+#   --name <n>        attachment file name shown in ADO (default: basename file)
+#   --comment <c>     relation comment (default: "Attached by spike-attach")
+#   --force           attach even if a same-named attachment already exists
+#   -h, --help        show this help
+#
+# Env vars:
+#   SPIKE_ORG         default org (bare name or URL) if not given as arg 3
+#                     (default: imdidev)
+set -euo pipefail
+
+die() { echo "spike-attach: error: $*" >&2; exit 1; }
+log() { echo "spike-attach: $*" >&2; }
+
+NAME=""
+COMMENT="Attached by spike-attach"
+FORCE=""
+ARGS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --name) shift; [ "$#" -gt 0 ] || die "--name requires an argument"; NAME="$1" ;;
+    --name=*) NAME="${1#*=}" ;;
+    --comment) shift; [ "$#" -gt 0 ] || die "--comment requires an argument"; COMMENT="$1" ;;
+    --comment=*) COMMENT="${1#*=}" ;;
+    --force) FORCE=1 ;;
+    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *) ARGS+=("$1") ;;
+  esac
+  shift
+done
+set -- "${ARGS[@]:-}"
+
+WI_ID="${1:-}"
+FILE="${2:-}"
+[ -n "$WI_ID" ] || die "missing work-item id. usage: spike-attach <id> <file> [org]"
+[[ "$WI_ID" =~ ^[0-9]+$ ]] || die "work-item id must be numeric, got: $WI_ID"
+[ -n "$FILE" ] || die "missing file. usage: spike-attach <id> <file> [org]"
+[ -f "$FILE" ] || die "file not found: $FILE"
+[ -n "$NAME" ] || NAME="$(basename "$FILE")"
+
+for t in az jq curl; do command -v "$t" >/dev/null || die "$t not found on PATH"; done
+
+# --- resolve org -------------------------------------------------------------
+ORG_IN="${3:-${SPIKE_ORG:-imdidev}}"
+case "$ORG_IN" in
+  http*://*) ORG="${ORG_IN%/}" ;;
+  *)         ORG="https://dev.azure.com/${ORG_IN}" ;;
+esac
+RES="499b84ac-1321-427f-aa17-267ca6975798"  # Azure DevOps resource id
+
+# --- auth preflight ----------------------------------------------------------
+auth_ok() {
+  az rest --resource "$RES" \
+    --url "$ORG/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+    | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+}
+if ! auth_ok; then
+  log "Azure DevOps token not accepted by $ORG; running az login"
+  az login --allow-no-subscriptions >/dev/null || die "az login failed"
+  auth_ok || die "still not authenticated against $ORG after az login"
+fi
+
+token() { az account get-access-token --resource "$RES" --query accessToken -o tsv; }
+TOKEN="$(token)"
+[ -n "$TOKEN" ] || die "could not obtain an access token"
+
+# --- idempotency check -------------------------------------------------------
+if [ -z "$FORCE" ]; then
+  existing="$(curl -sS "$ORG/_apis/wit/workitems/$WI_ID?\$expand=relations&api-version=7.1" \
+    -H "Authorization: Bearer $TOKEN" \
+    | jq -r --arg n "$NAME" \
+        '[.relations[]? | select(.rel=="AttachedFile") | (.attributes.name // (.url|capture("fileName=(?<f>[^&]+)").f) // "")] | index($n) // empty')"
+  if [ -n "$existing" ]; then
+    log "an attachment named '$NAME' is already linked to #$WI_ID; skipping (use --force to add anyway)"
+    exit 0
+  fi
+fi
+
+# --- upload ------------------------------------------------------------------
+log "uploading '$FILE' as '$NAME' to $ORG"
+UP="$(curl -sS -X POST "$ORG/_apis/wit/attachments?fileName=$NAME&api-version=7.1" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @"$FILE")"
+ATT_URL="$(echo "$UP" | jq -r '.url // empty')"
+[ -n "$ATT_URL" ] || die "upload failed: $UP"
+log "uploaded: $ATT_URL"
+
+# --- link to work item -------------------------------------------------------
+PATCH="$(jq -n --arg url "$ATT_URL" --arg c "$COMMENT" \
+  '[{op:"add", path:"/relations/-", value:{rel:"AttachedFile", url:$url, attributes:{comment:$c}}}]')"
+RESULT="$(curl -sS -X PATCH "$ORG/_apis/wit/workitems/$WI_ID?api-version=7.1" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json-patch+json" \
+  --data "$PATCH")"
+LINKED_ID="$(echo "$RESULT" | jq -r '.id // empty')"
+[ "$LINKED_ID" = "$WI_ID" ] || die "link failed: $RESULT"
+
+log "done. attached '$NAME' to work item #$WI_ID"
