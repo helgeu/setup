@@ -14,6 +14,18 @@
       source = ./ado-create-tasks;
       executable = true;
     };
+    "bin/ado-deploy-metrics" = {
+      source = ./ado-deploy-metrics;
+      executable = true;
+    };
+    "bin/ado-dora" = {
+      source = ./ado-dora;
+      executable = true;
+    };
+    "bin/ado-dora-chart" = {
+      source = ./ado-dora-chart;
+      executable = true;
+    };
     "bin/ado-my-items" = {
       source = ./ado-my-items;
       executable = true;
@@ -44,6 +56,10 @@
     };
     "bin/opencode-cost" = {
       source = ./opencode-cost;
+      executable = true;
+    };
+    "bin/opencode-fix-message-ids" = {
+      source = ./opencode-fix-message-ids;
       executable = true;
     };
     "bin/pr-model-select" = {

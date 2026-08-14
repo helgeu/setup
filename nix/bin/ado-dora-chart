@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Turn ADO DORA CSVs into an Excel workbook with weekly trend charts.
+
+Consumes the CSVs produced by `ado-deploy-metrics` (deployments) and, optionally,
+`ado-prs-export` (pull requests, for lead time). Produces a workbook with native
+Excel charts so the development over time is visible at a glance:
+
+  * Deploys per week   - successful deployments per ISO week, one line per env
+  * Prod & CFR weekly  - prod deploy successes/failures + change-failure-rate line
+  * Lead time weekly   - median PR created->merged hours per ISO week (if --prs)
+  * Data sheets        - the weekly matrices behind each chart
+
+Weeks are bucketed by ISO week off the event timestamps.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime as dt
+import statistics
+from collections import defaultdict
+
+import xlsxwriter
+
+
+ENV_ORDER = ["dev", "test", "qa", "prod", "unspecified"]
+
+
+def parse_dt(value: str) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def iso_week(value: dt.datetime) -> str:
+    year, week, _ = value.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def week_sort_key(week: str) -> tuple[int, int]:
+    year, wk = week.split("-W")
+    return int(year), int(wk)
+
+
+def read_deploys(path: str):
+    """Return (weeks_sorted, success_by_env_week, fail_by_env_week)."""
+    success: dict[tuple[str, str], int] = defaultdict(int)
+    fail: dict[tuple[str, str], int] = defaultdict(int)
+    envs: set[str] = set()
+    weeks: set[str] = set()
+    with open(path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            week = row.get("week") or ""
+            env = row.get("environment") or "unspecified"
+            if not week:
+                continue
+            weeks.add(week)
+            envs.add(env)
+            if row.get("result") == "succeeded":
+                success[(env, week)] += 1
+            elif row.get("result") == "failed":
+                fail[(env, week)] += 1
+    ordered_envs = [e for e in ENV_ORDER if e in envs] + sorted(envs - set(ENV_ORDER))
+    return sorted(weeks, key=week_sort_key), ordered_envs, success, fail
+
+
+def read_lead_time(path: str, target_branches: set[str]):
+    """Return (weeks_sorted, median_hours_by_week)."""
+    hours_by_week: dict[str, list[float]] = defaultdict(list)
+    with open(path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if row.get("status") != "completed":
+                continue
+            if target_branches and row.get("target_branch") not in target_branches:
+                continue
+            created = parse_dt(row.get("created_at", ""))
+            closed = parse_dt(row.get("closed_at", ""))
+            if created and closed and closed >= created:
+                hours_by_week[iso_week(closed)].append((closed - created).total_seconds() / 3600.0)
+    weeks = sorted(hours_by_week, key=week_sort_key)
+    medians = {w: round(statistics.median(hours_by_week[w]), 1) for w in weeks}
+    return weeks, medians
+
+
+def build_workbook(
+    output: str,
+    weeks: list[str],
+    envs: list[str],
+    success,
+    fail,
+    lead_weeks: list[str],
+    lead_medians: dict[str, float],
+) -> None:
+    book = xlsxwriter.Workbook(output)
+    bold = book.add_format({"bold": True})
+    pct = book.add_format({"num_format": "0.0"})
+
+    # --- Deploys weekly data sheet ---
+    data = book.add_worksheet("Deploys weekly")
+    data.write(0, 0, "week", bold)
+    for col, env in enumerate(envs, start=1):
+        data.write(0, col, env, bold)
+    for r, week in enumerate(weeks, start=1):
+        data.write(r, 0, week)
+        for col, env in enumerate(envs, start=1):
+            data.write_number(r, col, success[(env, week)])
+    n = len(weeks)
+
+    chart = book.add_chart({"type": "line"})
+    for col, env in enumerate(envs, start=1):
+        chart.add_series({
+            "name": ["Deploys weekly", 0, col],
+            "categories": ["Deploys weekly", 1, 0, n, 0],
+            "values": ["Deploys weekly", 1, col, n, col],
+        })
+    chart.set_title({"name": "Successful deployments per week (by env)"})
+    chart.set_x_axis({"name": "ISO week"})
+    chart.set_y_axis({"name": "Deployments"})
+    chart.set_size({"width": 1100, "height": 460})
+    data.insert_chart(1, len(envs) + 2, chart)
+
+    # --- Prod & CFR weekly ---
+    prod = book.add_worksheet("Prod & CFR weekly")
+    prod.write_row(0, 0, ["week", "prod success", "prod fail", "CFR %"], bold)
+    for r, week in enumerate(weeks, start=1):
+        s = success[("prod", week)]
+        f = fail[("prod", week)]
+        cfr = (f / (s + f) * 100.0) if (s + f) else 0.0
+        prod.write(r, 0, week)
+        prod.write_number(r, 1, s)
+        prod.write_number(r, 2, f)
+        prod.write_number(r, 3, round(cfr, 1), pct)
+
+    col_chart = book.add_chart({"type": "column", "subtype": "stacked"})
+    col_chart.add_series({
+        "name": ["Prod & CFR weekly", 0, 1],
+        "categories": ["Prod & CFR weekly", 1, 0, n, 0],
+        "values": ["Prod & CFR weekly", 1, 1, n, 1],
+    })
+    col_chart.add_series({
+        "name": ["Prod & CFR weekly", 0, 2],
+        "categories": ["Prod & CFR weekly", 1, 0, n, 0],
+        "values": ["Prod & CFR weekly", 1, 2, n, 2],
+    })
+    line_chart = book.add_chart({"type": "line"})
+    line_chart.add_series({
+        "name": ["Prod & CFR weekly", 0, 3],
+        "categories": ["Prod & CFR weekly", 1, 0, n, 0],
+        "values": ["Prod & CFR weekly", 1, 3, n, 3],
+        "y2_axis": True,
+    })
+    col_chart.combine(line_chart)
+    col_chart.set_title({"name": "Production deployments & change failure rate"})
+    col_chart.set_x_axis({"name": "ISO week"})
+    col_chart.set_y_axis({"name": "Prod deployments"})
+    line_chart.set_y2_axis({"name": "CFR %"})
+    col_chart.set_size({"width": 1100, "height": 460})
+    prod.insert_chart(1, 5, col_chart)
+
+    # --- Lead time weekly ---
+    if lead_weeks:
+        lead = book.add_worksheet("Lead time weekly")
+        lead.write_row(0, 0, ["week", "median merge hours"], bold)
+        for r, week in enumerate(lead_weeks, start=1):
+            lead.write(r, 0, week)
+            lead.write_number(r, 1, lead_medians[week])
+        m = len(lead_weeks)
+        lt_chart = book.add_chart({"type": "line"})
+        lt_chart.add_series({
+            "name": ["Lead time weekly", 0, 1],
+            "categories": ["Lead time weekly", 1, 0, m, 0],
+            "values": ["Lead time weekly", 1, 1, m, 1],
+        })
+        lt_chart.set_title({"name": "Lead time for changes (median PR created->merged, hours)"})
+        lt_chart.set_x_axis({"name": "ISO week"})
+        lt_chart.set_y_axis({"name": "Hours"})
+        lt_chart.set_size({"width": 1100, "height": 460})
+        lead.insert_chart(1, 3, lt_chart)
+
+    book.close()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build an Excel workbook of weekly DORA trends.")
+    parser.add_argument("--deployments", default="ado_deployments.csv", help="CSV from ado-deploy-metrics.")
+    parser.add_argument("--prs", help="Optional CSV from ado-prs-export (adds lead-time chart).")
+    parser.add_argument("--target-branch", default="main", help="Trunk branch for lead time. Default: main.")
+    parser.add_argument("--output", default="dora_trends.xlsx", help="Workbook path. Default: dora_trends.xlsx")
+    args = parser.parse_args()
+
+    weeks, envs, success, fail = read_deploys(args.deployments)
+    lead_weeks: list[str] = []
+    lead_medians: dict[str, float] = {}
+    if args.prs:
+        branches = {args.target_branch} if args.target_branch else set()
+        lead_weeks, lead_medians = read_lead_time(args.prs, branches)
+
+    build_workbook(args.output, weeks, envs, success, fail, lead_weeks, lead_medians)
+    print(f"Wrote {args.output} ({len(weeks)} weeks, envs: {', '.join(envs)})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Produce the four DORA metrics for an Azure DevOps project from ADO data.
+
+This is a thin orchestrator. It reuses two sibling scripts and combines their
+output into one summary, so the numbers that back a MinimumCD / CD-maturity
+assessment are fully reproducible from one command.
+
+  * Lead Time for Changes  <- pull requests (created -> merged), via ado-prs-export
+  * Deployment Frequency   <- pipeline deploy stages, via ado-deploy-metrics
+  * Change Failure Rate     <- pipeline deploy stages, via ado-deploy-metrics
+  * Mean Time to Restore    <- pipeline deploy stages, via ado-deploy-metrics
+
+It writes:
+  * <output-dir>/ado_prs.csv           (raw PRs)
+  * <output-dir>/ado_deployments.csv   (raw deployment stages)
+  * <output-dir>/dora-summary.json     (machine-readable)
+  * <output-dir>/dora-summary.md       (human-readable, paste into the wiki)
+
+Caveats (also written into the report):
+  * Lead time here is PR created->merged, a proxy for full commit->prod lead time.
+  * Deployment metrics depend on the deploy-stage name heuristic in
+    ado-deploy-metrics; tune --deploy-* patterns if a pipeline names stages
+    differently.
+  * MTTR is restore-of-deployment (failed deploy -> next successful deploy of the
+    same pipeline+env), not incident MTTR (ADO has no incident feed).
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime as dt
+import json
+import os
+import shutil
+import statistics
+import subprocess
+import sys
+
+
+def default_since() -> str:
+    today = dt.date.today()
+    return f"{today.year - 1}-10-01"
+
+
+def resolve_sibling(name: str) -> str:
+    """Find a helper script on PATH, else next to this file."""
+    found = shutil.which(name)
+    if found:
+        return found
+    local = os.path.join(os.path.dirname(os.path.realpath(__file__)), name)
+    if os.path.exists(local):
+        return local
+    raise FileNotFoundError(f"Could not locate helper script '{name}' on PATH or beside {__file__}")
+
+
+def run(cmd: list[str]) -> None:
+    print(f"+ {' '.join(cmd)}", file=sys.stderr)
+    subprocess.run(cmd, check=True)
+
+
+def parse_dt(value: str) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def lead_time_from_prs(csv_path: str, target_branches: set[str]) -> dict[str, float | int]:
+    hours: list[float] = []
+    with open(csv_path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if row.get("status") != "completed":
+                continue
+            if target_branches and row.get("target_branch") not in target_branches:
+                continue
+            created = parse_dt(row.get("created_at", ""))
+            closed = parse_dt(row.get("closed_at", ""))
+            if created and closed and closed >= created:
+                hours.append((closed - created).total_seconds() / 3600.0)
+    if not hours:
+        return {"merged_prs": 0}
+    return {
+        "merged_prs": len(hours),
+        "median_hours": round(statistics.median(hours), 1),
+        "p75_hours": round(statistics.quantiles(hours, n=4)[2], 1) if len(hours) >= 4 else round(max(hours), 1),
+        "mean_hours": round(statistics.fmean(hours), 1),
+    }
+
+
+def dora_bucket(value: float, thresholds: list[tuple[float, str]], reverse: bool = False) -> str:
+    """Map a metric to Elite/High/Medium/Low using ordered thresholds."""
+    for limit, label in thresholds:
+        if (value <= limit) != reverse:
+            return label
+    return thresholds[-1][1]
+
+
+def rate_lead_time(median_hours: float) -> str:
+    return dora_bucket(median_hours, [(24, "Elite"), (24 * 7, "High"), (24 * 30, "Medium"), (float("inf"), "Low")])
+
+
+def rate_deploy_freq(per_week: float) -> str:
+    if per_week >= 7:
+        return "Elite (on-demand/daily)"
+    if per_week >= 1:
+        return "High (weekly+)"
+    if per_week >= 0.25:
+        return "Medium (monthly+)"
+    return "Low (< monthly)"
+
+
+def rate_cfr(pct: float) -> str:
+    return dora_bucket(pct, [(15, "Elite/High (<=15%)"), (30, "Medium"), (float("inf"), "Low")])
+
+
+def rate_mttr(hours: float | None) -> str:
+    if hours is None:
+        return "n/a"
+    return dora_bucket(hours, [(1, "Elite (<1h)"), (24, "High (<1d)"), (24 * 7, "Medium (<1w)"), (float("inf"), "Low")])
+
+
+def write_markdown(path: str, org: str, project: str, since: str, lead: dict, deploy: dict, prod_env: str) -> None:
+    envs = deploy.get("environments", {})
+    prod = envs.get(prod_env, {})
+    lines: list[str] = []
+    lines.append(f"# DORA metrics - {org}/{project}")
+    lines.append("")
+    lines.append(f"Window: since {since} (~{deploy.get('weeks_span', '?')} weeks). Generated {dt.date.today().isoformat()}.")
+    lines.append("")
+    lines.append("## Headline (production)")
+    lines.append("")
+    lines.append("| DORA metric | Value | Band |")
+    lines.append("|---|---|---|")
+    if "median_hours" in lead:
+        lines.append(f"| Lead Time for Changes (PR merge proxy) | {lead['median_hours']} h median | {rate_lead_time(lead['median_hours'])} |")
+    else:
+        lines.append("| Lead Time for Changes (PR merge proxy) | no merged PRs in window | n/a |")
+    if prod:
+        lines.append(f"| Deployment Frequency | {prod.get('deployment_frequency_per_week', 0)} /week | {rate_deploy_freq(prod.get('deployment_frequency_per_week', 0))} |")
+        lines.append(f"| Change Failure Rate | {prod.get('change_failure_rate_pct', 0)}% | {rate_cfr(prod.get('change_failure_rate_pct', 0))} |")
+        lines.append(f"| Mean Time to Restore | {prod.get('mttr_hours')} h | {rate_mttr(prod.get('mttr_hours'))} |")
+    else:
+        lines.append(f"| Deployment Frequency / CFR / MTTR | no '{prod_env}' deployments detected | n/a |")
+    lines.append("")
+    lines.append("## Per-environment deployments")
+    lines.append("")
+    lines.append("| Env | Deploys/week | Successes | Failures | CFR % | MTTR h |")
+    lines.append("|---|---|---|---|---|---|")
+    for env, data in envs.items():
+        lines.append(
+            f"| {env} | {data['deployment_frequency_per_week']} | {data['successes']} | "
+            f"{data['failures']} | {data['change_failure_rate_pct']} | {data['mttr_hours'] if data['mttr_hours'] is not None else '-'} |"
+        )
+    lines.append("")
+    lines.append("## Lead time (PR created -> merged)")
+    lines.append("")
+    if "median_hours" in lead:
+        lines.append(f"- Merged PRs: {lead['merged_prs']}")
+        lines.append(f"- Median: {lead['median_hours']} h | Mean: {lead['mean_hours']} h | p75: {lead['p75_hours']} h")
+    else:
+        lines.append("- No merged PRs in the window.")
+    lines.append("")
+    lines.append("## Caveats")
+    lines.append("")
+    lines.append("- Lead time is PR created->merged, a proxy for full commit->prod lead time.")
+    lines.append("- Deployment/CFR/MTTR depend on the deploy-stage name heuristic (see ado-deploy-metrics --include/--exclude/--env patterns).")
+    lines.append("- MTTR is restore-of-deployment, not incident MTTR (no incident feed in ADO).")
+    lines.append("- 'Validate deploy to <env>' gate stages are excluded; they are approvals, not deployments.")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Produce the four DORA metrics for an ADO project.")
+    parser.add_argument("--organization", required=True, help="Azure DevOps organization name")
+    parser.add_argument("--project", required=True, help="Azure DevOps project name")
+    parser.add_argument("--since", default=default_since(), help=f"Start date YYYY-MM-DD. Default: {default_since()}.")
+    parser.add_argument("--output-dir", default=".", help="Directory for CSV + summary output. Default: current dir.")
+    parser.add_argument("--target-branch", default="main", help="Branch treated as trunk for lead time + deploys. Default: main.")
+    parser.add_argument("--prod-env", default="prod", help="Environment name to headline. Default: prod.")
+    parser.add_argument("--pat", help="Azure DevOps PAT (else falls back to az login, like the sibling scripts).")
+    parser.add_argument("--deploy-include-pattern", help="Override deploy-stage include regex passed to ado-deploy-metrics.")
+    parser.add_argument("--deploy-exclude-pattern", help="Override deploy-stage exclude regex passed to ado-deploy-metrics.")
+    parser.add_argument("--skip-prs", action="store_true", help="Skip the PR export / lead-time step.")
+    parser.add_argument("--skip-deploys", action="store_true", help="Skip the deployment-metrics step.")
+    args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    prs_csv = os.path.join(args.output_dir, "ado_prs.csv")
+    deploys_csv = os.path.join(args.output_dir, "ado_deployments.csv")
+    summary_json = os.path.join(args.output_dir, "dora-summary.json")
+    summary_md = os.path.join(args.output_dir, "dora-summary.md")
+
+    lead: dict = {}
+    deploy: dict = {"environments": {}}
+
+    if not args.skip_prs:
+        export = resolve_sibling("ado-prs-export")
+        cmd = [export, "--organization", args.organization, "--project", args.project,
+               "--since", args.since, "--output", prs_csv, "--verbose"]
+        if args.pat:
+            cmd += ["--pat", args.pat]
+        run(cmd)
+        lead = lead_time_from_prs(prs_csv, {args.target_branch} if args.target_branch else set())
+
+    if not args.skip_deploys:
+        metrics = resolve_sibling("ado-deploy-metrics")
+        cmd = [metrics, "--organization", args.organization, "--project", args.project,
+               "--since", args.since, "--output", deploys_csv, "--summary", "--verbose"]
+        if args.target_branch:
+            cmd += ["--target-branch", args.target_branch]
+        if args.pat:
+            cmd += ["--pat", args.pat]
+        if args.deploy_include_pattern:
+            cmd += ["--include-pattern", args.deploy_include_pattern]
+        if args.deploy_exclude_pattern:
+            cmd += ["--exclude-pattern", args.deploy_exclude_pattern]
+        run(cmd)
+        with open(f"{deploys_csv}.summary.json", encoding="utf-8") as handle:
+            deploy = json.load(handle)
+
+    combined = {
+        "organization": args.organization,
+        "project": args.project,
+        "since": args.since,
+        "generated": dt.date.today().isoformat(),
+        "lead_time": lead,
+        "deployments": deploy,
+    }
+    with open(summary_json, "w", encoding="utf-8") as handle:
+        json.dump(combined, handle, indent=2)
+    write_markdown(summary_md, args.organization, args.project, args.since, lead, deploy, args.prod_env)
+
+    print(f"\nWrote {summary_json}\nWrote {summary_md}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

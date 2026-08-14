@@ -76,6 +76,7 @@ in
       models = {
         "qwen3.6:latest".name = "Qwen3.6 (local)";
         "qwen3-coder:30b".name = "Qwen3 Coder 30B (local)";
+        "muse-glimmer:latest".name = "Muse Glimmer (local)";
       };
     };
   };

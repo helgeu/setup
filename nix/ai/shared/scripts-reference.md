@@ -32,6 +32,7 @@ source and rebuild.
 | Approve a pipeline ManualValidation gate (promote dev→test/qa/prod) | `ado-approve-deploy -o <org> -p <project> --build <id> --stage test` | Resumes a paused `ManualValidation@0` stage. `-o -p --build` all **required** (no defaults; never picks a run for you). `--list`, `--reject`, `--dry-run`. Deploy approvals are deliberate — ask if the build/stage isn't explicit. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
+| Repair opencode sessions broken by non-time-sortable message ids | `opencode-fix-message-ids [--all\|-s <id>] [--dry-run]` | Fixes the "conversation must end with a user message" prefill loop + out-of-order display (upstream anomalyco/opencode#38791). Renumbers messages by `time_created`; backs up first. |
 | Create one ADO work item (optionally parent-linked) | `New-AdoWorkItem.ps1` | `-Config <org>-<project> -Type -Title [-ParentId -Tags]`. |
 | Seed an Epic/Feature hierarchy from a backlog JSON | `Import-AdoBacklog.ps1` | Idempotent; `-Backlog file.json [-WhatIf]`. |
 | Pull the live board to `backlog.json` + `Backlog.md` | `Export-AdoBacklog.ps1` | ADO is master; generated files, never hand-edit. |
@@ -65,6 +66,24 @@ source and rebuild.
 - **`oc [model] [opencode args…]`** — opencode against local Ollama. Aliases:
   `oc`/`oc general` → qwen3.6, `oc coder` → qwen3-coder:30b. Requires
   `ollama serve` reachable on :11434.
+
+### opencode maintenance (`~/bin`, bash)
+
+- **`opencode-fix-message-ids [--all | -s <id>…] [--dry-run] [--no-backup] [--keep-empty] [--yes]`**
+  — repairs sessions hit by upstream bug
+  [anomalyco/opencode#38791](https://github.com/anomalyco/opencode/issues/38791):
+  opencode picks the "last" message by comparing message ids as plain strings,
+  which only works while ids sort chronologically. When they don't — an imported
+  session, or opencode's own id prefix rolling from the high `f/e/d` range down
+  to `0…` on an upgrade — the run loop never exits and the provider 400s with
+  *"This model does not support assistant message prefill. The conversation must
+  end with a user message"*; the TUI also renders out of order. With no args it
+  only **detects** and lists broken sessions (id order ≠ `time_created` order).
+  `--all`/`-s` renumbers each session's messages into `time_created` order
+  (remapping `part.message_id`, `parentID`, `session.revert`) and drops empty
+  errored assistant turns. Full `.backup` first, one transaction,
+  `foreign_key_check` + `quick_check`. Data-side mirror of the upstream
+  "order by time.created" fix (PR #38798).
 
 ### PR analytics (`~/bin`, python)
 

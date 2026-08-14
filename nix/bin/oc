@@ -24,6 +24,7 @@ model="${1:-qwen3.6:latest}"
 case "$model" in
   default|general|qwen|qwen3.6) model="qwen3.6:latest" ;;
   coder|code|next)              model="qwen3-coder:30b" ;;
+  muse|glimmer|muse-glimmer)    model="muse-glimmer:latest" ;;
 esac
 
 command -v opencode >/dev/null || die "opencode not found on PATH"

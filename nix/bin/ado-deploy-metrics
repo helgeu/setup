@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""Extract Azure DevOps deployment events and DORA-style metrics from pipelines.
+
+The script walks every pipeline (build definition) in a project, reads each
+completed run's timeline, and records the *deployment stages*. From those events
+it derives three of the four DORA metrics:
+
+  * Deployment Frequency  - successful deployments per environment per week
+  * Change Failure Rate   - failed deployments / attempted deployments
+  * Mean Time to Restore  - time from a failed deployment to the next successful
+                            deployment of the same pipeline + environment
+
+Lead Time for Changes is produced separately from pull-request data by
+`ado-prs-export`; the `ado-dora` wrapper combines both into one summary.
+
+Deployment stages are detected by name (this org has several conventions, e.g.
+"Deploy prod", "Deploy to prod environment", "Deploy API (Prod)", "Release
+(manual approval)"). A stage counts as a deployment when its name matches the
+include pattern AND does not match the exclude pattern. The exclude pattern
+removes gate stages such as "Validate deploy to qa environment", which are
+approvals, not deployments. All patterns are configurable.
+
+The raw per-stage CSV is always written; it is the reproducible dataset. Pass
+`--summary` to also print the DORA roll-up.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import csv
+import datetime as dt
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any
+
+
+API_VERSION = "7.1"
+ADO_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"
+
+# A deployment stage: name starts with "deploy" or contains "release" ...
+DEFAULT_INCLUDE_PATTERN = r"(?i)(^\s*deploy|release)"
+# ... but never a gate/approval such as "Validate deploy to <env> environment".
+DEFAULT_EXCLUDE_PATTERN = r"(?i)(validate|what-if|plan|approval gate)"
+# Environment token, including the parenthesised "(Prod)" form.
+DEFAULT_ENV_PATTERN = r"(?i)\b(dev|test|qa|prod|production|staging)\b"
+
+
+class AdoRequestError(RuntimeError):
+    def __init__(self, status_code: int, reason: str, url: str, body: str) -> None:
+        super().__init__(f"ADO request failed: {status_code} {reason}\n{url}\n{body}")
+        self.status_code = status_code
+        self.reason = reason
+        self.url = url
+        self.body = body
+
+
+def default_since() -> str:
+    today = dt.date.today()
+    return f"{today.year - 1}-10-01"
+
+
+def parse_date(value: str) -> dt.datetime:
+    try:
+        return dt.datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("date must use YYYY-MM-DD format") from exc
+
+
+def parse_ado_datetime(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    if "." in normalized:
+        prefix, suffix = normalized.split(".", 1)
+        timezone_start = min(
+            [index for index in (suffix.find("+"), suffix.find("-")) if index != -1]
+            or [len(suffix)]
+        )
+        fraction = suffix[:timezone_start][:6].ljust(6, "0")
+        timezone = suffix[timezone_start:]
+        normalized = f"{prefix}.{fraction}{timezone}"
+    try:
+        return dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def iso_week(value: dt.datetime) -> str:
+    year, week, _ = value.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+class AzureDevOpsClient:
+    def __init__(self, organization: str, project: str, pat: str | None, bearer_token: str | None) -> None:
+        self.organization = organization
+        self.project = project
+        if pat:
+            auth_value = f"Basic {base64.b64encode(f':{pat}'.encode('utf-8')).decode('ascii')}"
+        elif bearer_token:
+            auth_value = f"Bearer {bearer_token}"
+        else:
+            raise ValueError("Missing authentication token")
+
+        self.headers = {"Accept": "application/json", "Authorization": auth_value}
+        self.project_url = f"https://dev.azure.com/{organization}/{urllib.parse.quote(project, safe='')}"
+
+    def _get(self, url: str) -> dict[str, Any]:
+        request = urllib.request.Request(url, headers=self.headers)
+        try:
+            with urllib.request.urlopen(request) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+
+    def list_definitions(self) -> list[dict[str, Any]]:
+        definitions: list[dict[str, Any]] = []
+        continuation_token = ""
+        while True:
+            params = {"api-version": API_VERSION, "$top": "500"}
+            if continuation_token:
+                params["continuationToken"] = continuation_token
+            url = f"{self.project_url}/_apis/build/definitions?{urllib.parse.urlencode(params)}"
+            request = urllib.request.Request(url, headers=self.headers)
+            try:
+                with urllib.request.urlopen(request) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    definitions.extend(payload.get("value", []))
+                    continuation_token = response.headers.get("x-ms-continuationtoken", "")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+            if not continuation_token:
+                return definitions
+
+    def list_builds(self, definition_id: int, since: dt.datetime) -> list[dict[str, Any]]:
+        builds: list[dict[str, Any]] = []
+        continuation_token = ""
+        while True:
+            params = {
+                "api-version": API_VERSION,
+                "definitions": str(definition_id),
+                "minTime": since.isoformat(),
+                "statusFilter": "completed",
+                "queryOrder": "finishTimeAscending",
+                "$top": "200",
+            }
+            if continuation_token:
+                params["continuationToken"] = continuation_token
+            url = f"{self.project_url}/_apis/build/builds?{urllib.parse.urlencode(params)}"
+            request = urllib.request.Request(url, headers=self.headers)
+            try:
+                with urllib.request.urlopen(request) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    builds.extend(payload.get("value", []))
+                    continuation_token = response.headers.get("x-ms-continuationtoken", "")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+            if not continuation_token:
+                return builds
+
+    def get_timeline(self, build_id: int) -> dict[str, Any] | None:
+        url = f"{self.project_url}/_apis/build/builds/{build_id}/Timeline?api-version={API_VERSION}"
+        request = urllib.request.Request(url, headers=self.headers)
+        try:
+            with urllib.request.urlopen(request) as response:
+                body = response.read().decode("utf-8").strip()
+                # Builds without a timeline (e.g. canceled early) return 204/empty body.
+                return json.loads(body) if body else None
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            body = exc.read().decode("utf-8", errors="replace")
+            raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+        except json.JSONDecodeError:
+            return None
+
+
+def detect_env(name: str, env_re: re.Pattern[str]) -> str:
+    match = env_re.search(name)
+    if not match:
+        return "unspecified"
+    env = match.group(1).lower()
+    return "prod" if env == "production" else env
+
+
+def build_rows(
+    client: AzureDevOpsClient,
+    definitions: list[dict[str, Any]],
+    since: dt.datetime,
+    include_re: re.Pattern[str],
+    exclude_re: re.Pattern[str],
+    env_re: re.Pattern[str],
+    target_branch: str | None,
+    verbose: bool,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for definition in definitions:
+        def_id = definition["id"]
+        def_name = definition["name"]
+        try:
+            builds = client.list_builds(def_id, since)
+        except AdoRequestError as exc:
+            if exc.status_code in {403, 404}:
+                print(f"Skipping inaccessible pipeline {def_name} ({def_id}): {exc.status_code}", file=sys.stderr)
+                continue
+            raise
+        if verbose:
+            print(f"Pipeline {def_id} {def_name}: {len(builds)} completed runs", file=sys.stderr)
+
+        for build in builds:
+            branch = (build.get("sourceBranch") or "").removeprefix("refs/heads/")
+            if target_branch and branch != target_branch:
+                continue
+            timeline = client.get_timeline(build["id"])
+            if not timeline:
+                continue
+            for record in timeline.get("records", []):
+                if record.get("type") != "Stage":
+                    continue
+                name = record.get("name") or ""
+                if not include_re.search(name) or exclude_re.search(name):
+                    continue
+                result = record.get("result")  # succeeded / failed / canceled / skipped / None
+                if result in (None, "skipped", "canceled"):
+                    # Not an attempted deployment (gated out, or the run never reached it).
+                    continue
+                finished = parse_ado_datetime(record.get("finishTime"))
+                started = parse_ado_datetime(record.get("startTime"))
+                rows.append(
+                    {
+                        "finished_at": finished.isoformat() if finished else "",
+                        "week": iso_week(finished) if finished else "",
+                        "pipeline_id": str(def_id),
+                        "pipeline": def_name,
+                        "build_id": str(build["id"]),
+                        "build_number": build.get("buildNumber", ""),
+                        "stage": name,
+                        "environment": detect_env(name, env_re),
+                        "result": result,
+                        "success": "1" if result == "succeeded" else "0",
+                        "branch": branch,
+                        "source_version": build.get("sourceVersion", ""),
+                        "started_at": started.isoformat() if started else "",
+                        "url": (build.get("_links", {}).get("web", {}) or {}).get("href", ""),
+                    }
+                )
+    rows.sort(key=lambda r: (r["finished_at"], r["pipeline"], r["stage"]))
+    return rows
+
+
+def write_csv(rows: list[dict[str, str]], output_path: str) -> None:
+    fieldnames = [
+        "finished_at", "week", "pipeline_id", "pipeline", "build_id", "build_number",
+        "stage", "environment", "result", "success", "branch", "source_version",
+        "started_at", "url",
+    ]
+    with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def summarize(rows: list[dict[str, str]], since: dt.datetime, envs_of_interest: list[str]) -> dict[str, Any]:
+    weeks_span = max(1.0, (dt.datetime.now(dt.timezone.utc) - since).days / 7.0)
+    per_env: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        env = row["environment"]
+        bucket = per_env.setdefault(env, {"attempts": 0, "successes": 0, "failures": 0, "events": []})
+        bucket["attempts"] += 1
+        if row["result"] == "succeeded":
+            bucket["successes"] += 1
+        elif row["result"] == "failed":
+            bucket["failures"] += 1
+        bucket["events"].append(row)
+
+    summary: dict[str, Any] = {"weeks_span": round(weeks_span, 1), "environments": {}}
+    for env, bucket in sorted(per_env.items()):
+        attempts = bucket["attempts"]
+        successes = bucket["successes"]
+        failures = bucket["failures"]
+        cfr = (failures / attempts * 100.0) if attempts else 0.0
+        freq = successes / weeks_span
+
+        # MTTR proxy: per pipeline, time from a failed deploy to the next success.
+        restore_hours: list[float] = []
+        events = sorted(bucket["events"], key=lambda r: r["finished_at"])
+        by_pipeline: dict[str, list[dict[str, str]]] = {}
+        for event in events:
+            by_pipeline.setdefault(event["pipeline_id"], []).append(event)
+        for pipeline_events in by_pipeline.values():
+            pending_failure: dt.datetime | None = None
+            for event in pipeline_events:
+                finished = parse_ado_datetime(event["finished_at"])
+                if finished is None:
+                    continue
+                if event["result"] == "failed" and pending_failure is None:
+                    pending_failure = finished
+                elif event["result"] == "succeeded" and pending_failure is not None:
+                    restore_hours.append((finished - pending_failure).total_seconds() / 3600.0)
+                    pending_failure = None
+        mttr = (sum(restore_hours) / len(restore_hours)) if restore_hours else None
+
+        summary["environments"][env] = {
+            "attempts": attempts,
+            "successes": successes,
+            "failures": failures,
+            "deployment_frequency_per_week": round(freq, 2),
+            "change_failure_rate_pct": round(cfr, 1),
+            "mttr_hours": round(mttr, 1) if mttr is not None else None,
+            "restore_samples": len(restore_hours),
+        }
+    summary["envs_of_interest"] = envs_of_interest
+    return summary
+
+
+def print_summary(summary: dict[str, Any]) -> None:
+    print("", file=sys.stderr)
+    print("DORA deployment metrics (from pipeline stages)", file=sys.stderr)
+    print(f"Window: last {summary['weeks_span']} weeks", file=sys.stderr)
+    header = f"{'env':<12}{'deploys/wk':>12}{'success':>9}{'fail':>6}{'CFR%':>7}{'MTTR h':>9}"
+    print(header, file=sys.stderr)
+    print("-" * len(header), file=sys.stderr)
+    for env, data in summary["environments"].items():
+        mttr = "-" if data["mttr_hours"] is None else f"{data['mttr_hours']}"
+        print(
+            f"{env:<12}{data['deployment_frequency_per_week']:>12}{data['successes']:>9}"
+            f"{data['failures']:>6}{data['change_failure_rate_pct']:>7}{mttr:>9}",
+            file=sys.stderr,
+        )
+
+
+def get_azure_cli_token() -> str | None:
+    try:
+        result = subprocess.run(
+            ["az", "account", "get-access-token", "--resource", ADO_RESOURCE,
+             "--query", "accessToken", "-o", "tsv"],
+            check=True, capture_output=True, text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+    token = result.stdout.strip()
+    return token or None
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Extract ADO deployment events and DORA metrics.")
+    parser.add_argument("--organization", required=True, help="Azure DevOps organization name")
+    parser.add_argument("--project", required=True, help="Azure DevOps project name")
+    parser.add_argument(
+        "--pat",
+        default=os.environ.get("AZURE_DEVOPS_EXT_PAT") or os.environ.get("ADO_PAT"),
+        help="Azure DevOps PAT. Defaults to AZURE_DEVOPS_EXT_PAT or ADO_PAT. Falls back to az login.",
+    )
+    parser.add_argument("--since", type=parse_date, default=parse_date(default_since()),
+                        help=f"Only include runs finished on/after this date. Default: {default_since()}.")
+    parser.add_argument("--pipeline-ids", help="Comma-separated build definition ids to limit to.")
+    parser.add_argument("--name-filter", help="Case-insensitive regex; only pipelines whose name matches are scanned.")
+    parser.add_argument("--include-pattern", default=DEFAULT_INCLUDE_PATTERN,
+                        help="Regex a stage name must match to count as a deployment.")
+    parser.add_argument("--exclude-pattern", default=DEFAULT_EXCLUDE_PATTERN,
+                        help="Regex that removes gate/approval stages (e.g. 'Validate deploy to ...').")
+    parser.add_argument("--env-pattern", default=DEFAULT_ENV_PATTERN,
+                        help="Regex whose first group is the environment token.")
+    parser.add_argument("--target-branch", help="Only count deployments from this branch (e.g. main).")
+    parser.add_argument("--output", default="ado_deployments.csv", help="Per-stage CSV path. Default: ado_deployments.csv")
+    parser.add_argument("--summary", action="store_true", help="Print DORA roll-up to stderr and write <output>.summary.json")
+    parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
+    args = parser.parse_args()
+
+    bearer_token = None if args.pat else get_azure_cli_token()
+    if not args.pat and not bearer_token:
+        print("Missing authentication. Pass --pat, set AZURE_DEVOPS_EXT_PAT/ADO_PAT, or sign in with az.", file=sys.stderr)
+        return 2
+
+    include_re = re.compile(args.include_pattern)
+    exclude_re = re.compile(args.exclude_pattern)
+    env_re = re.compile(args.env_pattern)
+
+    client = AzureDevOpsClient(args.organization, args.project, args.pat, bearer_token)
+    definitions = client.list_definitions()
+
+    if args.pipeline_ids:
+        wanted = {int(x) for x in args.pipeline_ids.split(",") if x.strip()}
+        definitions = [d for d in definitions if d["id"] in wanted]
+    if args.name_filter:
+        name_re = re.compile(args.name_filter, re.IGNORECASE)
+        definitions = [d for d in definitions if name_re.search(d["name"])]
+
+    rows = build_rows(client, definitions, args.since, include_re, exclude_re, env_re, args.target_branch, args.verbose)
+    write_csv(rows, args.output)
+    print(f"Wrote {len(rows)} deployment-stage rows to {args.output}")
+
+    if args.summary:
+        summary = summarize(rows, args.since, ["prod"])
+        summary_path = f"{args.output}.summary.json"
+        with open(summary_path, "w", encoding="utf-8") as handle:
+            json.dump(summary, handle, indent=2)
+        print(f"Wrote DORA summary to {summary_path}")
+        print_summary(summary)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

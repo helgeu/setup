@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# opencode-fix-message-ids — repair opencode sessions broken by non-time-sortable
+# message ids (upstream bug anomalyco/opencode#38791, fix PR #38798).
+#
+# THE BUG
+#   opencode's run loop and MessageV2.latest() decide the "last" message by
+#   comparing message ids as PLAIN STRINGS. That only works while ids sort
+#   chronologically. When they do not — an imported session, or (as seen here)
+#   opencode's own id prefix rolling from the high f/e/d range down to 0... on
+#   an upgrade/wraparound — the loop picks the wrong last message, never exits,
+#   and re-requests ending on an assistant turn. Providers reject it with:
+#     "This model does not support assistant message prefill.
+#      The conversation must end with a user message."
+#   The TUI also renders messages out of order.
+#
+# THE FIX (data side, mirrors upstream "order by time.created")
+#   Renumber every message in an affected session into new ids that sort by
+#   time_created, keeping each message's unique random suffix. New ids land in a
+#   tiny 000000000xxx range so they stay below any real/future opencode id.
+#   part.message_id, message.data.parentID, and session.revert are remapped in
+#   lockstep. Empty errored assistant messages (0 parts, MessageAborted/APIError)
+#   are dropped so a session cannot end on a broken turn.
+#
+# USAGE
+#   opencode-fix-message-ids                 # detect + list broken sessions (no changes)
+#   opencode-fix-message-ids --all           # fix every broken session
+#   opencode-fix-message-ids -s <id> [-s..]  # fix specific session id(s)
+#   opencode-fix-message-ids --all --dry-run # show what would change, touch nothing
+#   flags: --no-backup  --keep-empty  --yes  -h/--help
+#
+# SAFETY
+#   Makes a full online backup (sqlite .backup) before any write unless
+#   --no-backup. Runs in one transaction with foreign_key_check + quick_check.
+#   Close opencode instances on the target sessions first (avoids concurrent
+#   writes); a normal TUI on a different session is fine.
+
+set -euo pipefail
+
+DB="${OPENCODE_DB:-$(opencode db path 2>/dev/null || echo "$HOME/.local/share/opencode/opencode-stable.db")}"
+BACKUP_DIR="${OPENCODE_FIX_BACKUP_DIR:-$HOME/.local/share/opencode/backup}"
+
+MODE="detect"          # detect | fix
+declare -a SESSIONS=()
+ALL=0 DRYRUN=0 BACKUP=1 CLEAN_EMPTY=1 ASSUME_YES=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --all)          ALL=1; MODE="fix"; shift ;;
+    -s|--session)   SESSIONS+=("$2"); MODE="fix"; shift 2 ;;
+    --session=*)    SESSIONS+=("${1#*=}"); MODE="fix"; shift ;;
+    --dry-run)      DRYRUN=1; shift ;;
+    --no-backup)    BACKUP=0; shift ;;
+    --keep-empty)   CLEAN_EMPTY=0; shift ;;
+    --yes|-y)       ASSUME_YES=1; shift ;;
+    -h|--help)      sed -n '2,33p' "$0"; exit 0 ;;
+    *) echo "opencode-fix-message-ids: unknown arg '$1'" >&2; exit 2 ;;
+  esac
+done
+
+[ -f "$DB" ] || { echo "DB not found: $DB" >&2; exit 1; }
+q() { sqlite3 "$DB" "$@"; }
+
+# A session is broken if lexical id order != time_created order (>0 inversions).
+detect_sql() {
+  cat <<'SQL'
+SELECT session_id, cnt, first_ts, last_ts FROM (
+  SELECT m.session_id AS session_id,
+         COUNT(*) AS cnt,
+         datetime(MIN(m.time_created)/1000,'unixepoch','localtime') AS first_ts,
+         datetime(MAX(m.time_created)/1000,'unixepoch','localtime') AS last_ts,
+         SUM(CASE WHEN prev IS NOT NULL AND m.time_created < prev THEN 1 ELSE 0 END) AS inv
+  FROM (
+    SELECT session_id, time_created,
+           LAG(time_created) OVER (PARTITION BY session_id ORDER BY id) AS prev
+    FROM message
+  ) m
+  GROUP BY m.session_id
+) WHERE inv > 0
+ORDER BY last_ts DESC;
+SQL
+}
+
+if [ "$MODE" = "detect" ]; then
+  echo "DB: $DB"
+  echo "Scanning for sessions with non-time-sortable message ids…"
+  rows=$(q -separator '|' "$(detect_sql)")
+  if [ -z "$rows" ]; then echo "No broken sessions found."; exit 0; fi
+  n=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
+  echo "Broken sessions ($n):"
+  printf '%s\n' "$rows" | while IFS='|' read -r sid cnt f l; do
+    printf '  %s  msgs=%-5s  %s → %s\n' "$sid" "$cnt" "$f" "$l"
+  done
+  echo
+  echo "Fix all:      opencode-fix-message-ids --all"
+  echo "Fix one:      opencode-fix-message-ids -s <session_id>"
+  echo "Preview only: opencode-fix-message-ids --all --dry-run"
+  exit 0
+fi
+
+# Build the target list.
+declare -a TARGETS=()
+if [ "$ALL" = 1 ]; then
+  while IFS='|' read -r sid _; do [ -n "$sid" ] && TARGETS+=("$sid"); done < <(q -separator '|' "$(detect_sql)")
+else
+  TARGETS=("${SESSIONS[@]}")
+fi
+[ "${#TARGETS[@]}" -gt 0 ] || { echo "Nothing to fix."; exit 0; }
+
+echo "DB: $DB"
+echo "Target sessions (${#TARGETS[@]}): ${TARGETS[*]}"
+
+# SQL IN (...) list of quoted ids.
+IN_LIST=$(printf "'%s'," "${TARGETS[@]}"); IN_LIST="(${IN_LIST%,})"
+
+if [ "$DRYRUN" = 1 ]; then
+  echo "--- DRY RUN (no changes) ---"
+  q "SELECT session_id||': '||COUNT(*)||' messages, '||
+            SUM(CASE WHEN json_extract(data,'\$.role')='assistant'
+                     AND (SELECT COUNT(*) FROM part WHERE message_id=message.id)=0
+                THEN 1 ELSE 0 END)||' empty-errored to remove'
+     FROM message WHERE session_id IN $IN_LIST GROUP BY session_id;"
+  exit 0
+fi
+
+if [ "$ASSUME_YES" != 1 ]; then
+  printf "Proceed with in-place repair of %d session(s)? [y/N] " "${#TARGETS[@]}"
+  read -r ans; case "$ans" in y|Y|yes) ;; *) echo "Aborted."; exit 1 ;; esac
+fi
+
+if [ "$BACKUP" = 1 ]; then
+  mkdir -p "$BACKUP_DIR"
+  BK="$BACKUP_DIR/opencode-stable.$(date +%Y%m%d-%H%M%S).db"
+  echo "Backing up → $BK"
+  q ".backup '$BK'"
+  echo "Backup OK ($(du -h "$BK" | awk '{print $1}'))"
+fi
+
+DELETE_EMPTY_SQL=""
+if [ "$CLEAN_EMPTY" = 1 ]; then
+  DELETE_EMPTY_SQL="DELETE FROM message WHERE session_id IN $IN_LIST
+    AND json_extract(data,'\$.role')='assistant'
+    AND id IN (SELECT m.id FROM message m WHERE m.session_id IN $IN_LIST
+               AND (SELECT COUNT(*) FROM part WHERE message_id=m.id)=0);"
+fi
+
+echo "Repairing…"
+sqlite3 "$DB" <<SQL
+PRAGMA busy_timeout=20000;
+PRAGMA foreign_keys=OFF;
+BEGIN IMMEDIATE;
+
+CREATE TEMP TABLE _idmap AS
+SELECT id AS old_id,
+       'msg_' || printf('%012x', ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY time_created, id))
+              || substr(id, 17) AS new_id
+FROM message
+WHERE session_id IN $IN_LIST;
+
+-- remap parentID references (any message pointing at a renumbered parent)
+UPDATE message SET data = json_set(data, '\$.parentID',
+        (SELECT new_id FROM _idmap WHERE _idmap.old_id = json_extract(message.data,'\$.parentID')))
+WHERE session_id IN $IN_LIST
+  AND json_extract(data,'\$.parentID') IN (SELECT old_id FROM _idmap);
+
+-- remap part foreign keys
+UPDATE part SET message_id = (SELECT new_id FROM _idmap WHERE _idmap.old_id = part.message_id)
+WHERE message_id IN (SELECT old_id FROM _idmap);
+
+-- remap session.revert pointer if it references a renumbered message
+UPDATE session SET revert = (SELECT new_id FROM _idmap WHERE _idmap.old_id = session.revert)
+WHERE id IN $IN_LIST AND revert IN (SELECT old_id FROM _idmap);
+
+-- remap the message primary keys
+UPDATE message SET id = (SELECT new_id FROM _idmap WHERE _idmap.old_id = message.id)
+WHERE id IN (SELECT old_id FROM _idmap);
+
+$DELETE_EMPTY_SQL
+
+DROP TABLE _idmap;
+COMMIT;
+PRAGMA foreign_keys=ON;
+SQL
+
+echo "--- verify ---"
+fk=$(q "PRAGMA foreign_key_check;")
+qc=$(q "PRAGMA quick_check;")
+[ -z "$fk" ] && echo "foreign_key_check: clean" || { echo "FK VIOLATIONS:"; echo "$fk"; }
+echo "quick_check: $qc"
+
+for sid in "${TARGETS[@]}"; do
+  inv=$(q "WITH m AS (SELECT time_created, LAG(time_created) OVER (ORDER BY id) prev
+             FROM message WHERE session_id='$sid')
+           SELECT COUNT(*) FROM m WHERE prev IS NOT NULL AND time_created<prev;")
+  empt=$(q "SELECT COUNT(*) FROM message m WHERE session_id='$sid'
+             AND json_extract(data,'\$.role')='assistant'
+             AND (SELECT COUNT(*) FROM part WHERE message_id=m.id)=0;")
+  tail=$(q "SELECT json_extract(data,'\$.role') FROM message
+             WHERE session_id='$sid' ORDER BY id DESC LIMIT 1;")
+  printf '  %s  order_anomalies=%s  empty_errored=%s  ends_with=%s\n' "$sid" "$inv" "$empt" "$tail"
+done
+echo "Done."
