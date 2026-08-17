@@ -18,6 +18,7 @@ case "$CONFIG_TYPE" in
         echo "  - NO-GLV6Y9N492 (work Mac)"
         echo "  - Helges-MacBook-Pro (home Mac)"
         echo "  - wsl-work (WSL)"
+        echo "  - IMDI-computer (WSL)"
         exit 1
         ;;
 esac

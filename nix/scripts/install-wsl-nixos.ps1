@@ -25,6 +25,7 @@
 
 param(
     [string]$DistroName = "NixOS",
+    [string]$ConfigName = "wsl-work",
     [string]$InstallPath = "$env:USERPROFILE\WSL\$DistroName",
     [switch]$SkipWSLInstall,
     [switch]$Force
@@ -249,7 +250,7 @@ wsl -d $DistroName -- bash -c "find '$WslFlakePath' -name '*.nix' -o -name '*.sh
 # Run nixos-rebuild directly from Windows filesystem
 # Use --no-update-lock-file since git isn't available yet
 Write-Info "Running NixOS rebuild (this may take a while)..."
-wsl -d $DistroName -- bash -c "cd '$WslFlakePath' && sudo nixos-rebuild switch --flake .#wsl-work --no-update-lock-file"
+wsl -d $DistroName -- bash -c "cd '$WslFlakePath' && sudo nixos-rebuild switch --flake .#$ConfigName --no-update-lock-file"
 
 # -----------------------------------------------------------------------------
 # Step 8: Summary
@@ -269,6 +270,6 @@ To enter NixOS:
 
 To rebuild after changes:
   cd $WslFlakePath
-  sudo nixos-rebuild switch --flake .#wsl-work
+  sudo nixos-rebuild switch --flake .#$ConfigName
 
 "@ -ForegroundColor Green

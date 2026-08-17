@@ -93,6 +93,12 @@ Or from an elevated Command Prompt / PowerShell:
 .\scripts\install-wsl-nixos.cmd
 ```
 
+For a different machine config, pass `-ConfigName` (default `wsl-work`):
+
+```powershell
+.\scripts\install-wsl-nixos.ps1 -ConfigName IMDI-computer
+```
+
 This will:
 1. Enable/update WSL2
 2. Download and import NixOS-WSL
@@ -119,6 +125,7 @@ sudo nixos-rebuild switch --flake ~/git/github/setup/nix#wsl-work
 | NO-GLV6Y9N492 | Work Mac | `darwinConfigurations."NO-GLV6Y9N492"` |
 | Helges-MacBook-Pro | Personal Mac | `darwinConfigurations."Helges-MacBook-Pro"` |
 | wsl-work | Windows WSL | `nixosConfigurations."wsl-work"` |
+| IMDI-computer | Windows WSL | `nixosConfigurations."IMDI-computer"` |
 
 ## Notes
 

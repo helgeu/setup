@@ -8,9 +8,6 @@
     azure-functions-core-tools
     bicep
 
-    # JetBrains
-    jetbrains.rider
-
     # JS/Node
     pnpm
 

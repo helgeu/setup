@@ -114,8 +114,23 @@
           }
         ];
       };
+
+    # Helper to create a NixOS-WSL configuration
+    mkWsl = {
+      systemModule,
+      homeModule,
+    }:
+      nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+        modules = [
+          {nixpkgs.overlays = overlays;}
+          nixos-wsl.nixosModules.default
+          systemModule
+          home-manager.nixosModules.home-manager
+          (hmConfig "nixos" homeModule)
+        ];
+      };
   in {
-    # Work Mac: NO-GLV6Y9N492
     darwinConfigurations."NO-GLV6Y9N492" = mkDarwin {
       user = "helgereneurholm";
       systemModule = ./system/NO-GLV6Y9N492.nix;
@@ -132,15 +147,15 @@
     };
 
     # WSL: wsl-work
-    nixosConfigurations."wsl-work" = nixpkgs.lib.nixosSystem {
-      system = linuxSystem;
-      modules = [
-        {nixpkgs.overlays = overlays;}
-        nixos-wsl.nixosModules.default
-        ./system/wsl-work.nix
-        home-manager.nixosModules.home-manager
-        (hmConfig "nixos" ./home-manager/wsl-work.nix)
-      ];
+    nixosConfigurations."wsl-work" = mkWsl {
+      systemModule = ./system/wsl-work.nix;
+      homeModule = ./home-manager/wsl-work.nix;
+    };
+
+    # WSL: IMDI-computer
+    nixosConfigurations."IMDI-computer" = mkWsl {
+      systemModule = ./system/IMDI-computer.nix;
+      homeModule = ./home-manager/IMDI-computer.nix;
     };
   };
 }

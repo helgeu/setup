@@ -1,4 +1,4 @@
-{ ... }: {
+{ pkgs, ... }: {
   imports = [
     ./shared.nix
     ./macos-shared.nix
@@ -9,4 +9,6 @@
   home.homeDirectory = "/Users/helgereneurholm";
   home.stateVersion = "25.11";
 
+  # JetBrains Rider (macOS GUI IDE; not replicated to WSL machines)
+  home.packages = [ pkgs.jetbrains.rider ];
 }

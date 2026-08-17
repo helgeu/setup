@@ -17,7 +17,7 @@ case "$CONFIG_NAME" in
     NO-GLV6Y9N492|Helges-MacBook-Pro)
         CONFIG_TYPE="darwin"
         ;;
-    wsl-work)
+    wsl-work|IMDI-computer)
         CONFIG_TYPE="nixos"
         ;;
     *)

@@ -22,6 +22,7 @@ eval_config() {
 eval_config darwin NO-GLV6Y9N492
 eval_config darwin Helges-MacBook-Pro
 eval_config nixos wsl-work
+eval_config nixos IMDI-computer
 
 if [[ $failed -eq 0 ]]; then
     echo "All evaluations successful!"

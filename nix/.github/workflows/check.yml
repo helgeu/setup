@@ -27,4 +27,7 @@ jobs:
           echo "Evaluating wsl-work..."
           nix eval .#nixosConfigurations.wsl-work.config.system.build.toplevel > /dev/null
 
+          echo "Evaluating IMDI-computer..."
+          nix eval .#nixosConfigurations.IMDI-computer.config.system.build.toplevel > /dev/null
+
           echo "All configurations evaluated successfully!"
