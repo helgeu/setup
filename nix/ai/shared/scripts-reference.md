@@ -30,6 +30,7 @@ source and rebuild.
 | List open work items assigned to me (or someone) | `ado-my-items` | Defaults `urholm`/`Devkunt`/`@me`; `-o -p -a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
 | Approve a pipeline ManualValidation gate (promote dev→test/qa/prod) | `ado-approve-deploy -o <org> -p <project> --build <id> --stage test` | Resumes a paused `ManualValidation@0` stage. `-o -p --build` all **required** (no defaults; never picks a run for you). `--list`, `--reject`, `--dry-run`. Deploy approvals are deliberate — ask if the build/stage isn't explicit. |
+| Draft (or send) a formatted HTML email in Outlook | `outlook-draft -s <subj> -t <to> [-c <cc>] --html <file>` | macOS only. Recipients comma/semicolon-sep, bare or `Name <addr>`. Body from `--html <file>` or `--stdin`. Opens a draft by default; `--send` to send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
 | Repair opencode sessions broken by non-time-sortable message ids | `opencode-fix-message-ids [--all\|-s <id>] [--dry-run]` | Fixes the "conversation must end with a user message" prefill loop + out-of-order display (upstream anomalyco/opencode#38791). Renumbers messages by `time_created`; backs up first. |
@@ -84,6 +85,18 @@ source and rebuild.
   errored assistant turns. Full `.backup` first, one transaction,
   `foreign_key_check` + `quick_check`. Data-side mirror of the upstream
   "order by time.created" fix (PR #38798).
+
+### Email (`~/bin`, bash — macOS only)
+
+- **`outlook-draft -s <subject> -t <to> [-c <cc>] [-b <bcc>] (--html <file> | --stdin) [--send] [--dry-run]`**
+  — creates a rich **HTML** email in Microsoft Outlook via AppleScript. The body
+  is passed through a temp file (read by AppleScript as UTF-8), so there is no
+  escaping/quoting hell and full HTML (tables, links, styling) renders. To/Cc/Bcc
+  accept comma- **or** semicolon-separated lists, each a bare `user@host` or a
+  display form `Full Name <user@host>` (the name is preserved). Opens an editable
+  **draft** by default; `--send` sends immediately; `--dry-run` prints the parsed
+  recipients + generated AppleScript without touching Outlook. Requires classic
+  Outlook (AppleScript-scriptable); "New Outlook" may show raw HTML instead.
 
 ### PR analytics (`~/bin`, python)
 

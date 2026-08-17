@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# outlook-draft — create an HTML email draft (or send it) in Microsoft Outlook
+# for Mac via AppleScript. Handles To/Cc/Bcc, a subject, and an HTML body read
+# from a file or stdin. The HTML is passed via a temp file (read by AppleScript
+# as UTF-8) so there is no escaping/quoting hell.
+#
+# Usage:
+#   outlook-draft -s "Subject" -t "a@b.com,Name <c@d.com>" [-c "cc@x.com"] \
+#                 [-b "bcc@x.com"] --html body.html
+#   cat body.html | outlook-draft -s "Subject" -t "a@b.com" --stdin
+#
+# Recipients: comma- OR semicolon-separated. Each may be a bare address
+#   (user@host) or a display form "Full Name <user@host>".
+#
+# Flags:
+#   -s, --subject   Subject line (required)
+#   -t, --to        To recipients (required)
+#   -c, --cc        Cc recipients (optional, repeatable)
+#   -b, --bcc       Bcc recipients (optional, repeatable)
+#   -H, --html      Path to an HTML file for the body
+#       --stdin     Read the HTML body from stdin instead of a file
+#       --send      Send immediately instead of just opening the draft
+#       --dry-run   Print what would happen; don't touch Outlook
+#   -h, --help      This help
+set -euo pipefail
+
+die() { printf 'outlook-draft: %s\n' "$*" >&2; exit 1; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+subject=""
+to=""
+cc=""
+bcc=""
+html_file=""
+use_stdin=0
+send=0
+dry_run=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -s|--subject) subject="$2"; shift 2 ;;
+    -t|--to)      to="${to:+$to;}$2"; shift 2 ;;
+    -c|--cc)      cc="${cc:+$cc;}$2"; shift 2 ;;
+    -b|--bcc)     bcc="${bcc:+$bcc;}$2"; shift 2 ;;
+    -H|--html)    html_file="$2"; shift 2 ;;
+    --stdin)      use_stdin=1; shift ;;
+    --send)       send=1; shift ;;
+    --dry-run)    dry_run=1; shift ;;
+    -h|--help)    usage 0 ;;
+    *)            die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$subject" ] || die "missing --subject"
+[ -n "$to" ] || die "missing --to"
+
+# --- resolve the HTML body into a temp file -------------------------------
+tmp_html="$(mktemp -t outlook-draft.XXXXXX.html)"
+trap 'rm -f "$tmp_html" "${tmp_scpt:-}"' EXIT
+
+if [ "$use_stdin" -eq 1 ]; then
+  cat > "$tmp_html"
+elif [ -n "$html_file" ]; then
+  [ -f "$html_file" ] || die "html file not found: $html_file"
+  cp "$html_file" "$tmp_html"
+else
+  die "provide a body with --html <file> or --stdin"
+fi
+
+# --- build AppleScript recipient statements -------------------------------
+# split on ',' and ';', trim, and emit a `make new <kind>` line per address.
+emit_recipients() {
+  local kind="$1" list="$2" line name addr
+  # normalise separators to newlines (trailing \n so `read` sees the last field)
+  printf '%s\n' "$list" | tr ',;' '\n\n' | while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"   # ltrim
+    line="${line%"${line##*[![:space:]]}"}"    # rtrim
+    [ -n "$line" ] || continue
+    if printf '%s' "$line" | grep -q '<'; then
+      name="${line%%<*}"
+      name="${name%"${name##*[![:space:]]}"}"  # rtrim name
+      addr="${line##*<}"; addr="${addr%%>*}"
+    else
+      name=""
+      addr="$line"
+    fi
+    # escape double quotes for AppleScript string literals
+    name=${name//\"/\\\"}
+    addr=${addr//\"/\\\"}
+    if [ -n "$name" ]; then
+      printf '  make new %s at newMsg with properties {email address:{name:"%s", address:"%s"}}\n' "$kind" "$name" "$addr"
+    else
+      printf '  make new %s at newMsg with properties {email address:{address:"%s"}}\n' "$kind" "$addr"
+    fi
+  done
+}
+
+recip_block="$(emit_recipients "recipient" "$to")"
+[ -n "$cc" ]  && recip_block="$recip_block
+$(emit_recipients "cc recipient" "$cc")"
+[ -n "$bcc" ] && recip_block="$recip_block
+$(emit_recipients "bcc recipient" "$bcc")"
+
+subject_esc=${subject//\"/\\\"}
+tmp_html_esc=${tmp_html//\"/\\\"}
+
+final_action="  open newMsg"
+[ "$send" -eq 1 ] && final_action="  send newMsg"
+
+if [ "$dry_run" -eq 1 ]; then
+  echo "--- outlook-draft dry-run ---"
+  echo "subject : $subject"
+  echo "to      : $to"
+  [ -n "$cc" ]  && echo "cc      : $cc"
+  [ -n "$bcc" ] && echo "bcc     : $bcc"
+  echo "html    : ${html_file:-<stdin>} ($(wc -c < "$tmp_html") bytes)"
+  echo "action  : $([ "$send" -eq 1 ] && echo send || echo open-draft)"
+  echo "--- recipient AppleScript ---"
+  echo "$recip_block"
+  exit 0
+fi
+
+# --- assemble & run the AppleScript ---------------------------------------
+tmp_scpt="$(mktemp -t outlook-draft.XXXXXX.applescript)"
+cat > "$tmp_scpt" <<APPLESCRIPT
+set htmlBody to (read (POSIX file "$tmp_html_esc") as «class utf8»)
+tell application "Microsoft Outlook"
+  activate
+  set newMsg to make new outgoing message with properties {subject:"$subject_esc", content:htmlBody}
+$recip_block
+$final_action
+end tell
+APPLESCRIPT
+
+osascript "$tmp_scpt"
+echo "outlook-draft: $([ "$send" -eq 1 ] && echo sent || echo draft opened) — \"$subject\""

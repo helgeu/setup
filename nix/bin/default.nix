@@ -54,6 +54,10 @@
       source = ./oc;
       executable = true;
     };
+    "bin/outlook-draft" = {
+      source = ./outlook-draft;
+      executable = true;
+    };
     "bin/opencode-cost" = {
       source = ./opencode-cost;
       executable = true;
