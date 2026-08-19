@@ -64,15 +64,22 @@
   # Shared homebrew config
   homebrew = {
     enable = true;
-    onActivation.upgrade = false;
-    onActivation.autoUpdate = false;
+    # Upgrades are applied at switch (activation), not at update time.
+    # scripts/update.sh runs `brew update` to fetch new versions (the "find
+    # upgrades" step); `darwin-rebuild switch` then upgrades formulae, casks,
+    # and Mac App Store apps.
+    onActivation.upgrade = true;
+    onActivation.autoUpdate = false; # switch never runs `brew update`; update.sh does that
+    global.autoUpdate = false; # no implicit 5-min brew auto-update on manual commands
 
     brews = [
       "mas"
     ];
     casks = [
       "alt-tab"  # Official Developer-ID build; nixpkgs build is ad-hoc signed and loops TCC Screen Recording prompts
-      "brave-browser"
+      # Sparkle self-updater is disabled (see CustomUserPreferences above), so
+      # greedy is required for the switch to upgrade it.
+      { name = "brave-browser"; greedy = true; }
       "ghostty"
     ];
     masApps = {

@@ -22,17 +22,11 @@
     };
 
     # macOS Homebrew integration
+    # NOTE: taps are mutable (managed by `brew`); package versions are upgraded
+    # via scripts/update.sh (brew upgrade --greedy), not the flake. Do not add
+    # homebrew-core/homebrew-cask inputs unless you also wire nix-homebrew.taps
+    # with mutableTaps = false.
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-
-    homebrew-core = {
-      url = "github:homebrew/homebrew-core";
-      flake = false;
-    };
-
-    homebrew-cask = {
-      url = "github:homebrew/homebrew-cask";
-      flake = false;
-    };
 
     nvf = {
       url = "github:notashelf/nvf/";
@@ -60,8 +54,6 @@
     home-manager,
     nixos-wsl,
     nix-homebrew,
-    homebrew-core,
-    homebrew-cask,
     nvf,
     ...
   }: let

@@ -58,6 +58,10 @@
       source = ./outlook-draft;
       executable = true;
     };
+    "bin/outlook-meeting" = {
+      source = ./outlook-meeting;
+      executable = true;
+    };
     "bin/opencode-cost" = {
       source = ./opencode-cost;
       executable = true;

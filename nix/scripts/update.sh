@@ -1,5 +1,9 @@
 #!/bin/zsh
-# Update flake inputs and validate
+# Find upgrades and prep for the switch. This does NOT upgrade software.
+# It updates the flake lock (nix) and refreshes Homebrew tap metadata, then
+# previews what is outdated. The actual upgrades (nix + Homebrew + Mac App
+# Store) are applied by `switch.sh` via nix-darwin activation
+# (homebrew.onActivation.upgrade = true). See system/shared.nix + readme.
 
 set -e
 
@@ -28,4 +32,23 @@ else
 fi
 
 echo ""
-echo "Update complete. Run 'sudo ./scripts/switch.sh' to apply."
+echo "Refreshing Homebrew tap metadata (finding upgrades)..."
+if command -v brew &>/dev/null; then
+    brew update
+    echo "Homebrew packages the switch will upgrade:"
+    brew outdated --greedy
+else
+    echo "Homebrew not installed - skipping (non-macOS)."
+fi
+
+echo ""
+echo "Mac App Store apps the switch will upgrade:"
+if command -v mas &>/dev/null; then
+    mas outdated
+else
+    echo "mas not installed - skipping (non-macOS)."
+fi
+
+echo ""
+echo "Prep complete. Nothing upgraded yet."
+echo "Run 'sudo ./scripts/switch.sh' to apply nix + Homebrew + App Store upgrades."

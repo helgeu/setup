@@ -47,7 +47,7 @@ dock/                    # macOS Dock configurations
 scripts/                 # All scripts
   install.sh             # macOS: install Nix + nix-darwin
   switch.sh              # macOS: rebuild
-  update.sh              # Update flake inputs
+  update.sh              # Find upgrades + prep (flake lock, brew update)
   uninstall-nix.sh       # macOS: complete Nix removal
   clean-homebrew.sh      # macOS: pre-nix Homebrew cleanup
   discover-installed.sh  # Discover installed apps
@@ -63,17 +63,35 @@ scripts/                 # All scripts
 ./scripts/install.sh
 ```
 
-### Rebuild
+### Rebuild / Apply (nix + Homebrew + App Store)
 
 ```bash
 sudo ./scripts/switch.sh
 ```
 
-### Update Flake Inputs
+This builds and activates the flake. It also applies all software upgrades: nix
+packages, Homebrew formulae and casks, and Mac App Store apps
+(`homebrew.onActivation.upgrade = true`). Run `update.sh` first to fetch the
+latest versions.
+
+### Update (find upgrades + prep)
 
 ```bash
 ./scripts/update.sh
 ```
+
+This does NOT upgrade software. It updates the flake lock (nix) and refreshes
+Homebrew tap metadata with `brew update`. Then it previews what is outdated
+(`brew outdated --greedy` and `mas outdated`). Apply everything with the switch:
+
+```bash
+sudo ./scripts/switch.sh
+```
+
+The split is deliberate. `update.sh` finds and pins the new versions.
+`switch.sh` applies them. Homebrew and App Store versions are not pinned by the
+flake — the switch upgrades them during nix-darwin activation, using whatever
+`update.sh` last fetched.
 
 ### Uninstall
 

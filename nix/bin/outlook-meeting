@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# outlook-meeting — create a meeting invite (calendar event with attendees) in
+# Microsoft Outlook for Mac via AppleScript, and open it as a draft for review.
+# The agenda/body is passed via a temp file (read by AppleScript as UTF-8) so
+# there is no escaping/quoting hell. Dates are built from components to avoid
+# AppleScript's locale-dependent date parsing.
+#
+# Usage:
+#   outlook-meeting -s "Subject" -a "a@b.com,Name <c@d.com>" \
+#                   --start "2026-08-21 10:00" --duration 30 \
+#                   [--location "Teams"] [--optional "x@y.com"] --agenda body.txt
+#   cat agenda.txt | outlook-meeting -s "Subject" -a "a@b.com" --stdin
+#
+# Attendees: comma- OR semicolon-separated. Each may be a bare address
+#   (user@host) or a display form "Full Name <user@host>".
+#
+# Flags:
+#   -s, --subject    Subject line (required)
+#   -a, --attendee   Required attendees (required, repeatable)
+#       --required    Alias for --attendee
+#       --optional   Optional attendees (repeatable)
+#       --start      Start "YYYY-MM-DD HH:MM" (default: tomorrow 09:00, local)
+#       --duration   Duration in minutes (default: 30)
+#       --location   Location / meeting link (optional)
+#   -A, --agenda     Path to a text file for the agenda/body
+#       --stdin      Read the agenda body from stdin instead of a file
+#       --send       Send the invite immediately instead of opening a draft
+#       --dry-run    Print what would happen; don't touch Outlook
+#   -h, --help       This help
+set -euo pipefail
+
+die() { printf 'outlook-meeting: %s\n' "$*" >&2; exit 1; }
+usage() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+subject=""
+required=""
+optional=""
+start=""
+duration=30
+location=""
+agenda_file=""
+use_stdin=0
+send=0
+dry_run=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -s|--subject)        subject="$2"; shift 2 ;;
+    -a|--attendee|--required) required="${required:+$required;}$2"; shift 2 ;;
+    --optional)          optional="${optional:+$optional;}$2"; shift 2 ;;
+    --start)             start="$2"; shift 2 ;;
+    --duration)          duration="$2"; shift 2 ;;
+    --location)          location="$2"; shift 2 ;;
+    -A|--agenda)         agenda_file="$2"; shift 2 ;;
+    --stdin)             use_stdin=1; shift ;;
+    --send)              send=1; shift ;;
+    --dry-run)           dry_run=1; shift ;;
+    -h|--help)           usage 0 ;;
+    *)                   die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$subject" ] || die "missing --subject"
+[ -n "$required" ] || die "missing --attendee"
+case "$duration" in ''|*[!0-9]*) die "--duration must be a whole number of minutes" ;; esac
+
+# --- resolve start into unpadded date components (base-10) ------------------
+[ -n "$start" ] || start="$(date -v+1d '+%Y-%m-%d 09:00')"
+comps="$(date -j -f "%Y-%m-%d %H:%M" "$start" "+%Y %m %d %H %M" 2>/dev/null)" \
+  || die "could not parse --start '$start' (use 'YYYY-MM-DD HH:MM')"
+read -r sy sm sd sh smin <<EOF
+$comps
+EOF
+sy=$((10#$sy)); sm=$((10#$sm)); sd=$((10#$sd)); sh=$((10#$sh)); smin=$((10#$smin))
+
+# --- resolve the agenda body into a temp file ------------------------------
+tmp_body="$(mktemp -t outlook-meeting.XXXXXX.txt)"
+trap 'rm -f "$tmp_body" "${tmp_scpt:-}"' EXIT
+
+if [ "$use_stdin" -eq 1 ]; then
+  cat > "$tmp_body"
+elif [ -n "$agenda_file" ]; then
+  [ -f "$agenda_file" ] || die "agenda file not found: $agenda_file"
+  cp "$agenda_file" "$tmp_body"
+else
+  : > "$tmp_body"  # allow an empty agenda
+fi
+
+# --- build AppleScript attendee statements ---------------------------------
+# split on ',' and ';', trim, and emit a `make new <kind>` line per address.
+emit_attendees() {
+  local kind="$1" list="$2" line name addr
+  printf '%s\n' "$list" | tr ',;' '\n\n' | while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"   # ltrim
+    line="${line%"${line##*[![:space:]]}"}"    # rtrim
+    [ -n "$line" ] || continue
+    if printf '%s' "$line" | grep -q '<'; then
+      name="${line%%<*}"
+      name="${name%"${name##*[![:space:]]}"}"  # rtrim name
+      addr="${line##*<}"; addr="${addr%%>*}"
+    else
+      name=""
+      addr="$line"
+    fi
+    name=${name//\"/\\\"}
+    addr=${addr//\"/\\\"}
+    if [ -n "$name" ]; then
+      printf '  make new %s at theEvent with properties {email address:{name:"%s", address:"%s"}}\n' "$kind" "$name" "$addr"
+    else
+      printf '  make new %s at theEvent with properties {email address:{address:"%s"}}\n' "$kind" "$addr"
+    fi
+  done
+}
+
+attendee_block="$(emit_attendees "required attendee" "$required")"
+[ -n "$optional" ] && attendee_block="$attendee_block
+$(emit_attendees "optional attendee" "$optional")"
+
+subject_esc=${subject//\"/\\\"}
+location_esc=${location//\"/\\\"}
+tmp_body_esc=${tmp_body//\"/\\\"}
+final_action="  open theEvent"
+[ "$send" -eq 1 ] && final_action="  open theEvent"$'\n'"  -- review the draft, then Send from the window"
+
+location_prop=""
+[ -n "$location" ] && location_prop=", location:\"$location_esc\""
+
+if [ "$dry_run" -eq 1 ]; then
+  echo "--- outlook-meeting dry-run ---"
+  echo "subject  : $subject"
+  echo "start    : $(printf '%04d-%02d-%02d %02d:%02d' "$sy" "$sm" "$sd" "$sh" "$smin") (+${duration}m)"
+  [ -n "$location" ] && echo "location : $location"
+  echo "required : $required"
+  [ -n "$optional" ] && echo "optional : $optional"
+  echo "agenda   : ${agenda_file:-${use_stdin:+<stdin>}} ($(wc -c < "$tmp_body") bytes)"
+  echo "--- attendee AppleScript ---"
+  echo "$attendee_block"
+  exit 0
+fi
+
+# --- assemble & run the AppleScript ----------------------------------------
+tmp_scpt="$(mktemp -t outlook-meeting.XXXXXX.applescript)"
+cat > "$tmp_scpt" <<APPLESCRIPT
+set agendaBody to (read (POSIX file "$tmp_body_esc") as «class utf8»)
+tell application "Microsoft Outlook"
+  activate
+  set theStart to (current date)
+  set time of theStart to 0
+  set day of theStart to 1
+  set year of theStart to $sy
+  set month of theStart to $sm
+  set day of theStart to $sd
+  set hours of theStart to $sh
+  set minutes of theStart to $smin
+  set theEnd to theStart + ($duration * minutes)
+  set theEvent to make new calendar event with properties {subject:"$subject_esc", content:agendaBody, start time:theStart, end time:theEnd$location_prop}
+$attendee_block
+$final_action
+end tell
+APPLESCRIPT
+
+osascript "$tmp_scpt"
+echo "outlook-meeting: draft opened — \"$subject\" ($(printf '%04d-%02d-%02d %02d:%02d' "$sy" "$sm" "$sd" "$sh" "$smin"), ${duration}m)"
