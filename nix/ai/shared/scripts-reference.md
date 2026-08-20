@@ -31,7 +31,7 @@ source and rebuild.
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
 | Approve a pipeline ManualValidation gate (promote dev→test/qa/prod) | `ado-approve-deploy -o <org> -p <project> --build <id> --stage test` | Resumes a paused `ManualValidation@0` stage. `-o -p --build` all **required** (no defaults; never picks a run for you). `--list`, `--reject`, `--dry-run`. Deploy approvals are deliberate — ask if the build/stage isn't explicit. |
 | Draft (or send) a formatted HTML email in Outlook | `outlook-draft -s <subj> -t <to> [-c <cc>] --html <file>` | macOS only. Recipients comma/semicolon-sep, bare or `Name <addr>`. Body from `--html <file>` or `--stdin`. Opens a draft by default; `--send` to send. `--dry-run` to preview. |
-| Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
+| Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` (plain text, HTML-escaped, newlines → `<br>`), `--html <file>` (raw HTML), or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
 | Close stale opencode session todos whose PR/WI is done in ADO | `reconcile-todos [--apply]` | Dry-run by default. Closes a session's open todos iff every PR/WI its title references is terminal (PR completed/abandoned, WI Closed/Removed/Resolved/Ready for Production); keeps active PRs/open WIs; ignores bare numbers. `-o -p --db --json`. |
@@ -100,12 +100,14 @@ source and rebuild.
   recipients + generated AppleScript without touching Outlook. Requires classic
   Outlook (AppleScript-scriptable); "New Outlook" may show raw HTML instead.
 
-- **`outlook-meeting -s <subject> -a <attendee> [--optional <a>] [--start "YYYY-MM-DD HH:MM"] [--duration <min>] [--location <x>] (--agenda <file> | --stdin) [--dry-run]`**
+- **`outlook-meeting -s <subject> -a <attendee> [--optional <a>] [--start "YYYY-MM-DD HH:MM"] [--duration <min>] [--location <x>] (--agenda <file> | --html <file> | --stdin) [--dry-run]`**
   — creates a **meeting invite** (a `calendar event` with required/optional
   attendees) in Microsoft Outlook via AppleScript and opens it as a draft to
   review + Send. The agenda/body is passed through a temp file (UTF-8), and dates
-  are built from components (no locale-dependent AppleScript date parsing). `-a`
-  (required) and `--optional` are repeatable and accept comma-/semicolon-separated
+  are built from components (no locale-dependent AppleScript date parsing). A
+  plain `--agenda` is HTML-escaped and its newlines become `<br>` (Outlook
+  calendar `content` is HTML); `--html` passes a raw HTML file through untouched.
+  `-a` (required) and `--optional` are repeatable and accept comma-/semicolon-separated
   lists, each a bare `user@host` or `Full Name <user@host>`. Start defaults to
   tomorrow 09:00 local; `--duration` defaults to 30 min. `--dry-run` prints the
   parsed attendees + generated AppleScript without touching Outlook. Requires
