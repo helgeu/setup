@@ -22,7 +22,8 @@
 #       --start      Start "YYYY-MM-DD HH:MM" (default: tomorrow 09:00, local)
 #       --duration   Duration in minutes (default: 30)
 #       --location   Location / meeting link (optional)
-#   -A, --agenda     Path to a text file for the agenda/body
+#   -A, --agenda     Path to a plain-text file for the agenda/body
+#       --html       Path to a raw HTML file for the agenda/body instead
 #       --stdin      Read the agenda body from stdin instead of a file
 #       --send       Send the invite immediately instead of opening a draft
 #       --dry-run    Print what would happen; don't touch Outlook
@@ -30,7 +31,7 @@
 set -euo pipefail
 
 die() { printf 'outlook-meeting: %s\n' "$*" >&2; exit 1; }
-usage() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 subject=""
 required=""
@@ -39,6 +40,7 @@ start=""
 duration=30
 location=""
 agenda_file=""
+html_file=""
 use_stdin=0
 send=0
 dry_run=0
@@ -52,6 +54,7 @@ while [ $# -gt 0 ]; do
     --duration)          duration="$2"; shift 2 ;;
     --location)          location="$2"; shift 2 ;;
     -A|--agenda)         agenda_file="$2"; shift 2 ;;
+    -H|--html)           html_file="$2"; shift 2 ;;
     --stdin)             use_stdin=1; shift ;;
     --send)              send=1; shift ;;
     --dry-run)           dry_run=1; shift ;;
@@ -73,17 +76,32 @@ $comps
 EOF
 sy=$((10#$sy)); sm=$((10#$sm)); sd=$((10#$sd)); sh=$((10#$sh)); smin=$((10#$smin))
 
-# --- resolve the agenda body into a temp file ------------------------------
-tmp_body="$(mktemp -t outlook-meeting.XXXXXX.txt)"
-trap 'rm -f "$tmp_body" "${tmp_scpt:-}"' EXIT
+# --- resolve the agenda body into an HTML temp file ------------------------
+# Outlook calendar-event `content` is HTML (has html defaults true and is not
+# settable at creation), so a plain agenda is HTML-escaped and its newlines
+# become <br> to keep the layout. --html passes raw HTML through untouched.
+tmp_raw="$(mktemp -t outlook-meeting.XXXXXX.in)"
+tmp_body="$(mktemp -t outlook-meeting.XXXXXX.html)"
+trap 'rm -f "$tmp_raw" "$tmp_body" "${tmp_scpt:-}"' EXIT
 
 if [ "$use_stdin" -eq 1 ]; then
-  cat > "$tmp_body"
+  cat > "$tmp_raw"
+elif [ -n "$html_file" ]; then
+  [ -f "$html_file" ] || die "html file not found: $html_file"
+  cp "$html_file" "$tmp_raw"
 elif [ -n "$agenda_file" ]; then
   [ -f "$agenda_file" ] || die "agenda file not found: $agenda_file"
-  cp "$agenda_file" "$tmp_body"
+  cp "$agenda_file" "$tmp_raw"
 else
-  : > "$tmp_body"  # allow an empty agenda
+  : > "$tmp_raw"  # allow an empty agenda
+fi
+
+if [ -n "$html_file" ]; then
+  cp "$tmp_raw" "$tmp_body"                       # already HTML
+else
+  # escape HTML, then turn each newline into <br> so the agenda keeps its layout
+  sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$tmp_raw" \
+    | sed 's/$/<br>/' > "$tmp_body"
 fi
 
 # --- build AppleScript attendee statements ---------------------------------
@@ -132,7 +150,7 @@ if [ "$dry_run" -eq 1 ]; then
   [ -n "$location" ] && echo "location : $location"
   echo "required : $required"
   [ -n "$optional" ] && echo "optional : $optional"
-  echo "agenda   : ${agenda_file:-${use_stdin:+<stdin>}} ($(wc -c < "$tmp_body") bytes)"
+  echo "agenda   : ${html_file:-${agenda_file:-${use_stdin:+<stdin>}}} ($(wc -c < "$tmp_body") bytes)"
   echo "--- attendee AppleScript ---"
   echo "$attendee_block"
   exit 0
