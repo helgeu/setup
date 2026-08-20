@@ -34,6 +34,7 @@ source and rebuild.
 | Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
+| Close stale opencode session todos whose PR/WI is done in ADO | `reconcile-todos [--apply]` | Dry-run by default. Closes a session's open todos iff every PR/WI its title references is terminal (PR completed/abandoned, WI Closed/Removed/Resolved/Ready for Production); keeps active PRs/open WIs; ignores bare numbers. `-o -p --db --json`. |
 | Repair opencode sessions broken by non-time-sortable message ids | `opencode-fix-message-ids [--all\|-s <id>] [--dry-run]` | Fixes the "conversation must end with a user message" prefill loop + out-of-order display (upstream anomalyco/opencode#38791). Renumbers messages by `time_created`; backs up first. |
 | Create one ADO work item (optionally parent-linked) | `New-AdoWorkItem.ps1` | `-Config <org>-<project> -Type -Title [-ParentId -Tags]`. |
 | Seed an Epic/Feature hierarchy from a backlog JSON | `Import-AdoBacklog.ps1` | Idempotent; `-Backlog file.json [-WhatIf]`. |
@@ -146,6 +147,19 @@ run under the nix-provided `python3` (which bundles `xlsxwriter`).
   `distributedtask/manualvalidations` route). Deploy approvals are deliberate —
   if the build/stage isn't clear from the human, ask. Details in
   `ado-cli-reference.md` → "Approving a ManualValidation gate".
+- **`reconcile-todos` (bash+python)** — closes stale opencode session todos by
+  cross-checking ADO. For every session with open (pending/in_progress) todos it
+  extracts the PR/WI ids named in the session title (only numbers anchored to a
+  `PR`/`work item`/`bug`/`feature`/`spike` keyword or an ADO URL — bare numbers
+  like personnr/buildId/timestamps are ignored), queries the live PR status /
+  work-item state via `az rest`, and marks the session's todos `completed` iff it
+  has ≥1 resolvable id and **all** resolvable ids are terminal (PR
+  completed/abandoned; WI Closed/Removed/Resolved/Ready for Production). Sessions
+  with an active PR/open WI, or with no resolvable id, are left untouched.
+  Deterministic given ADO state. **Dry-run by default; `--apply` to write.**
+  `-o org -p project` (default `imdidev`/`Bosettingsprosjekt`), `--db PATH`,
+  `--json`. Verifies the Entra token against the org's `connectionData` first.
+  This is the automation of the `standup` skill's session-DB reconcile pass.
 - **PowerShell backlog toolkit (`~/.claude/ado/*.ps1`)** — all take
   `-Config <org>-<project>` matching a file in `~/.claude/ado/configs/`
   (nix-generated). `New-AdoWorkItem`, `Import-AdoBacklog` (seed, `-WhatIf`),

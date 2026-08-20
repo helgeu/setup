@@ -82,6 +82,10 @@
       source = ./pr-review-post;
       executable = true;
     };
+    "bin/reconcile-todos" = {
+      source = ./reconcile-todos;
+      executable = true;
+    };
     "bin/sonar-scan" = {
       source = ./sonar-scan;
       executable = true;

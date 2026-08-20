@@ -82,6 +82,14 @@ Use the existing helper scripts first (`~/.claude/scripts-reference.md`):
 `azprs <org>` for my open/merged PRs, `ado-my-items` for assigned work-item
 state, `find-prs` inside a repo. Drop to raw `az` for pipeline/build detail.
 
+**To clean stale session-DB todos, use `reconcile-todos` — don't hand-roll it.**
+It closes a session's open todos iff every PR/WI its title references is terminal
+in ADO (PR completed/abandoned, WI Closed/Removed/Resolved/Ready for Production),
+keeping active PRs/open WIs and ignoring bare numbers. Run `reconcile-todos`
+(dry-run) to preview, then `reconcile-todos --apply` to write. This is the
+deterministic automation of the reclassify step below; it does NOT touch
+`todo-2026.md` (still your judgment, per Step 4).
+
 ### `az boards` / `az devops invoke` gotchas (learned the hard way)
 
 - **Never put `[System.TeamProject] = @project` in a WIQL `WHERE`** — with

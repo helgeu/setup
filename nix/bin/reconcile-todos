@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+#
+# reconcile-todos - Close stale opencode session todos against Azure DevOps.
+#
+# The opencode session DB accumulates open (pending/in_progress) todos that were
+# never closed when their session ended. Most reference a PR or work item that
+# has long since merged/closed. This script reconciles those todos against the
+# live ADO state and marks them completed when their referenced item is terminal.
+#
+# Deterministic: a session's open todos are closed iff the session title
+# references at least one PR/work-item id AND every id it references that ADO can
+# resolve is in a terminal state:
+#   PR  -> completed | abandoned
+#   WI  -> Closed | Removed | Resolved | Ready for Production
+# Sessions with an active PR / open WI, or with no resolvable id, are LEFT ALONE.
+# Bare numbers with no PR/WI keyword (personnr, buildId, timestamps) are ignored.
+#
+# Usage:
+#   reconcile-todos                    # DRY RUN: show what would be closed
+#   reconcile-todos --apply            # actually close them
+#   reconcile-todos --json             # machine-readable report (dry run)
+#   reconcile-todos -o imdidev -p Bosettingsprosjekt --apply
+#
+# Options:
+#   -o, --org        org name (imdidev) or full URL   [default: imdidev]
+#   -p, --project    project name                       [default: Bosettingsprosjekt]
+#       --db PATH    opencode DB path                   [default: $OPENCODE_DB or
+#                                                        ~/.local/share/opencode/opencode-stable.db]
+#       --apply      write changes (default is dry run)
+#       --json       emit JSON report instead of text
+#   -h, --help       show this help
+#
+# Auth: uses the current `az login` session. The Entra token is verified against
+# the org's connectionData before any work; if it is stale you are told to run
+# `az login` (no silent browser launch).
+#
+set -euo pipefail
+
+die() { echo "reconcile-todos: error: $*" >&2; exit 1; }
+
+ORG="imdidev"
+PROJECT="Bosettingsprosjekt"
+DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode-stable.db}"
+APPLY=0
+JSON=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o|--org)     ORG="${2:-}"; shift 2 ;;
+    -p|--project) PROJECT="${2:-}"; shift 2 ;;
+    --db)         DB="${2:-}"; shift 2 ;;
+    --apply)      APPLY=1; shift ;;
+    --json)       JSON=1; shift ;;
+    -h|--help)    sed -n '3,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)            die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]     || die "missing org"
+[ -n "$PROJECT" ] || die "missing project"
+[ -f "$DB" ]      || die "opencode DB not found at $DB"
+
+command -v az      >/dev/null || die "az CLI not found"
+command -v python3 >/dev/null || die "python3 not found"
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+
+# --- auth preflight: prove the token authenticates against THIS org ----------
+# (minting a token is not proof of access; a stale one still mints then 401s.)
+ADO_RES="499b84ac-1321-427f-aa17-267ca6975798"   # Azure DevOps resource id
+auth_ok() {
+  az rest --resource "$ADO_RES" \
+    --url "$ORG_URL/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+  | grep -q '"isActive": *true'
+}
+if ! auth_ok; then
+  die "not authenticated against $ORG_URL. Run: az login  (then retry)"
+fi
+TOKEN="$(az account get-access-token --resource "$ADO_RES" --query accessToken -o tsv 2>/dev/null)" \
+  || die "could not mint ADO access token"
+
+# --- reconcile (python: native sqlite + REST, no shell word-split traps) ------
+ORG_URL="$ORG_URL" PROJECT="$PROJECT" DB="$DB" TOKEN="$TOKEN" \
+APPLY="$APPLY" JSON="$JSON" python3 - <<'PY'
+import os, re, json, time, sqlite3, urllib.request, urllib.error
+
+ORG_URL = os.environ["ORG_URL"]
+PROJECT = os.environ["PROJECT"]
+DB      = os.environ["DB"]
+TOKEN   = os.environ["TOKEN"]
+APPLY   = os.environ["APPLY"] == "1"
+JSON    = os.environ["JSON"] == "1"
+
+WI_TERMINAL = {"Closed", "Removed", "Resolved", "Ready for Production"}
+PR_TERMINAL = {"completed", "abandoned"}
+
+# --- id extraction: only numbers anchored to a PR/WI keyword or an ADO URL ----
+URL_PR = re.compile(r'pullrequest/(\d+)', re.I)
+URL_WI = re.compile(r'workitems/edit/(\d+)', re.I)
+PR_KW  = re.compile(r'\b(?:prs?|pull\s*requests?)\b', re.I)
+WI_KW  = re.compile(r'\b(?:work\s*items?|wi|bugs?|features?|user\s*stor(?:y|ies)|spikes?)\b', re.I)
+RUN    = re.compile(r'[\s#:/-]*((?:\d{3,6}[\s,#/and-]*)+)', re.I)
+
+def extract(title):
+    """Return {id: 'pr'|'wi'} for ids referenced with clear PR/WI context."""
+    ids = {}
+    for m in URL_PR.finditer(title): ids.setdefault(m.group(1), "pr")
+    for m in URL_WI.finditer(title): ids.setdefault(m.group(1), "wi")
+    for kw, typ in ((PR_KW, "pr"), (WI_KW, "wi")):
+        for m in kw.finditer(title):
+            run = RUN.match(title[m.end():m.end()+60])
+            if run:
+                for d in re.findall(r'\d{3,6}', run.group(1)):
+                    ids.setdefault(d, typ)
+    return ids
+
+# --- ADO REST lookups (cached) ------------------------------------------------
+_cache = {}
+def _get(url):
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + TOKEN})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 401, 403):
+            return None
+        raise
+
+def state_of(typ, wid):
+    key = (typ, wid)
+    if key in _cache:
+        return _cache[key]
+    if typ == "pr":
+        d = _get(f"{ORG_URL}/{PROJECT}/_apis/git/pullrequests/{wid}?api-version=7.1-preview")
+        st = d.get("status") if d else None
+        res = ("pr", st, (st in PR_TERMINAL)) if st else None
+    else:
+        d = _get(f"{ORG_URL}/{PROJECT}/_apis/wit/workitems/{wid}?api-version=7.1-preview")
+        st = d["fields"].get("System.State") if d else None
+        res = ("wi", st, (st in WI_TERMINAL)) if st else None
+    _cache[key] = res
+    return res
+
+# --- read sessions with open todos --------------------------------------------
+con = sqlite3.connect(DB, timeout=20)
+con.execute("PRAGMA busy_timeout=20000")
+rows = con.execute(
+    "SELECT s.id, s.title, count(*) "
+    "FROM todo t JOIN session s ON s.id = t.session_id "
+    "WHERE t.status IN ('pending','in_progress') "
+    "GROUP BY s.id, s.title"
+).fetchall()
+
+close_ids, close_report, kept, skipped = [], [], [], []
+for sid, title, n in rows:
+    ids = extract(title or "")
+    if not ids:
+        skipped.append({"title": title, "open": n, "reason": "no PR/WI reference"})
+        continue
+    resolved = {i: state_of(t, i) for i, t in ids.items()}
+    found = {i: r for i, r in resolved.items() if r}
+    if not found:
+        skipped.append({"title": title, "open": n, "reason": "ids not found in ADO"})
+        continue
+    if all(r[2] for r in found.values()):
+        close_ids.append(sid)
+        close_report.append({"title": title, "open": n,
+                             "items": {i: f"{r[0]}:{r[1]}" for i, r in found.items()}})
+    else:
+        live = {i: f"{r[0]}:{r[1]}" for i, r in found.items() if not r[2]}
+        kept.append({"title": title, "open": n, "live": live})
+
+closed_n = sum(c["open"] for c in close_report)
+
+if APPLY and close_ids:
+    now = int(time.time() * 1000)
+    qs = ",".join("?" * len(close_ids))
+    con.execute(
+        f"UPDATE todo SET status='completed', time_updated={now} "
+        f"WHERE status IN ('pending','in_progress') AND session_id IN ({qs})",
+        close_ids)
+    con.commit()
+
+if JSON:
+    print(json.dumps({
+        "org": ORG_URL, "project": PROJECT, "applied": APPLY,
+        "sessions_closeable": len(close_report), "todos_closeable": closed_n,
+        "close": close_report, "kept_live": kept, "skipped": skipped,
+    }, ensure_ascii=False, indent=2))
+else:
+    verb = "Closed" if APPLY else "Would close"
+    print(f"{verb} {closed_n} todo(s) across {len(close_report)} session(s) "
+          f"(all referenced PR/WI terminal):")
+    for c in close_report:
+        items = ", ".join(f"{i}={s}" for i, s in c["items"].items())
+        print(f"  • [{c['open']}] {c['title']}  ({items})")
+    print(f"\nKept {sum(k['open'] for k in kept)} todo(s) in {len(kept)} session(s) "
+          f"with live PR/WI:")
+    for k in kept:
+        live = ", ".join(f"{i}={s}" for i, s in k["live"].items())
+        print(f"  • [{k['open']}] {k['title']}  (live: {live})")
+    print(f"\nLeft {sum(s['open'] for s in skipped)} todo(s) in {len(skipped)} "
+          f"session(s) with no resolvable ADO reference (untouched).")
+    if not APPLY:
+        print("\nDry run. Re-run with --apply to write.")
+con.close()
+PY
