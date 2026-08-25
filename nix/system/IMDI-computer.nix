@@ -43,7 +43,8 @@
   time.timeZone = "Europe/Oslo";
 
   # Networking
-  networking.hostName = "IMDI-computer";
+  # Keep the default WSL hostname "nixos" (do not rename this machine).
+  networking.hostName = "nixos";
 
   # NixOS state version
   system.stateVersion = "24.05";

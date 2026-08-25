@@ -12,6 +12,9 @@ CONFIG_NAME="$HOSTNAME"
 # Map X-GLV6Y9N492 to NO-GLV6Y9N492 (same machine, renamed)
 [[ "$CONFIG_NAME" == "X-GLV6Y9N492" ]] && CONFIG_NAME="NO-GLV6Y9N492"
 
+# IMDI machine keeps the default WSL hostname "nixos"; map it to its config
+[[ "$CONFIG_NAME" == "nixos" ]] && CONFIG_NAME="IMDI-computer"
+
 # Determine configuration type
 case "$CONFIG_NAME" in
     NO-GLV6Y9N492|Helges-MacBook-Pro)
