@@ -10,7 +10,7 @@ let
   rows = 50;
 in {
   # Ghostty config file (app installed via Homebrew cask in system/*.nix)
-  home.file.".config/ghostty/config" = lib.mkIf pkgs.stdenv.isDarwin {
+  home.file.".config/ghostty/config" = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
     text = ''
       # Theme (built-in, matches iTerm2 Dracula profile)
       theme = Dracula

@@ -3,7 +3,7 @@
   lib,
   ...
 }: let
-  isDarwin = pkgs.stdenv.isDarwin;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   combinedDotnet = with pkgs.dotnetCorePackages;
     combinePackages [
       sdk_8_0

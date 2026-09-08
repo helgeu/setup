@@ -26,7 +26,7 @@
       enable = true;
       signing.format = null;
       package =
-        if pkgs.stdenv.isDarwin
+        if pkgs.stdenv.hostPlatform.isDarwin
         then pkgs.git.override {osxkeychainSupport = false;}
         else pkgs.git;
       settings = {

@@ -26,7 +26,7 @@ Single flake (`nix/flake.nix`) drives three layers per machine:
 2. **Home Manager** (`home-manager/*.nix`) - User packages, shell, editor, dev tools
 3. **Dock** (`dock/*.nix`) - macOS Dock layout (macOS only)
 
-Convention: `*/shared.nix` holds cross-machine config; hostname files hold machine-specific overrides. Use `pkgs.stdenv.isDarwin`/`isLinux` for platform conditionals.
+Convention: `*/shared.nix` holds cross-machine config; hostname files hold machine-specific overrides. Use `pkgs.stdenv.hostPlatform.isDarwin`/`isLinux` for platform conditionals.
 
 Key modules imported by home-manager: `zsh.nix`, `git.nix`, `vscode.nix`, `nvf.nix` (Neovim via NVF framework), `claude.nix`, `ghostty.nix`, `lsp-servers.nix`.
 

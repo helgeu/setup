@@ -13,10 +13,10 @@
   nix.gc = {
     automatic = true;
     options = "--delete-older-than 30d";
-  } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+  } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
     # nix-darwin: launchd interval (Sunday 3am)
     interval = { Weekday = 7; Hour = 3; Minute = 0; };
-  } // lib.optionalAttrs pkgs.stdenv.isLinux {
+  } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     # NixOS: systemd calendar format
     dates = "weekly";
   };

@@ -44,6 +44,11 @@
         #guiFont = "MesloLGS NF:h14";
 
         statusline.lualine.enable = true;
+        # Breadcrumbs moved here from the deprecated vim.ui.breadcrumbs.* path.
+        statusline.lualine.integrations.breadcrumbs = {
+          nvim-navic.enable = false;
+          navbuddy.enable = false;
+        };
         telescope.enable = true;
         autocomplete.nvim-cmp.enable = true;
 
@@ -74,10 +79,6 @@
           colorizer.enable = true;
           #modes-nvim.enable = false; # the theme looks terrible with catppuccin
 
-          breadcrumbs = {
-            enable = false;
-            navbuddy.enable = false;
-          };
           fastaction.enable = true;
         };
 
