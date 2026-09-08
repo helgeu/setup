@@ -34,9 +34,16 @@ fi
 echo ""
 echo "Refreshing Homebrew tap metadata (finding upgrades)..."
 if command -v brew &>/dev/null; then
-    brew update
+    # nix-homebrew points HOMEBREW_REPOSITORY at a stub with a fake .git, so
+    # `brew update` can intermittently die with "fatal: not in a git directory"
+    # on a cold API cache. It clears on retry and only refreshes metadata, so
+    # keep it best-effort: the flake lock is already committed above and the
+    # switch applies brew upgrades regardless (onActivation.upgrade = true).
+    if ! (brew update || { sleep 2; brew update; }); then
+        echo "⚠ brew update failed (nix-homebrew git stub / transient) - continuing."
+    fi
     echo "Homebrew packages the switch will upgrade:"
-    brew outdated --greedy
+    brew outdated --greedy || echo "⚠ brew outdated failed - continuing."
 else
     echo "Homebrew not installed - skipping (non-macOS)."
 fi
@@ -44,7 +51,7 @@ fi
 echo ""
 echo "Mac App Store apps the switch will upgrade:"
 if command -v mas &>/dev/null; then
-    mas outdated
+    mas outdated || echo "⚠ mas outdated failed - continuing."
 else
     echo "mas not installed - skipping (non-macOS)."
 fi
