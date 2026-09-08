@@ -26,10 +26,12 @@ source and rebuild.
 | Publish reviewed findings to the PR | `pr-review-post <findings.json>` | Reads the JSON `pr-review` wrote; supports `--dry-run` / `--yes`. |
 | Export every PR in a project/org to CSV | `ado-prs-export --organization <org> [--project <p>]` | Auth via `az` login or `--pat`. `--since YYYY-MM-DD` (default Oct 1 last year); omit `--project` for the whole org. Writes `ado_prs.csv`. |
 | Build a per-person weekly PR chart workbook | `ado-prs-chart --input ado_prs.csv` | Excel workbook: summary + one column-chart sheet per person (avg + 4-week moving avg). Feed it an `ado-prs-export` CSV. |
+| Export Bug work items to CSV (DORA Reliability feeder) | `ado-bugs-export --organization <org> --project <p> [--area-path <path>] [--severity <s>]` | REST WIQL (not `az boards query`, which returns empty on some orgs). `--area-path` scopes to a product area (bugs are filed per area, not per repo). Writes `ado_bugs.csv` with `created_at`/`resolved_at`/`state`/`severity`. Feeds `ado-dora --reliability-area-path`. |
 | Choose an opencode model + reasoning variant interactively | `pr-model-select` | Shared chooser used by `find-prs`/`pr-review`; rarely called directly. |
-| List open work items assigned to me (or someone) | `ado-my-items` | Defaults `urholm`/`Devkunt`/`@me`; `-o -p -a -f`. |
+| List open work items assigned to me (or someone) | `ado-my-items -o <org> -p <project>` | `-o`/`-p` **required** (no default); assignee defaults `@me`. `-a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
 | Approve a pipeline ManualValidation gate (promote dev→test/qa/prod) | `ado-approve-deploy -o <org> -p <project> --build <id> --stage test` | Resumes a paused `ManualValidation@0` stage. `-o -p --build` all **required** (no defaults; never picks a run for you). `--list`, `--reject`, `--dry-run`. Deploy approvals are deliberate — ask if the build/stage isn't explicit. |
+| Retire (disable+hide) a repo and archive the pipelines it orphans | `ado-retire-repo -o <org> -p <project> -r <repo> [--apply] [--delete]` | Dry-run plan by default. Disables the repo (reversible; **never deleted**) and disables+moves its bound build pipelines & releases into `\Retired\<repo>`. `-o -p -r` required; `--apply` to execute, `--delete` to remove instead of archive. |
 | Draft (or send) a formatted HTML email in Outlook | `outlook-draft -s <subj> -t <to> [-c <cc>] --html <file>` | macOS only. Recipients comma/semicolon-sep, bare or `Name <addr>`. Body from `--html <file>` or `--stdin`. Opens a draft by default; `--send` to send. `--dry-run` to preview. |
 | Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` (plain text, HTML-escaped, newlines → `<br>`), `--html <file>` (raw HTML), or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
@@ -130,11 +132,40 @@ run under the nix-provided `python3` (which bundles `xlsxwriter`).
   column chart of PRs/week combined with average + 4-week-moving-average lines,
   and a **Raw PRs** sheet. Buckets by ISO week off the `date` column.
 
+### DORA metrics (`~/bin`, python)
+
+Full DORA set for a project. `ado-dora` is a thin orchestrator over the feeders;
+run it for one combined report, or run the feeders directly for the raw CSVs.
+
+- **`ado-dora --organization <org> --project <p> [--since YYYY-MM-DD] [--target-branch main] [--prod-env prod] [--reliability-area-path <path>] [--reliability-severity <s>] [--output-dir .] [--skip-prs] [--skip-deploys]`**
+  — combines all five metrics into `dora-summary.json` + `dora-summary.md`:
+  Lead Time (PR merge proxy), Deployment Frequency, Change Failure Rate, MTTR
+  (via the feeders below), and **Reliability** (ADO-bug proxy) when
+  `--reliability-area-path` is given. Each value is labelled proxy vs real.
+- **`ado-deploy-metrics ...`** — walks pipeline timelines, derives Deployment
+  Frequency / CFR / MTTR per environment. Stage detection is name-based
+  (`--include-pattern` / `--exclude-pattern` / `--env-pattern`).
+- **`ado-bugs-export --organization <org> --project <p> [--area-path <path>] [--severity <s>] [--since YYYY-MM-DD]`**
+  — Reliability feeder. REST WIQL (not `az boards query`, which returns empty on
+  some org/process configs). Bugs are filed per **area path** (product area), not
+  per repo, so scope with `--area-path`. Writes `ado_bugs.csv`.
+- **`ado-dora-chart [--deployments ado_deployments.csv] [--prs ado_prs.csv] [--bugs ado_bugs.csv] [--output dora_trends.xlsx]`**
+  — Excel workbook of weekly trends: deploys/week per env, prod deploys + CFR,
+  lead-time median, and a **Reliability** sheet (new bugs + open backlog/week).
+
+Keep targeting out of committed code (public repo). Use the placeholder template
+`nix/bin/dora.example.env`; copy it to the gitignored `nix/bin/dora.local.env`,
+fill in real org/project/area-path there, `source` it, and pass the vars to
+`ado-dora`. Not in prod yet? Point `--prod-env` at the most prod-like env (e.g.
+`qa`).
+
 ### ADO work items
 
 - **`ado-my-items` (bash)** — WIQL "my items" (assigned, not
   Closed/Removed/Resolved/Ready for Production). `-o org -p project -a assignee
-  -f table|json`. Defaults `urholm`/`Devkunt`/`@me`.
+  -f table|json`. `-o`/`-p` are **required** (no default — it never guesses the
+  org/project); assignee defaults `@me`. Surfaces the real `az` error on failure
+  (e.g. `TF400813` not-authorized) instead of a generic "are you logged in?".
 - **`ado-create-tasks <tasks.json>` (python)** — creates child Tasks under user
   stories; inherits parent Area/Iteration; idempotent by title. `--dry-run`,
   `--yes`. JSON shape documented in the script header.
@@ -149,6 +180,17 @@ run under the nix-provided `python3` (which bundles `xlsxwriter`).
   `distributedtask/manualvalidations` route). Deploy approvals are deliberate —
   if the build/stage isn't clear from the human, ask. Details in
   `ado-cli-reference.md` → "Approving a ManualValidation gate".
+- **`ado-retire-repo` (bash)** — retire a git repo: disable+hide it and archive
+  the pipelines it orphans. **Dry-run plan by default**; `--apply` to execute.
+  Finds build pipelines BOUND to the repo (by `repository.id`, never by name) and
+  the classic releases that deploy it, then disables them and moves them into a
+  graveyard folder (`\Retired\<repo>`; override with `--graveyard`). `--delete`
+  removes them instead of archiving. **The repo is only ever disabled
+  (`isDisabled=true`), never deleted — history is preserved.** `-o -p -r`
+  required; `--no-releases`, `-y/--yes`. The gotcha it encapsulates: a build def
+  bound to a disabled repo cannot be saved (`TF401019`), so it edits pipelines
+  first and disables the repo last (re-enabling briefly if already disabled).
+  Variable groups, service connections and environments are left untouched.
 - **`reconcile-todos` (bash+python)** — closes stale opencode session todos by
   cross-checking ADO. For every session with open (pending/in_progress) todos it
   extracts the PR/WI ids named in the session title (only numbers anchored to a
