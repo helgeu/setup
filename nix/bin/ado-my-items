@@ -8,14 +8,13 @@
 #   Ready for Production), ordered by ID.
 #
 # Usage:
-#   ado-my-items                                  # defaults: urholm / Devkunt / @me
-#   ado-my-items -o myorg -p MyProject           # any org/project, still @me
-#   ado-my-items -a someone@example.com          # someone else's items
-#   ado-my-items -f json                         # raw work-item JSON (pipe to jq)
+#   ado-my-items -o imdidev -p Bosettingsprosjekt          # my open items
+#   ado-my-items -o imdidev -p Bosettingsprosjekt -a x@y   # someone else's items
+#   ado-my-items -o imdidev -p Bosettingsprosjekt -f json  # raw JSON (pipe to jq)
 #
 # Options:
-#   -o, --org        org name (myorg) or full URL   [default: urholm]
-#   -p, --project    project name                    [default: Devkunt]
+#   -o, --org        org name (imdidev) or full URL  (required, no default)
+#   -p, --project    project name                    (required, no default)
 #   -a, --assignee   assignee email/id, or @me       [default: @me]
 #   -f, --format     table (default) | json
 #   -h, --help       show this help
@@ -27,8 +26,8 @@ set -euo pipefail
 die() { echo "error: $*" >&2; exit 1; }
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
 
-ORG="urholm"
-PROJECT="Devkunt"
+ORG=""
+PROJECT=""
 ASSIGNEE="@me"
 FORMAT="table"
 
@@ -43,8 +42,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$ORG" ]     || die "missing org"
-[ -n "$PROJECT" ] || die "missing project"
+[ -n "$ORG" ]     || die "missing org: pass -o <org> (e.g. -o imdidev); no default"
+[ -n "$PROJECT" ] || die "missing project: pass -p <project> (e.g. -p Bosettingsprosjekt); no default"
 
 # Allow either a bare org name (imdidev) or a full URL.
 case "$ORG" in
@@ -68,8 +67,8 @@ where [System.TeamProject]='${PROJECT}' and [System.AssignedTo]=${ASSIGNEE_CLAUS
       and not [System.State] in ('Closed','Removed','Resolved','Ready for Production') \
 order by [System.Id]"
 
-items="$(az boards query --org "$ORG_URL" --project "$PROJECT" --wiql "$WIQL" -o json 2>/dev/null)" \
-  || die "query failed (are you logged in? run: az login)"
+items="$(az boards query --org "$ORG_URL" --project "$PROJECT" --wiql "$WIQL" -o json)" \
+  || die "query failed against $ORG_URL/$PROJECT (see az error above)"
 
 # Normalise to {id, type, title, state, url}.
 rows="$(echo "$items" | jq --arg base "$ORG_URL/$PROJECT/_workitems/edit/" '
