@@ -42,6 +42,10 @@
       source = ./ado-prs-export;
       executable = true;
     };
+    "bin/ado-retire-repo" = {
+      source = ./ado-retire-repo;
+      executable = true;
+    };
     "bin/azprs" = {
       source = ./azprs;
       executable = true;

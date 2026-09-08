@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+#
+# ado-retire-repo - Disable ("retire") an Azure DevOps git repository and archive
+#                   the pipelines it orphans: disable+hide the repo, disable/move
+#                   the build pipelines bound to it into a graveyard folder, and
+#                   disable/move the classic releases that deploy it.
+#
+# The repo is always DISABLED (reversible, isDisabled=true) - never deleted, so
+# history is preserved. --delete only affects the orphaned pipelines/releases.
+#
+# Safe by default: prints a PLAN and changes nothing unless --apply is given.
+#
+# Ordering (hard-won): a build definition whose repo is disabled cannot be saved
+# (the PUT re-validates the git binding and fails TF401019). So this tool edits
+# the pipelines FIRST and disables the repo LAST. If the repo is already disabled
+# it is briefly re-enabled to move the build defs, then disabled again.
+#
+# What it does:
+#   1. auth preflight (token + connectionData isActive; az login if needed)
+#   2. resolve the repo id + current isDisabled state
+#   3. find build/YAML pipelines BOUND to the repo (by repository.id - never by
+#      name; a same-named *feature* may have pipelines in another repo)
+#   4. find classic releases whose artifact deploys this repo/app
+#   5. print the plan; stop here unless --apply
+#   6. disable+move (or --delete) the build pipelines   [repo still enabled]
+#   7. disable+move (or --delete) the releases
+#   8. disable + hide the repo (LAST); verify
+#
+# Left untouched on purpose: variable groups (Library), service connections and
+# environments (usually shared) - they are reported by the runbook, not by this
+# tool. Secret scanning of the repo history is also out of scope.
+#
+# Usage:
+#   ado-retire-repo -o <org> -p <project> -r <repo>                     # dry-run plan
+#   ado-retire-repo -o <org> -p <project> -r <repo> --apply             # disable + archive
+#   ado-retire-repo -o <org> -p <project> -r <repo> --apply --delete    # remove pipelines/releases
+#   ado-retire-repo -o imdidev -p Bosettingsprosjekt -r kommisjon --apply
+#
+# Options (org, project and repo are REQUIRED - no defaults):
+#   -o, --org         org name or full URL                  (required)
+#   -p, --project     project name                          (required)
+#   -r, --repo        repository name to retire             (required)
+#       --graveyard   archive folder for disabled pipelines [default: \Retired\<repo>]
+#       --apply       perform changes (default: dry-run plan only)
+#       --delete      DELETE the orphaned pipelines/releases instead of disabling+moving
+#       --no-releases skip classic release definitions
+#   -y, --yes         skip the interactive confirmation (required for --apply when non-interactive)
+#   -h, --help        show this help
+#
+# Auth: uses the current `az login` session (needs repo admin + edit build/release
+# definitions). Runs `az login` automatically only if there is no valid token.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ORG=""
+PROJECT=""
+REPO=""
+GRAVEYARD=""
+APPLY=0
+DELETE=0
+DO_RELEASES=1
+YES=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)       ORG="${2:-}"; shift 2 ;;
+    -p|--project)   PROJECT="${2:-}"; shift 2 ;;
+    -r|--repo)      REPO="${2:-}"; shift 2 ;;
+    --graveyard)    GRAVEYARD="${2:-}"; shift 2 ;;
+    --apply)        APPLY=1; shift ;;
+    --delete)       DELETE=1; shift ;;
+    --no-releases)  DO_RELEASES=0; shift ;;
+    -y|--yes)       YES=1; shift ;;
+    -h|--help)      usage 0 ;;
+    *)              die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+[ -n "$ORG" ]     || die "missing --org (required; no default)"
+[ -n "$PROJECT" ] || die "missing --project (required; no default)"
+[ -n "$REPO" ]    || die "missing --repo (required; no default)"
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}"; ORG_NAME="$(basename "$ORG_URL")" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}"; ORG_NAME="$ORG" ;;
+esac
+BASE="${ORG_URL}/${PROJECT}/_apis"
+VSRM="https://vsrm.dev.azure.com/${ORG_NAME}/${PROJECT}/_apis"
+API="api-version=7.1"
+FOLDER_API="api-version=7.1-preview.2"
+
+[ -n "$GRAVEYARD" ] || GRAVEYARD="\\Retired\\${REPO}"
+
+# ADO resource id for token acquisition.
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+
+get_token() { az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null; }
+
+# Minting a token is not proof of access - prove the identity authenticates
+# against THIS org (connectionData), and re-login if not.
+auth_ok() {
+  [ -n "${TOKEN:-}" ] || return 1
+  curl -sf -u ":$TOKEN" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+    | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+}
+TOKEN="$(get_token || true)"
+if ! auth_ok; then
+  echo "no valid ADO session for ${ORG_URL}, running az login..." >&2
+  az login >/dev/null || die "az login failed"
+  TOKEN="$(get_token)" || die "could not obtain access token"
+  auth_ok || die "still not authenticated against ${ORG_URL} (right account? member of org?)"
+fi
+
+adorest() { # method url [json-body]
+  local method="$1" url="$2" body="${3:-}"
+  if [ -n "$body" ]; then
+    curl -sf -u ":$TOKEN" -X "$method" -H "Content-Type: application/json" -d "$body" "$url"
+  else
+    curl -sf -u ":$TOKEN" -X "$method" "$url"
+  fi
+}
+
+enc() { printf '%s' "$1" | sed 's/\\/%5C/g; s/ /%20/g'; }   # url-encode backslash + space for path query
+
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+
+# ---- Step 1: resolve the repo (id + current disabled state) ----------------
+# A disabled repo returns empty from the direct GET, so fall back to the
+# includeHidden list in that case.
+repo_json="$(adorest GET "${BASE}/git/repositories/${REPO}?${API}" 2>/dev/null || true)"
+REPOID="$(printf '%s' "$repo_json" | jq -r '.id // empty' 2>/dev/null || true)"
+REPO_DISABLED="$(printf '%s' "$repo_json" | jq -r '.isDisabled // empty' 2>/dev/null || true)"
+if [ -z "$REPOID" ]; then
+  repo_json="$(adorest GET "${BASE}/git/repositories?includeHidden=true&${API}" \
+    | jq -e --arg n "$REPO" '.value[] | select(.name==$n)')" \
+    || die "repository '$REPO' not found in ${ORG_NAME}/${PROJECT}"
+  REPOID="$(printf '%s' "$repo_json" | jq -r '.id')"
+  REPO_DISABLED="$(printf '%s' "$repo_json" | jq -r '.isDisabled')"
+fi
+[ -n "$REPOID" ] || die "could not resolve repository id for '$REPO'"
+[ -n "$REPO_DISABLED" ] || REPO_DISABLED="false"
+
+# ---- Step 2: discover build/YAML pipelines bound to the repo ----------------
+# The build-definitions LIST does not populate .repository, so probe each def.
+echo "scanning build pipelines for repo bindings..." >&2
+mapfile -t _ids < <(adorest GET "${BASE}/build/definitions?${API}" | jq -r '.value[].id')
+_probe_def() {
+  local id="$1" j
+  j="$(curl -sf -u ":$TOKEN" "${BASE}/build/definitions/${id}?${API}" 2>/dev/null)" || return 0
+  printf '%s' "$j" | jq -r '"\(.id)\t\(.repository.id//"-")\t\(.queueStatus//"-")\t\(.path//"\\")\t\(.name//"-")"' 2>/dev/null || true
+}
+export -f _probe_def
+export TOKEN BASE API
+if [ "${#_ids[@]}" -gt 0 ]; then
+  printf '%s\n' "${_ids[@]}" | xargs -P 12 -I {} bash -c '_probe_def "$@"' _ {} > "$TMP/defs.tsv" 2>/dev/null || true
+else
+  : > "$TMP/defs.tsv"
+fi
+mapfile -t BOUND < <(awk -F'\t' -v r="$REPOID" '$2==r' "$TMP/defs.tsv")
+
+# ---- Step 3: discover classic releases that deploy this repo/app ------------
+RELS=()
+if [ "$DO_RELEASES" = 1 ]; then
+  echo "scanning classic release definitions..." >&2
+  bound_ids_json="$(printf '%s\n' "${BOUND[@]:-}" | awk -F'\t' 'NF{print $1}' | jq -R . | jq -s .)"
+  rels_json="$(adorest GET "${VSRM}/release/definitions?${API}&\$expand=artifacts" 2>/dev/null || true)"
+  if [ -n "$rels_json" ]; then
+    mapfile -t RELS < <(printf '%s' "$rels_json" | jq -r \
+      --arg repo "$REPO" --argjson bids "${bound_ids_json:-[]}" '
+      .value[]
+      | . as $rd | ($rd.artifacts // []) as $a
+      | select(
+          ($a | any((.definitionReference.definition.name // "") | ascii_downcase == ($repo|ascii_downcase)))
+          or ($a | any((.alias // "") | ascii_downcase | contains($repo|ascii_downcase)))
+          or ($a | any(.type=="Build" and ((((.definitionReference.definition.id // "")|tostring)) as $id | ($bids|index($id)) != null)))
+        )
+      | "\(.id)\t\(.path // "\\")\t\(.name)"')
+  fi
+fi
+
+# ---- Plan ------------------------------------------------------------------
+echo
+echo "==== ado-retire-repo PLAN ===="
+echo "org/project : ${ORG_NAME}/${PROJECT}"
+echo "repository  : ${REPO}  (id ${REPOID}; currently isDisabled=${REPO_DISABLED})"
+if [ "$DELETE" = 1 ]; then
+  echo "disposition : DELETE bound pipelines/releases (permanent)"
+else
+  echo "disposition : disable + move to ${GRAVEYARD}"
+fi
+[ "$APPLY" = 1 ] && echo "mode        : APPLY" || echo "mode        : dry-run (no changes)"
+echo
+echo "repo        -> DISABLE + hide (isDisabled=true)   [reversible; repo is never deleted]"
+if [ "${#BOUND[@]}" -gt 0 ]; then
+  echo "build pipelines bound to repo (${#BOUND[@]}):"
+  printf '%s\n' "${BOUND[@]}" | awk -F'\t' '{printf "  - [%s] %-9s %s   (in %s)\n",$1,$3,$5,$4}'
+else
+  echo "build pipelines bound to repo: none"
+fi
+if [ "$DO_RELEASES" = 1 ]; then
+  if [ "${#RELS[@]}" -gt 0 ]; then
+    echo "classic releases deploying this app (${#RELS[@]}):"
+    printf '%s\n' "${RELS[@]}" | awk -F'\t' '{printf "  - [%s] %s   (in %s)\n",$1,$3,$2}'
+  else
+    echo "classic releases deploying this app: none"
+  fi
+else
+  echo "classic releases: skipped (--no-releases)"
+fi
+echo "untouched   : variable groups (Library), service connections, environments"
+echo "=============================="
+echo
+
+if [ "$APPLY" != 1 ]; then
+  echo "(dry-run) nothing changed. Re-run with --apply to execute." >&2
+  exit 0
+fi
+
+# ---- Confirm ----------------------------------------------------------------
+if [ "$YES" != 1 ]; then
+  [ -t 0 ] || die "refusing to --apply without --yes in a non-interactive shell"
+  word="disable + archive"; [ "$DELETE" = 1 ] && word="DELETE"
+  read -r -p "Proceed to ${word} the above and disable repo '${REPO}'? [y/N] " ans
+  case "$ans" in y|Y|yes|YES) ;; *) die "aborted" ;; esac
+fi
+
+# ---- Execute ---------------------------------------------------------------
+# Keep the repo enabled while we touch its build defs (avoids TF401019), then
+# disable it last.
+if [ "${#BOUND[@]}" -gt 0 ] && [ "$REPO_DISABLED" = "true" ]; then
+  echo "repo is disabled; temporarily re-enabling to edit build definitions..." >&2
+  adorest PATCH "${BASE}/git/repositories/${REPOID}?${API}" '{"isDisabled": false}' >/dev/null
+fi
+
+if [ "$DELETE" != 1 ] && [ "${#BOUND[@]}" -gt 0 ]; then
+  adorest PUT "${BASE}/build/folders?path=$(enc "$GRAVEYARD")&${FOLDER_API}" \
+    "$(jq -nc --arg p "$GRAVEYARD" '{path:$p}')" >/dev/null 2>&1 || true
+fi
+
+declare -A OLDFOLDERS=()
+for line in "${BOUND[@]:-}"; do
+  [ -n "$line" ] || continue
+  id="$(printf '%s' "$line" | cut -f1)"
+  oldpath="$(printf '%s' "$line" | cut -f4)"
+  name="$(printf '%s' "$line" | cut -f5)"
+  if [ "$DELETE" = 1 ]; then
+    if adorest DELETE "${BASE}/build/definitions/${id}?${API}" >/dev/null; then
+      echo "deleted build [$id] $name"
+      [ -n "$oldpath" ] && [ "$oldpath" != "\\" ] && OLDFOLDERS["$oldpath"]=1
+    else
+      echo "WARN: delete build [$id] failed" >&2
+    fi
+  else
+    def="$(adorest GET "${BASE}/build/definitions/${id}?${API}")" || { echo "WARN: get build [$id] failed" >&2; continue; }
+    newdef="$(printf '%s' "$def" | jq --arg p "$GRAVEYARD" '.queueStatus="disabled" | .path=$p')"
+    if adorest PUT "${BASE}/build/definitions/${id}?${API}" "$newdef" >/dev/null; then
+      echo "disabled + moved build [$id] $name -> $GRAVEYARD"
+      [ -n "$oldpath" ] && [ "$oldpath" != "\\" ] && [ "$oldpath" != "$GRAVEYARD" ] && OLDFOLDERS["$oldpath"]=1
+    else
+      echo "WARN: update build [$id] failed" >&2
+    fi
+  fi
+done
+
+# best-effort: remove now-empty original build folders
+if [ "${#OLDFOLDERS[@]}" -gt 0 ]; then
+  for f in "${!OLDFOLDERS[@]}"; do
+    adorest DELETE "${BASE}/build/folders?path=$(enc "$f")&${FOLDER_API}" >/dev/null 2>&1 \
+      && echo "removed empty build folder $f" || true
+  done
+fi
+
+if [ "$DO_RELEASES" = 1 ] && [ "${#RELS[@]}" -gt 0 ]; then
+  for line in "${RELS[@]}"; do
+    [ -n "$line" ] || continue
+    id="$(printf '%s' "$line" | cut -f1)"
+    name="$(printf '%s' "$line" | cut -f3)"
+    if [ "$DELETE" = 1 ]; then
+      if adorest DELETE "${VSRM}/release/definitions/${id}?${API}" >/dev/null; then
+        echo "deleted release [$id] $name"
+      else
+        echo "WARN: delete release [$id] failed" >&2
+      fi
+    else
+      rel="$(adorest GET "${VSRM}/release/definitions/${id}?${API}")" || { echo "WARN: get release [$id] failed" >&2; continue; }
+      newrel="$(printf '%s' "$rel" | jq --arg p "$GRAVEYARD" '.triggers=[] | .path=$p')"
+      if adorest PUT "${VSRM}/release/definitions/${id}?${API}" "$newrel" >/dev/null; then
+        echo "disabled (triggers cleared) + moved release [$id] $name -> $GRAVEYARD"
+      else
+        echo "WARN: update release [$id] failed" >&2
+      fi
+    fi
+  done
+fi
+
+# ---- Step 8: disable + hide the repo (LAST) --------------------------------
+adorest PATCH "${BASE}/git/repositories/${REPOID}?${API}" '{"isDisabled": true}' >/dev/null \
+  || die "failed to disable repo $REPO"
+echo "disabled + hid repo $REPO"
+
+# ---- Verify ----------------------------------------------------------------
+echo
+echo "==== verify ===="
+adorest GET "${BASE}/git/repositories?includeHidden=true&${API}" \
+  | jq -r --arg n "$REPO" '.value[] | select(.name==$n) | "repo \(.name): isDisabled=\(.isDisabled)"'
+echo "done."
