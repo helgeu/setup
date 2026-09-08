@@ -3,3 +3,14 @@
 *.swp
 nix/.github/copilot-instructions.md
 .claude/
+
+# DORA metrics: real run config + generated artifacts (never commit real org/project data)
+nix/bin/dora.local.env
+dora-out/
+ado_prs.csv
+ado_bugs.csv
+ado_deployments.csv
+ado_deployments.csv.summary.json
+dora-summary.json
+dora-summary.md
+dora_trends.xlsx

@@ -9,10 +9,12 @@ assessment are fully reproducible from one command.
   * Deployment Frequency   <- pipeline deploy stages, via ado-deploy-metrics
   * Change Failure Rate     <- pipeline deploy stages, via ado-deploy-metrics
   * Mean Time to Restore    <- pipeline deploy stages, via ado-deploy-metrics
+  * Reliability             <- Bug work items, via ado-bugs-export
 
 It writes:
   * <output-dir>/ado_prs.csv           (raw PRs)
   * <output-dir>/ado_deployments.csv   (raw deployment stages)
+  * <output-dir>/ado_bugs.csv          (raw bugs, if reliability is enabled)
   * <output-dir>/dora-summary.json     (machine-readable)
   * <output-dir>/dora-summary.md       (human-readable, paste into the wiki)
 
@@ -23,6 +25,9 @@ Caveats (also written into the report):
     differently.
   * MTTR is restore-of-deployment (failed deploy -> next successful deploy of the
     same pipeline+env), not incident MTTR (ADO has no incident feed).
+  * Reliability is an ADO-Bug proxy (defect inflow + open backlog + bug recovery
+    time), scoped by --reliability-area-path. It is an operational-quality signal,
+    not an availability/SLO measurement. Enable it with --reliability-area-path.
 """
 
 from __future__ import annotations
@@ -90,6 +95,52 @@ def lead_time_from_prs(csv_path: str, target_branches: set[str]) -> dict[str, fl
     }
 
 
+def reliability_from_bugs(csv_path: str, since: str) -> dict[str, float | int | None]:
+    """Derive a Reliability signal from Bug work items.
+
+    Reliability is an operational-quality proxy (ADO has no SLO/availability feed):
+      * new-bug rate     - bugs created per week (defect inflow)
+      * open backlog     - bugs still open now (created, not yet resolved/closed)
+      * bug recovery     - median created->resolved hours (a labelled restore proxy)
+    """
+    created: list[dt.datetime] = []
+    recovery_hours: list[float] = []
+    open_now = 0
+    with open(csv_path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            created_at = parse_dt(row.get("created_at", ""))
+            if created_at is None:
+                continue
+            created.append(created_at)
+            resolved_at = parse_dt(row.get("resolved_at", ""))
+            if resolved_at and resolved_at >= created_at:
+                recovery_hours.append((resolved_at - created_at).total_seconds() / 3600.0)
+            else:
+                open_now += 1
+    if not created:
+        return {"bugs": 0}
+    since_dt = parse_dt(since)
+    now = dt.datetime.now(dt.timezone.utc)
+    anchor = since_dt if since_dt and since_dt.tzinfo else (since_dt.replace(tzinfo=dt.timezone.utc) if since_dt else min(created))
+    weeks_span = max(1.0, (now - anchor).days / 7.0)
+    result: dict[str, float | int | None] = {
+        "bugs": len(created),
+        "weeks_span": round(weeks_span, 1),
+        "new_bugs_per_week": round(len(created) / weeks_span, 2),
+        "open_backlog": open_now,
+        "resolved": len(recovery_hours),
+    }
+    if recovery_hours:
+        result["median_recovery_hours"] = round(statistics.median(recovery_hours), 1)
+        result["mean_recovery_hours"] = round(statistics.fmean(recovery_hours), 1)
+    return result
+
+
+def rate_reliability(new_bugs_per_week: float) -> str:
+    """Band the defect inflow. Lower is better; there is no official DORA band."""
+    return dora_bucket(new_bugs_per_week, [(1, "Low inflow"), (5, "Moderate inflow"), (float("inf"), "High inflow")])
+
+
 def dora_bucket(value: float, thresholds: list[tuple[float, str]], reverse: bool = False) -> str:
     """Map a metric to Elite/High/Medium/Low using ordered thresholds."""
     for limit, label in thresholds:
@@ -122,7 +173,7 @@ def rate_mttr(hours: float | None) -> str:
     return dora_bucket(hours, [(1, "Elite (<1h)"), (24, "High (<1d)"), (24 * 7, "Medium (<1w)"), (float("inf"), "Low")])
 
 
-def write_markdown(path: str, org: str, project: str, since: str, lead: dict, deploy: dict, prod_env: str) -> None:
+def write_markdown(path: str, org: str, project: str, since: str, lead: dict, deploy: dict, reliability: dict, prod_env: str, reliability_area: str | None) -> None:
     envs = deploy.get("environments", {})
     prod = envs.get(prod_env, {})
     lines: list[str] = []
@@ -144,6 +195,11 @@ def write_markdown(path: str, org: str, project: str, since: str, lead: dict, de
         lines.append(f"| Mean Time to Restore | {prod.get('mttr_hours')} h | {rate_mttr(prod.get('mttr_hours'))} |")
     else:
         lines.append(f"| Deployment Frequency / CFR / MTTR | no '{prod_env}' deployments detected | n/a |")
+    if reliability.get("bugs"):
+        npw = reliability.get("new_bugs_per_week", 0)
+        lines.append(f"| Reliability (ADO-bug proxy) | {npw} new bugs/week | {rate_reliability(npw)} |")
+    elif reliability_area is not None:
+        lines.append("| Reliability (ADO-bug proxy) | no bugs in window | n/a |")
     lines.append("")
     lines.append("## Per-environment deployments")
     lines.append("")
@@ -163,18 +219,34 @@ def write_markdown(path: str, org: str, project: str, since: str, lead: dict, de
     else:
         lines.append("- No merged PRs in the window.")
     lines.append("")
+    lines.append("## Reliability (ADO-bug proxy)")
+    lines.append("")
+    if reliability.get("bugs"):
+        area = reliability_area or "(all areas)"
+        lines.append(f"- Scope: bugs under `{area}`")
+        lines.append(f"- Bugs in window: {reliability['bugs']} (~{reliability.get('weeks_span', '?')} weeks)")
+        lines.append(f"- Defect inflow: {reliability.get('new_bugs_per_week', 0)} new bugs/week ({rate_reliability(reliability.get('new_bugs_per_week', 0))})")
+        lines.append(f"- Open backlog (still unresolved): {reliability.get('open_backlog', 0)}")
+        if "median_recovery_hours" in reliability:
+            lines.append(f"- Bug recovery time (created->resolved): {reliability['median_recovery_hours']} h median | {reliability['mean_recovery_hours']} h mean ({reliability['resolved']} resolved)")
+    elif reliability_area is not None:
+        lines.append("- No bugs found in the window for the given area path.")
+    else:
+        lines.append("- Not enabled. Pass --reliability-area-path to populate this metric.")
+    lines.append("")
     lines.append("## Caveats")
     lines.append("")
     lines.append("- Lead time is PR created->merged, a proxy for full commit->prod lead time.")
     lines.append("- Deployment/CFR/MTTR depend on the deploy-stage name heuristic (see ado-deploy-metrics --include/--exclude/--env patterns).")
     lines.append("- MTTR is restore-of-deployment, not incident MTTR (no incident feed in ADO).")
+    lines.append("- Reliability is an ADO-Bug operational-quality proxy (defect inflow / open backlog / bug recovery), not an availability/SLO measurement.")
     lines.append("- 'Validate deploy to <env>' gate stages are excluded; they are approvals, not deployments.")
     with open(path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Produce the four DORA metrics for an ADO project.")
+    parser = argparse.ArgumentParser(description="Produce the DORA metrics for an ADO project (four core + optional Reliability).")
     parser.add_argument("--organization", required=True, help="Azure DevOps organization name")
     parser.add_argument("--project", required=True, help="Azure DevOps project name")
     parser.add_argument("--since", default=default_since(), help=f"Start date YYYY-MM-DD. Default: {default_since()}.")
@@ -184,6 +256,8 @@ def main() -> int:
     parser.add_argument("--pat", help="Azure DevOps PAT (else falls back to az login, like the sibling scripts).")
     parser.add_argument("--deploy-include-pattern", help="Override deploy-stage include regex passed to ado-deploy-metrics.")
     parser.add_argument("--deploy-exclude-pattern", help="Override deploy-stage exclude regex passed to ado-deploy-metrics.")
+    parser.add_argument("--reliability-area-path", help="Area path to scope the Reliability (ADO-bug) metric. Omit to skip reliability.")
+    parser.add_argument("--reliability-severity", help="Optional severity filter for the Reliability bug query.")
     parser.add_argument("--skip-prs", action="store_true", help="Skip the PR export / lead-time step.")
     parser.add_argument("--skip-deploys", action="store_true", help="Skip the deployment-metrics step.")
     args = parser.parse_args()
@@ -191,11 +265,13 @@ def main() -> int:
     os.makedirs(args.output_dir, exist_ok=True)
     prs_csv = os.path.join(args.output_dir, "ado_prs.csv")
     deploys_csv = os.path.join(args.output_dir, "ado_deployments.csv")
+    bugs_csv = os.path.join(args.output_dir, "ado_bugs.csv")
     summary_json = os.path.join(args.output_dir, "dora-summary.json")
     summary_md = os.path.join(args.output_dir, "dora-summary.md")
 
     lead: dict = {}
     deploy: dict = {"environments": {}}
+    reliability: dict = {}
 
     if not args.skip_prs:
         export = resolve_sibling("ado-prs-export")
@@ -222,6 +298,18 @@ def main() -> int:
         with open(f"{deploys_csv}.summary.json", encoding="utf-8") as handle:
             deploy = json.load(handle)
 
+    if args.reliability_area_path:
+        bugs = resolve_sibling("ado-bugs-export")
+        cmd = [bugs, "--organization", args.organization, "--project", args.project,
+               "--since", args.since, "--output", bugs_csv, "--verbose",
+               "--area-path", args.reliability_area_path]
+        if args.reliability_severity:
+            cmd += ["--severity", args.reliability_severity]
+        if args.pat:
+            cmd += ["--pat", args.pat]
+        run(cmd)
+        reliability = reliability_from_bugs(bugs_csv, args.since)
+
     combined = {
         "organization": args.organization,
         "project": args.project,
@@ -229,10 +317,11 @@ def main() -> int:
         "generated": dt.date.today().isoformat(),
         "lead_time": lead,
         "deployments": deploy,
+        "reliability": reliability,
     }
     with open(summary_json, "w", encoding="utf-8") as handle:
         json.dump(combined, handle, indent=2)
-    write_markdown(summary_md, args.organization, args.project, args.since, lead, deploy, args.prod_env)
+    write_markdown(summary_md, args.organization, args.project, args.since, lead, deploy, reliability, args.prod_env, args.reliability_area_path)
 
     print(f"\nWrote {summary_json}\nWrote {summary_md}")
     return 0

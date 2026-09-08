@@ -8,6 +8,7 @@ Excel charts so the development over time is visible at a glance:
   * Deploys per week   - successful deployments per ISO week, one line per env
   * Prod & CFR weekly  - prod deploy successes/failures + change-failure-rate line
   * Lead time weekly   - median PR created->merged hours per ISO week (if --prs)
+  * Reliability weekly - new bugs + open backlog per ISO week (if --bugs)
   * Data sheets        - the weekly matrices behind each chart
 
 Weeks are bucketed by ISO week off the event timestamps.
@@ -68,6 +69,42 @@ def read_deploys(path: str):
     return sorted(weeks, key=week_sort_key), ordered_envs, success, fail
 
 
+def read_bugs(path: str):
+    """Return (weeks_sorted, new_by_week, open_backlog_by_week).
+
+    new_by_week   - bugs created in that ISO week (defect inflow).
+    open_by_week  - bugs created on/before that week end and not yet resolved by then.
+    """
+    created: list[dt.datetime] = []
+    resolved: list[dt.datetime | None] = []
+    with open(path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            c = parse_dt(row.get("created_at", ""))
+            if c is None:
+                continue
+            created.append(c if c.tzinfo else c.replace(tzinfo=dt.timezone.utc))
+            r = parse_dt(row.get("resolved_at", ""))
+            resolved.append((r if (r is None or r.tzinfo) else r.replace(tzinfo=dt.timezone.utc)))
+
+    if not created:
+        return [], {}, {}
+
+    weeks = sorted({iso_week(c) for c in created}, key=week_sort_key)
+    new_by_week: dict[str, int] = {w: 0 for w in weeks}
+    for c in created:
+        new_by_week[iso_week(c)] += 1
+
+    open_by_week: dict[str, int] = {}
+    for w in weeks:
+        wy, wk = week_sort_key(w)
+        week_end = dt.datetime.fromisocalendar(wy, wk, 7).replace(tzinfo=dt.timezone.utc)
+        open_by_week[w] = sum(
+            1 for c, r in zip(created, resolved)
+            if c <= week_end and (r is None or r > week_end)
+        )
+    return weeks, new_by_week, open_by_week
+
+
 def read_lead_time(path: str, target_branches: set[str]):
     """Return (weeks_sorted, median_hours_by_week)."""
     hours_by_week: dict[str, list[float]] = defaultdict(list)
@@ -94,6 +131,9 @@ def build_workbook(
     fail,
     lead_weeks: list[str],
     lead_medians: dict[str, float],
+    bug_weeks: list[str],
+    bug_new: dict[str, int],
+    bug_open: dict[str, int],
 ) -> None:
     book = xlsxwriter.Workbook(output)
     bold = book.add_format({"bold": True})
@@ -181,6 +221,36 @@ def build_workbook(
         lt_chart.set_size({"width": 1100, "height": 460})
         lead.insert_chart(1, 3, lt_chart)
 
+    # --- Reliability weekly (ADO-bug proxy) ---
+    if bug_weeks:
+        rel = book.add_worksheet("Reliability weekly")
+        rel.write_row(0, 0, ["week", "new bugs", "open backlog"], bold)
+        for r, week in enumerate(bug_weeks, start=1):
+            rel.write(r, 0, week)
+            rel.write_number(r, 1, bug_new.get(week, 0))
+            rel.write_number(r, 2, bug_open.get(week, 0))
+        b = len(bug_weeks)
+        col_chart = book.add_chart({"type": "column"})
+        col_chart.add_series({
+            "name": ["Reliability weekly", 0, 1],
+            "categories": ["Reliability weekly", 1, 0, b, 0],
+            "values": ["Reliability weekly", 1, 1, b, 1],
+        })
+        open_line = book.add_chart({"type": "line"})
+        open_line.add_series({
+            "name": ["Reliability weekly", 0, 2],
+            "categories": ["Reliability weekly", 1, 0, b, 0],
+            "values": ["Reliability weekly", 1, 2, b, 2],
+            "y2_axis": True,
+        })
+        col_chart.combine(open_line)
+        col_chart.set_title({"name": "Reliability (ADO-bug proxy): new bugs & open backlog per week"})
+        col_chart.set_x_axis({"name": "ISO week"})
+        col_chart.set_y_axis({"name": "New bugs"})
+        open_line.set_y2_axis({"name": "Open backlog"})
+        col_chart.set_size({"width": 1100, "height": 460})
+        rel.insert_chart(1, 4, col_chart)
+
     book.close()
 
 
@@ -188,6 +258,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build an Excel workbook of weekly DORA trends.")
     parser.add_argument("--deployments", default="ado_deployments.csv", help="CSV from ado-deploy-metrics.")
     parser.add_argument("--prs", help="Optional CSV from ado-prs-export (adds lead-time chart).")
+    parser.add_argument("--bugs", help="Optional CSV from ado-bugs-export (adds reliability chart).")
     parser.add_argument("--target-branch", default="main", help="Trunk branch for lead time. Default: main.")
     parser.add_argument("--output", default="dora_trends.xlsx", help="Workbook path. Default: dora_trends.xlsx")
     args = parser.parse_args()
@@ -199,8 +270,15 @@ def main() -> int:
         branches = {args.target_branch} if args.target_branch else set()
         lead_weeks, lead_medians = read_lead_time(args.prs, branches)
 
-    build_workbook(args.output, weeks, envs, success, fail, lead_weeks, lead_medians)
-    print(f"Wrote {args.output} ({len(weeks)} weeks, envs: {', '.join(envs)})")
+    bug_weeks: list[str] = []
+    bug_new: dict[str, int] = {}
+    bug_open: dict[str, int] = {}
+    if args.bugs:
+        bug_weeks, bug_new, bug_open = read_bugs(args.bugs)
+
+    build_workbook(args.output, weeks, envs, success, fail, lead_weeks, lead_medians, bug_weeks, bug_new, bug_open)
+    extra = f", bugs: {len(bug_weeks)} wk" if bug_weeks else ""
+    print(f"Wrote {args.output} ({len(weeks)} weeks, envs: {', '.join(envs)}{extra})")
     return 0
 
 
