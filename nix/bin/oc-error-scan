@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+#
+# oc-error-scan - Scan local opencode sessions for error/frustration signals.
+#
+# The deterministic "sensor" pass of the closed loop: read the opencode session
+# DB and quantify WHERE things went wrong, so the signals can be handed to an AI
+# pass that proposes CLAUDE.md / skill / doc updates. No AI here - pure SQL +
+# regex, so it is fast, cheap and reproducible.
+#
+# Reports:
+#   - tool errors grouped by tool
+#   - top normalized error strings
+#   - frustration/profanity in YOUR messages (HARD / FRUST / WEAK tiers)
+#   - known recurring patterns (path guessing, URL 404, jq parse, ADO auth,
+#     grep --include, user aborts)
+#   - example quotes + session ids per class
+#
+# Usage:
+#   oc-error-scan                     # all-time summary
+#   oc-error-scan --since 2026-04-20  # only parts created on/after a date
+#   oc-error-scan -n 3                # 3 example quotes per class
+#   oc-error-scan --json              # machine-readable
+#
+# Options:
+#   --since YYYY-MM-DD  only include parts created on/after this date
+#   -n, --examples N    example quotes per class            [default: 2]
+#   --db PATH           override DB path (default: $OPENCODE_DB or the stable db)
+#   --json              emit JSON instead of a table
+#   -h, --help          show this help
+#
+# Auth: none. Reads a local SQLite file, read-only.
+#
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import sqlite3
+import sys
+
+DB = os.environ.get("OPENCODE_DB", os.path.expanduser(
+    "~/.local/share/opencode/opencode-stable.db"))
+
+# --- frustration / correction word lists (norsk + engelsk), three tiers -------
+# HARD: profanity/insults = strong, honest error markers.
+# FRUST: explicit correction/annoyance phrases.
+# WEAK: bare correction tokens (higher recall, more noise).
+HARD = r"""faen|for\s?faen|fy\s?faen|fanden|jævla|jævlig|jævel|helvete|
+for\s?helvete|dritt|driten|drittsekk|pokker|søren|satan|herregud|
+fuck|fucking|fuckin|motherfuck|wtf|stfu|fml|ffs|shit|bullshit|crap|crappy|
+damn|dammit|goddamn|goddammit|arse|asshole|\bass\b|bloody|bugger|piss|pissed|
+screw\s?this|screwed|sucks|sucked|trash|stupid|idiot|idiotic|dumb|useless|
+hopeless|pathetic|terrible|awful|horrible|nonsense|\bbs\b"""
+
+FRUST = r"""stop\s?guessing|quit\s?guessing|don.?t\s?guess|slutt\s?å?\s?gjette|
+gjett\s?ikke|ikke\s?gjett|why\s?did\s?you|why\s?are\s?you|why\s?would\s?you|
+hvorfor\s?gjorde\s?du|hvorfor\s?gjør\s?du|i\s?told\s?you|jeg\s?sa\s?jo|
+jeg\s?sa\s|i\s?said|that.?s\s?wrong|that.?s\s?not|det\s?er\s?feil|helt\s?feil|
+feil\s?igjen|still\s?wrong|still\s?broken|read\s?the|les\s?filen|
+les\s?konteksten|actually\s?no|revert|undo|come\s?on|seriously|seriøst|argh+|
+ugh|sigh|tull|tullete|elendig|dårlig|ubrukelig|håpløst|no\s?no\s?no|nope|
+det\s?funker\s?ikke|virker\s?ikke|not\s?what\s?i|ikke\s?det\s?jeg"""
+
+WEAK = r"""^\s*no[,.! ]|^\s*nei[,.! ]|\bwrong\b|\bfeil\b|\bstop\b|\bstopp\b|
+\bslutt\b|\bagain\b|\bigjen\b"""
+
+
+def die(msg, code=1):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def show_help():
+    with open(__file__) as fh:
+        for line in fh.readlines()[2:]:
+            if line.startswith("import "):
+                break
+            if line.startswith("#"):
+                print(line.rstrip("\n").lstrip("#").lstrip())
+
+
+def compile_list(raw):
+    parts = [p.strip() for p in raw.replace("\n", "").split("|") if p.strip()]
+    return re.compile("|".join(parts))
+
+
+def since_ms(since):
+    if not since:
+        return None
+    try:
+        d = dt.datetime.strptime(since, "%Y-%m-%d")
+    except ValueError:
+        die("--since must be YYYY-MM-DD")
+    return int(d.timestamp() * 1000)
+
+
+def normalize_error(text):
+    """Collapse variable bits (paths, numbers, urls) so the same class groups."""
+    if not text:
+        return "(empty)"
+    t = text.strip().split("\n", 1)[0]
+    t = re.sub(r"/[^\s'\"]+", "<path>", t)
+    t = re.sub(r"https?://\S+", "<url>", t)
+    t = re.sub(r"\b\d+\b", "N", t)
+    return t[:80]
+
+
+def scan(con, since, n_examples):
+    tmin = since_ms(since)
+    time_clause = f" AND p.time_created >= {tmin}" if tmin else ""
+
+    # --- tool errors ---------------------------------------------------------
+    rows = con.execute(f"""
+        SELECT json_extract(p.data,'$.tool')        AS tool,
+               json_extract(p.data,'$.state.error') AS err,
+               json_extract(p.data,'$.state.input') AS inp,
+               p.session_id                         AS sid
+        FROM part p
+        WHERE json_extract(p.data,'$.type')='tool'
+          AND json_extract(p.data,'$.state.status')='error'{time_clause}
+    """).fetchall()
+
+    by_tool = {}
+    by_error = {}
+    patterns = {
+        "path_guessing": {"count": 0, "examples": []},
+        "url_404": {"count": 0, "examples": []},
+        "jq_parse": {"count": 0, "examples": []},
+        "ado_auth": {"count": 0, "examples": []},
+        "grep_include": {"count": 0, "examples": []},
+        "user_abort": {"count": 0, "examples": []},
+    }
+
+    def add_ex(key, text, sid):
+        b = patterns[key]
+        if len(b["examples"]) < n_examples and text:
+            b["examples"].append({"text": text.strip()[:120], "session": sid})
+
+    for tool, err, inp, sid in rows:
+        by_tool[tool] = by_tool.get(tool, 0) + 1
+        norm = normalize_error(err)
+        by_error[norm] = by_error.get(norm, 0) + 1
+        e = (err or "").lower()
+        # These live in state.error (hard tool failures).
+        if "not found" in e or "no such file" in e:
+            patterns["path_guessing"]["count"] += 1
+            add_ex("path_guessing", err, sid)
+        if "404" in e:
+            patterns["url_404"]["count"] += 1
+            add_ex("url_404", err, sid)
+        if "abort" in e:
+            patterns["user_abort"]["count"] += 1
+            add_ex("user_abort", err, sid)
+
+    # jq / ADO-auth / grep-include failures surface in the bash *output*, not in
+    # state.error. Restrict to the bash tool: otherwise a `read` of a doc that
+    # *documents* these error strings (e.g. ado-cli-reference.md) is miscounted
+    # as a real failure. Classify grep-include on the command input, not output.
+    out_rows = con.execute(f"""
+        SELECT p.session_id                              AS sid,
+               json_extract(p.data,'$.state.output')     AS out,
+               json_extract(p.data,'$.state.error')      AS err,
+               json_extract(p.data,'$.state.input')      AS inp
+        FROM part p
+        WHERE json_extract(p.data,'$.type')='tool'
+          AND json_extract(p.data,'$.tool')='bash'
+          AND ( p.data LIKE '%Invalid numeric literal%'
+             OR p.data LIKE '%jq: parse error%'
+             OR p.data LIKE '%run the login command%'
+             OR p.data LIKE '%TF400813%'
+             OR p.data LIKE '%unrecognized flag --include%'
+             OR p.data LIKE '%--include=%' ){time_clause}
+    """).fetchall()
+
+    for sid, out, err, inp in out_rows:
+        outerr = " ".join(x for x in (out, err) if x).lower()
+        cmd = (inp or "").lower()
+        if "invalid numeric literal" in outerr or "jq: parse error" in outerr:
+            patterns["jq_parse"]["count"] += 1
+            add_ex("jq_parse", out or err, sid)
+        if "run the login command" in outerr or "tf400813" in outerr:
+            patterns["ado_auth"]["count"] += 1
+            add_ex("ado_auth", out or err, sid)
+        if "--include=" in cmd or "unrecognized flag --include" in outerr:
+            patterns["grep_include"]["count"] += 1
+            add_ex("grep_include", inp or out or err, sid)
+
+    # --- frustration in user messages ---------------------------------------
+    hard, frust, weak = compile_list(HARD), compile_list(FRUST), compile_list(WEAK)
+    urows = con.execute(f"""
+        SELECT lower(json_extract(p.data,'$.text')) AS t, p.session_id AS sid
+        FROM part p JOIN message m ON p.message_id = m.id
+        WHERE json_extract(p.data,'$.type')='text'
+          AND json_extract(m.data,'$.role')='user'{time_clause}
+    """).fetchall()
+
+    total_user = 0
+    tiers = {"hard": 0, "frust": 0, "weak": 0, "any": 0}
+    frust_examples = []
+    for t, sid in urows:
+        if not t:
+            continue
+        total_user += 1
+        mh, mf, mw = bool(hard.search(t)), bool(frust.search(t)), bool(weak.search(t))
+        tiers["hard"] += mh
+        tiers["frust"] += mf
+        tiers["weak"] += mw
+        if mh or mf or mw:
+            tiers["any"] += 1
+            if mh and len(frust_examples) < n_examples:
+                frust_examples.append({"text": t[:120], "session": sid})
+
+    return {
+        "since": since or "all-time",
+        "tool_errors": {
+            "total": sum(by_tool.values()),
+            "by_tool": dict(sorted(by_tool.items(), key=lambda x: -x[1])),
+        },
+        "top_error_strings": dict(
+            sorted(by_error.items(), key=lambda x: -x[1])[:15]),
+        "frustration": {
+            "user_messages": total_user,
+            "hard": tiers["hard"],
+            "frust": tiers["frust"],
+            "weak": tiers["weak"],
+            "any": tiers["any"],
+            "any_pct": round(100 * tiers["any"] / max(total_user, 1)),
+            "examples": frust_examples,
+        },
+        "known_patterns": patterns,
+    }
+
+
+def render(r):
+    print(f"opencode error scan — window: {r['since']}\n")
+
+    te = r["tool_errors"]
+    print(f"TOOL ERRORS: {te['total']}")
+    for tool, c in te["by_tool"].items():
+        print(f"  {tool:<12} {c:>5}")
+    print()
+
+    print("TOP ERROR STRINGS")
+    for e, c in r["top_error_strings"].items():
+        print(f"  {c:>5}  {e}")
+    print()
+
+    f = r["frustration"]
+    print(f"FRUSTRATION (of {f['user_messages']} user messages)")
+    print(f"  HARD profanity     {f['hard']:>5}")
+    print(f"  FRUST phrases      {f['frust']:>5}")
+    print(f"  WEAK corrections   {f['weak']:>5}")
+    print(f"  ANY signal         {f['any']:>5}  ({f['any_pct']}%)")
+    for ex in f["examples"]:
+        print(f"    e.g. [{ex['session']}] {ex['text']}")
+    print()
+
+    print("KNOWN PATTERNS")
+    for name, b in r["known_patterns"].items():
+        print(f"  {name:<14} {b['count']:>5}")
+        for ex in b["examples"]:
+            print(f"    e.g. [{ex['session']}] {ex['text']}")
+    print()
+    print("Deterministic sensor only. Feed --json to an AI pass to cluster,")
+    print("root-cause, and propose CLAUDE.md / skill / doc updates.")
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("--since", default=None)
+    p.add_argument("-n", "--examples", type=int, default=2)
+    p.add_argument("--db", default=None)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-h", "--help", action="store_true")
+    args = p.parse_args()
+
+    if args.help:
+        show_help()
+        return
+
+    db = args.db or DB
+    if not os.path.exists(db):
+        die(f"opencode DB not found at {db}")
+
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        result = scan(con, args.since, args.examples)
+    finally:
+        con.close()
+
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        render(result)
+
+
+if __name__ == "__main__":
+    main()
