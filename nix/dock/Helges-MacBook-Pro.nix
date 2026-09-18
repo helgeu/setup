@@ -9,7 +9,7 @@ in {
       # Browsers (Brave via Homebrew for iCloud Passwords compatibility)
       "/System/Cryptexes/App/System/Applications/Safari.app"
       "/Applications/Brave Browser.app"
-      "${hmApps}/Firefox.app"
+      "/Applications/Firefox.app"
       "/Applications/Tor Browser.app"
 
       # Communication
