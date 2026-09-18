@@ -44,7 +44,7 @@ in {
     # Dev tools
     (python3.withPackages (ps: [ ps.xlsxwriter ]))  # ado-prs-export/chart
     pandoc
-    texliveBasic  # Needed for pandoc PDF output
+    texliveSmall  # Needed for pandoc PDF output (xcolor + recommended LaTeX pkgs)
     powershell
     nixfmt
     gitleaks
