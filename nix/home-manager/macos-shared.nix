@@ -61,9 +61,16 @@ in {
   '';
 
   # Inject Brave Shields custom filters (browser-wide) declaratively.
-  # Brave stores these in Local State -> brave.ad_block.custom_filters (plain JSON,
-  # not MAC-protected) and rewrites the file at runtime, so we only apply the change
-  # when Brave is NOT running — otherwise Brave overwrites it on its next flush/exit.
+  # Brave stores these in Local State -> brave.ad_block.custom_filters and rewrites
+  # the file at runtime, so we only apply the change when Brave is NOT running —
+  # otherwise Brave overwrites it on its next flush/exit.
+  #
+  # This is best-effort: macOS now gates the whole BraveSoftware app-data folder
+  # behind TCC, so reads/writes fail with EPERM ("Operation not permitted") unless
+  # the process running the switch has Full Disk Access. A denial must SKIP with a
+  # warning, never abort the switch (activation runs under `set -e`). To actually
+  # apply filters, grant Full Disk Access to the terminal running switch and quit
+  # Brave first.
   home.activation.braveCustomFilters = lib.hm.dag.entryAfter ["writeBoundary"] ''
     braveLocalState="$HOME/Library/Application Support/BraveSoftware/Brave-Browser/Local State"
     if [ ! -f "$braveLocalState" ]; then
@@ -71,18 +78,21 @@ in {
     elif /usr/bin/pgrep -f "Brave Browser.app" > /dev/null 2>&1; then
       echo "WARNING: brave is RUNNING — custom filters were NOT applied." >&2
       echo "         Quit Brave completely, then re-run switch to apply them." >&2
+    elif ! current="$(${pkgs.jq}/bin/jq -r '.brave.ad_block.custom_filters // ""' "$braveLocalState" 2>/dev/null)"; then
+      echo "brave: cannot read Local State (macOS Full Disk Access / TCC); skipping custom filters" >&2
     else
       desired="$(${pkgs.jq}/bin/jq -rn --rawfile cf ${braveCustomFilters} '$cf')"
-      current="$(${pkgs.jq}/bin/jq -r '.brave.ad_block.custom_filters // ""' "$braveLocalState")"
       if [ "$desired" = "$current" ]; then
         echo "brave: custom filters already up to date"
-      else
-        tmp="$(mktemp "$(dirname "$braveLocalState")/.LocalState.XXXXXX")"
-        ${pkgs.jq}/bin/jq --rawfile cf ${braveCustomFilters} \
-          '.brave.ad_block.custom_filters = $cf' "$braveLocalState" > "$tmp"
-        chmod 600 "$tmp"
-        mv "$tmp" "$braveLocalState"
+      elif tmp="$(mktemp "$(dirname "$braveLocalState")/.LocalState.XXXXXX" 2>/dev/null)" \
+        && ${pkgs.jq}/bin/jq --rawfile cf ${braveCustomFilters} \
+             '.brave.ad_block.custom_filters = $cf' "$braveLocalState" > "$tmp" \
+        && chmod 600 "$tmp" \
+        && mv "$tmp" "$braveLocalState"; then
         echo "brave: applied custom filters"
+      else
+        [ -n "''${tmp:-}" ] && rm -f "$tmp" 2>/dev/null || true
+        echo "brave: cannot write Local State (macOS Full Disk Access / TCC); skipping custom filters" >&2
       fi
     fi
   '';
