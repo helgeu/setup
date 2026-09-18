@@ -16,6 +16,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,12 +28,23 @@ ADO_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"
 
 
 class AdoRequestError(RuntimeError):
-    def __init__(self, status_code: int, reason: str, url: str, body: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        reason: str,
+        url: str,
+        body: str,
+        non_json: bool = False,
+    ) -> None:
         super().__init__(f"ADO request failed: {status_code} {reason}\n{url}\n{body}")
         self.status_code = status_code
         self.reason = reason
         self.url = url
         self.body = body
+        # True when the transport succeeded (2xx) but the body was not JSON.
+        # ADO occasionally returns an empty/HTML body for an individual repo;
+        # callers treat this like an inaccessible repo and skip it.
+        self.non_json = non_json
 
 
 def default_since() -> str:
@@ -84,14 +96,35 @@ class AzureDevOpsClient:
         encoded_project = urllib.parse.quote(project, safe="") if project else ""
         project_segment = f"/{encoded_project}" if encoded_project else ""
         url = f"{self.base_url}{project_segment}/_apis/{path}?{query}"
-        request = urllib.request.Request(url, headers=self.headers)
 
-        try:
-            with urllib.request.urlopen(request) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+        last_body = ""
+        last_status = 0
+        for attempt in range(3):
+            request = urllib.request.Request(url, headers=self.headers)
+            try:
+                with urllib.request.urlopen(request) as response:
+                    last_status = getattr(response, "status", 200) or 200
+                    last_body = response.read().decode("utf-8", errors="replace")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+
+            try:
+                return json.loads(last_body)
+            except json.JSONDecodeError:
+                # A 2xx with a non-JSON/empty body is usually a transient ADO
+                # hiccup for one repo. Retry a couple of times before giving up.
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+
+        raise AdoRequestError(
+            last_status or 200,
+            "non-JSON response body",
+            url,
+            last_body,
+            non_json=True,
+        )
 
     def list_projects(self) -> list[dict[str, Any]]:
         projects: list[dict[str, Any]] = []
@@ -186,9 +219,10 @@ def build_rows(
             try:
                 pull_requests = client.list_pull_requests(project, repo_id)
             except AdoRequestError as exc:
-                if exc.status_code in {403, 404}:
+                if exc.status_code in {403, 404} or exc.non_json:
+                    reason = "non-JSON response" if exc.non_json else f"{exc.status_code} {exc.reason}"
                     print(
-                        f"Skipping inaccessible repo {project}/{repo_name}: {exc.status_code} {exc.reason}",
+                        f"Skipping repo {project}/{repo_name}: {reason}",
                         file=sys.stderr,
                     )
                     continue

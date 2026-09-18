@@ -35,6 +35,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -53,12 +54,23 @@ DEFAULT_ENV_PATTERN = r"(?i)\b(dev|test|qa|prod|production|staging)\b"
 
 
 class AdoRequestError(RuntimeError):
-    def __init__(self, status_code: int, reason: str, url: str, body: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        reason: str,
+        url: str,
+        body: str,
+        non_json: bool = False,
+    ) -> None:
         super().__init__(f"ADO request failed: {status_code} {reason}\n{url}\n{body}")
         self.status_code = status_code
         self.reason = reason
         self.url = url
         self.body = body
+        # True when the transport succeeded (2xx) but the body was not JSON.
+        # ADO occasionally returns an empty/HTML body for one request; callers
+        # treat this like an inaccessible pipeline and skip it.
+        self.non_json = non_json
 
 
 def default_since() -> str:
@@ -111,14 +123,43 @@ class AzureDevOpsClient:
         self.headers = {"Accept": "application/json", "Authorization": auth_value}
         self.project_url = f"https://dev.azure.com/{organization}/{urllib.parse.quote(project, safe='')}"
 
+    def _fetch(self, url: str, *, allow_empty: bool = False) -> tuple[Any, str]:
+        """GET url and return (parsed_json_or_None, continuation_token).
+
+        A 2xx with a non-JSON/empty body is usually a transient ADO hiccup, so
+        retry a couple of times. If allow_empty is set, an empty body is a valid
+        None result (e.g. a build with no timeline). Otherwise a persistently
+        unparseable body raises AdoRequestError(non_json=True) for the caller to
+        skip, matching the 403/404 handling.
+        """
+        last_body = ""
+        for attempt in range(3):
+            request = urllib.request.Request(url, headers=self.headers)
+            try:
+                with urllib.request.urlopen(request) as response:
+                    last_body = response.read().decode("utf-8", errors="replace").strip()
+                    token = response.headers.get("x-ms-continuationtoken", "")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+
+            if not last_body:
+                if allow_empty:
+                    return None, ""
+            else:
+                try:
+                    return json.loads(last_body), token
+                except json.JSONDecodeError:
+                    pass
+
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+
+        raise AdoRequestError(200, "non-JSON response body", url, last_body, non_json=True)
+
     def _get(self, url: str) -> dict[str, Any]:
-        request = urllib.request.Request(url, headers=self.headers)
-        try:
-            with urllib.request.urlopen(request) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+        payload, _ = self._fetch(url)
+        return payload
 
     def list_definitions(self) -> list[dict[str, Any]]:
         definitions: list[dict[str, Any]] = []
@@ -128,15 +169,8 @@ class AzureDevOpsClient:
             if continuation_token:
                 params["continuationToken"] = continuation_token
             url = f"{self.project_url}/_apis/build/definitions?{urllib.parse.urlencode(params)}"
-            request = urllib.request.Request(url, headers=self.headers)
-            try:
-                with urllib.request.urlopen(request) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                    definitions.extend(payload.get("value", []))
-                    continuation_token = response.headers.get("x-ms-continuationtoken", "")
-            except urllib.error.HTTPError as exc:
-                body = exc.read().decode("utf-8", errors="replace")
-                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+            payload, continuation_token = self._fetch(url)
+            definitions.extend(payload.get("value", []))
             if not continuation_token:
                 return definitions
 
@@ -155,33 +189,22 @@ class AzureDevOpsClient:
             if continuation_token:
                 params["continuationToken"] = continuation_token
             url = f"{self.project_url}/_apis/build/builds?{urllib.parse.urlencode(params)}"
-            request = urllib.request.Request(url, headers=self.headers)
-            try:
-                with urllib.request.urlopen(request) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                    builds.extend(payload.get("value", []))
-                    continuation_token = response.headers.get("x-ms-continuationtoken", "")
-            except urllib.error.HTTPError as exc:
-                body = exc.read().decode("utf-8", errors="replace")
-                raise AdoRequestError(exc.code, exc.reason, url, body) from exc
+            payload, continuation_token = self._fetch(url)
+            builds.extend(payload.get("value", []))
             if not continuation_token:
                 return builds
 
     def get_timeline(self, build_id: int) -> dict[str, Any] | None:
         url = f"{self.project_url}/_apis/build/builds/{build_id}/Timeline?api-version={API_VERSION}"
-        request = urllib.request.Request(url, headers=self.headers)
         try:
-            with urllib.request.urlopen(request) as response:
-                body = response.read().decode("utf-8").strip()
-                # Builds without a timeline (e.g. canceled early) return 204/empty body.
-                return json.loads(body) if body else None
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
+            payload, _ = self._fetch(url, allow_empty=True)
+            return payload
+        except AdoRequestError as exc:
+            # _fetch turns every HTTPError into AdoRequestError. A missing
+            # timeline (404) or an unparseable body means "no timeline".
+            if exc.status_code == 404 or exc.non_json:
                 return None
-            body = exc.read().decode("utf-8", errors="replace")
-            raise AdoRequestError(exc.code, exc.reason, url, body) from exc
-        except json.JSONDecodeError:
-            return None
+            raise
 
 
 def detect_env(name: str, env_re: re.Pattern[str]) -> str:
@@ -209,8 +232,9 @@ def build_rows(
         try:
             builds = client.list_builds(def_id, since)
         except AdoRequestError as exc:
-            if exc.status_code in {403, 404}:
-                print(f"Skipping inaccessible pipeline {def_name} ({def_id}): {exc.status_code}", file=sys.stderr)
+            if exc.status_code in {403, 404} or exc.non_json:
+                reason = "non-JSON response" if exc.non_json else str(exc.status_code)
+                print(f"Skipping inaccessible pipeline {def_name} ({def_id}): {reason}", file=sys.stderr)
                 continue
             raise
         if verbose:
