@@ -1,6 +1,10 @@
 .DS_Store
 
 *.swp
+
+# Python bytecode (py_compile writes this next to the scripts in nix/bin)
+__pycache__/
+*.py[cod]
 nix/.github/copilot-instructions.md
 .claude/
 
