@@ -16,6 +16,13 @@ in {
       # mutableExtensionsDir=true is required because VS Code (and built-in
       # Copilot Chat) writes temp/session files to the extensions dir at runtime.
       mutableExtensionsDir = true;
+      # Keep settings.json writable by VS Code at runtime. Without this,
+      # home-manager symlinks it read-only into the Nix store, so anything
+      # VS Code tries to persist (Copilot sign-in state, theme, UI toggles)
+      # fails with EACCES. Home-manager instead merges the declared settings
+      # below into the real writable file during activation (declared values
+      # win). Requires VS Code to be closed during `switch`.
+      profiles.default.mutableUserSettings = true;
       profiles.default.userSettings = {
         "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
         "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
