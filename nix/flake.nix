@@ -63,7 +63,6 @@
     overlays = [
       inputs.nix-vscode-extensions.overlays.default
       (import ./overlays/bicep-protoc.nix)
-      (import ./overlays/opencode-bun-splitting.nix)
     ];
 
     # Shared home-manager config for all platforms
