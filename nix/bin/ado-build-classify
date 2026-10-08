@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+#
+# ado-build-classify - Classify ONE Azure DevOps build by failure kind.
+#
+# The atom of the pipeline-failure toolkit. Given a single build id it walks the
+# build timeline, finds the failing task(s), downloads the TAIL of each failing
+# task's log, and rule-classifies the failure into one category. A succeeded
+# build is reported as category "ok"; a cancelled build as "cancelled".
+#
+# Emits a single JSON object on stdout (pipe to jq). This is the one place the
+# classification rules live; ado-builds-by-pipeline and ado-builds-scan reuse it.
+#
+# Usage:
+#   ado-build-classify -o imdidev -p Bosettingsprosjekt 123456
+#   ado-build-classify -o imdidev -p Bosettingsprosjekt 123456 | jq .category
+#   ado-build-classify -o imdidev -p Bosettingsprosjekt 123456 --tail 200
+#
+# Options:
+#   -o, --org       org name (imdidev) or full URL   (required, no default)
+#   -p, --project   project name                      (required, no default)
+#       --tail N    log tail lines to scan per task   [default: 120]
+#   -h, --help      show this help
+#   <buildId>       numeric build id                  (required, positional)
+#
+# Categories (first matching rule wins):
+#   ok               build succeeded
+#   cancelled        build/task canceled
+#   infra/agent      agent lost, pool, connection reset, 5xx
+#   timeout          step timed out / exceeded max time
+#   security-gate    Trivy / CVE / vulnerability gate
+#   dependency       NuGet/npm restore, feed resolve, unreachable host
+#   compile/build    CS/TS/MSB compile errors, Build FAILED, tsc
+#   test-failure     unit/integration/e2e test failures
+#   analyzer/lint    Sonar, Roslynator, ESLint, StyleCop
+#   auth/secret      401/403, service connection, token, AADSTS
+#   unknown          failed but no rule matched (snippet kept for triage)
+#
+# Auth: reuses $ADO_TOKEN if set (so callers mint once), else mints via az.
+#       Honours the ambient az session / AZURE_CONFIG_DIR.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+API="7.1"
+
+ORG=""
+PROJECT=""
+BUILD_ID=""
+TAIL=120
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)     ORG="${2:-}"; shift 2 ;;
+    -p|--project) PROJECT="${2:-}"; shift 2 ;;
+    --tail)       TAIL="${2:-}"; shift 2 ;;
+    -h|--help)    usage 0 ;;
+    -*)           die "unknown argument: $1 (try --help)" ;;
+    *)            [ -z "$BUILD_ID" ] || die "unexpected extra argument: $1"; BUILD_ID="$1"; shift ;;
+  esac
+done
+
+[ -n "$ORG" ]      || die "missing org: pass -o <org> (e.g. -o imdidev); no default"
+[ -n "$PROJECT" ]  || die "missing project: pass -p <project>; no default"
+[ -n "$BUILD_ID" ] || die "missing build id (positional); no default"
+case "$BUILD_ID" in *[!0-9]*) die "build id must be numeric: $BUILD_ID";; esac
+
+command -v az >/dev/null || die "az CLI not found"
+command -v jq >/dev/null || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+# URL-encode the project (handles spaces like "Regelforvaltning og Smarts").
+PROJ_ENC=$(jq -rn --arg p "$PROJECT" '$p|@uri')
+BASE="${ORG_URL}/${PROJ_ENC}/_apis/build"
+
+# --- auth: reuse a caller-provided token, else self-heal via ado-login --------
+if [ -z "${ADO_TOKEN:-}" ]; then
+  _preflight() {
+    local t; t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+    [ -n "$t" ] || return 1
+    curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+      | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+  }
+  if ! _preflight; then
+    # Stale/expired cache: let ado-login do the clear+login dance (it knows the
+    # "az keeps minting rejected tokens until the cache is cleared" gotcha).
+    login_bin="$(command -v ado-login || true)"
+    [ -n "$login_bin" ] || login_bin="$(cd "$(dirname "$0")" && pwd)/ado-login"
+    [ -x "$login_bin" ] || die "not authenticated against ${ORG_URL} and ado-login not found"
+    bash "$login_bin" -o "$ORG_URL" >/dev/null || die "ado-login failed for ${ORG_URL}"
+  fi
+  ADO_TOKEN=$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null) \
+    || die "could not mint ADO token after login"
+  [ -n "$ADO_TOKEN" ] || die "empty ADO token after login"
+fi
+export ADO_TOKEN
+
+api_get() { curl -s -u ":$ADO_TOKEN" "$1"; }
+
+# --- classify: stdin text -> one category token ------------------------------
+# Order matters: first matching rule wins (specific -> generic). Rules match on
+# the failing task NAME plus its log snippet / timeline issue message.
+classify() {
+  local text; text="$(cat)"
+  _m() { printf '%s' "$text" | grep -qiE "$1"; }
+  if   _m '##\[error\](the operation was )?cancel|was canceled by|build was canceled|manually (canceled|cancelled)|approval.*(reject|abandon)|await approval|approve deploy|approve .* to (test|qa|prod)|manual ?validation|wait for manual'; then echo cancelled
+  elif _m 'we stopped hearing from agent|agent (lost|went offline|did not (connect|run|respond))|no .* agent .* (found|available)|lost communication|connection reset|getaddrinfo|socket hang up|50[234] (bad gateway|service unavailable|gateway time)|tf400898|the http request timed out'; then echo infra/agent
+  elif _m 'timed out|timeout|exceeded the maximum|did not finish within|ran longer than|cancel(l)?ed because it ran longer'; then echo timeout
+  elif _m 'trivy|cve-[0-9]|vulnerabilit|\b(high|critical):?\s*[1-9]|security scan .*fail|snyk|dependency-check'; then echo security-gate
+  elif _m 'entered failure state|activationfailed|crash-loop|container (restarted|failed to start|crashed)|wait for new revision|revision .*(fail|unhealthy|not running)|revisionalreadyin|readiness probe|liveness probe|kubernetes error|deployment .*(failed|rollout)|rollout (failed|timed)|helm |restore traffic|shift traffic|deactivate .*revision|traffic to (new|stable)|blue/green|import image'; then echo deploy/runtime
+  elif _m 'one or more test failures|test failures detected|publish test (results|report)|path does not exist.*reports|tests? run:.*fail|test run failed|[0-9]+ (test|spec)s? (failed|failing)|assert(ion)?|vitest|playwright|cypress|\.(test|spec)\.(ts|tsx|js|cs)|xunit|nunit|✕|expect\(.*received|failed! +- +failed:'; then echo test-failure
+  elif _m 'err_pnpm|pnpm|npm err|npm error|yarn |npm ci|install dependencies|setup pnpm|restore failed|unable to load the service index|could not resolve|unable to resolve|package .* not found|nu[0-9]{3,4}:|enotfound|etarget|node_modules|unable to resolve dependenc'; then echo dependency
+  elif _m 'must specify a tag|cannot publish|npm publish|publish .*(feed|release|stable)|version already exists|409 .*(conflict|already exists)'; then echo publish/release
+  elif _m 'error cs[0-9]|error ts[0-9]|error msb[0-9]|build failed|the build failed|\btsc\b|syntaxerror|cannot find module|compilation (error|failed)|dotnet build'; then echo compile/build
+  elif _m 'sonar|roslynator|\bs[0-9]{3,4}:|eslint|stylecop|analyzer .*(error|fail)|quality gate (failed|status)'; then echo analyzer/lint
+  elif _m '\b401\b|\b403\b|unauthorized|forbidden|service connection|access token|aadsts[0-9]|authentication failed|login failed|permission denied'; then echo auth/secret
+  elif _m 'cmd\.exe exited with code|bash exited with code|powershell exited with code|process completed with exit code|exited with code .?[1-9]|##\[error\]process'; then echo script/exit
+  else echo unknown
+  fi
+}
+
+# --- fetch build + timeline --------------------------------------------------
+build_json="$(api_get "${BASE}/builds/${BUILD_ID}?api-version=${API}")"
+echo "$build_json" | jq -e '.id' >/dev/null 2>&1 \
+  || die "build ${BUILD_ID} not found in ${ORG}/${PROJECT} (or not authorized)"
+
+result="$(echo "$build_json" | jq -r '.result // "unknown"')"
+status="$(echo "$build_json" | jq -r '.status // "unknown"')"
+
+# Succeeded or still running: no failure to classify.
+overall=""
+case "$result" in
+  succeeded) overall="ok" ;;
+  canceled)  overall="cancelled" ;;
+esac
+
+failures_json='[]'
+if [ "$result" != "succeeded" ] && [ "$status" = "completed" ]; then
+  timeline="$(api_get "${BASE}/builds/${BUILD_ID}/Timeline?api-version=${API}" || true)"
+  if echo "$timeline" | jq -e '.records' >/dev/null 2>&1; then
+    # Failing leaf records, with their enclosing stage name resolved via parentId.
+    # Prefer Tasks (they carry logs); fall back to Job/Phase/Stage if none.
+    # Capture any timeline issue messages too - the fallback snippet when a
+    # failing record has no downloadable log (e.g. a failed Job/Stage).
+    pick() {
+      echo "$timeline" | jq -c --arg t "$1" '
+        (reduce .records[] as $r ({}; .[$r.id] = $r)) as $byid
+        | def stage($rec):
+            if $rec == null then ""
+            elif ($rec.type // "") == "Stage" then ($rec.name // "")
+            else stage($byid[$rec.parentId]) end;
+        [ .records[]
+          | select((.type == $t) and ((.result // "") as $r
+              | ($r=="failed" or $r=="succeededWithIssues" or $r=="canceled")))
+          | {task: (.name // ""), stage: stage(.), result: (.result // ""),
+             logUrl: (.log.url // ""),
+             issues: ([(.issues // [])[] | select(.type=="error") | .message] | join(" | "))} ]
+        | sort_by(if .result=="failed" then 0 elif .result=="succeededWithIssues" then 1 else 2 end)'
+    }
+    recs="$(pick Task)"
+    [ "$(echo "$recs" | jq 'length')" != "0" ] || recs="$(pick Job)"
+    [ "$(echo "$recs" | jq 'length')" != "0" ] || recs="$(pick Phase)"
+    [ "$(echo "$recs" | jq 'length')" != "0" ] || recs="$(pick Stage)"
+
+    n="$(echo "$recs" | jq 'length')"
+    out='[]'
+    i=0
+    while [ "$i" -lt "$n" ]; do
+      task="$(echo "$recs" | jq -r ".[$i].task")"
+      stage="$(echo "$recs" | jq -r ".[$i].stage")"
+      logUrl="$(echo "$recs" | jq -r ".[$i].logUrl")"
+      issues="$(echo "$recs" | jq -r ".[$i].issues")"
+      snippet=""
+      if [ -n "$logUrl" ] && [ "$logUrl" != "null" ]; then
+        # Tail the log, then keep the error-ish lines for a compact snippet.
+        raw="$(api_get "$logUrl" | tail -n "$TAIL" || true)"
+        snippet="$(printf '%s' "$raw" \
+          | grep -iE '##\[error\]|error|fail|exception|cve-|vulnerab|timed out|cancel|unauthorized|forbidden' \
+          | tail -n 8 || true)"
+        [ -n "$snippet" ] || snippet="$(printf '%s' "$raw" | tail -n 5)"
+      fi
+      # Fall back to the timeline issue message when there is no log text.
+      if [ -z "$snippet" ] && [ -n "$issues" ] && [ "$issues" != "null" ]; then
+        snippet="$issues"
+      fi
+      cat_text="$task
+$snippet"
+      category="$(printf '%s' "$cat_text" | classify)"
+      out="$(echo "$out" | jq --arg s "$stage" --arg t "$task" --arg c "$category" \
+        --arg u "$logUrl" --arg n "$snippet" \
+        '. + [{stage:$s, task:$t, category:$c, logUrl:$u, snippet:$n}]')"
+      i=$((i + 1))
+    done
+    failures_json="$out"
+  fi
+  # Overall category = first failure's category, else fall back.
+  if [ -z "$overall" ]; then
+    overall="$(echo "$failures_json" | jq -r 'if length>0 then .[0].category else "unknown" end')"
+  fi
+fi
+[ -n "$overall" ] || overall="$result"
+
+jq -cn \
+  --arg org "$ORG" --arg project "$PROJECT" \
+  --argjson build "$build_json" \
+  --arg category "$overall" \
+  --argjson failures "$failures_json" '
+  {
+    org: $org,
+    project: $project,
+    buildId: $build.id,
+    pipelineId: ($build.definition.id // null),
+    pipeline: ($build.definition.name // ""),
+    buildNumber: ($build.buildNumber // ""),
+    status: ($build.status // ""),
+    result: ($build.result // ""),
+    reason: ($build.reason // ""),
+    finishedAt: ($build.finishTime // ""),
+    sourceBranch: (($build.sourceBranch // "") | sub("^refs/heads/"; "")),
+    category: $category,
+    failures: $failures,
+    url: (($build._links.web.href) // "")
+  }'

@@ -18,6 +18,17 @@ let
       workItemTypes = [ "Epic" "Feature" "User Story" "Task" "Bug" ];
       notes = "Agility event platform; backend/frontend consolidating to a monorepo.";
     }
+    {
+      org = "imdidev";
+      organizationUrl = "https://dev.azure.com/imdidev";
+      project = "Bosettingsprosjekt";
+      process = "Bosettingsprosjekt Agile";
+      processBase = "Agile";
+      azureConfigDir = "${home}/git/imdidev/.az";
+      repositories = [ "bosetting-backend" ];
+      workItemTypes = [ "Epic" "Feature" "User Story" "Task" "Bug" ];
+      notes = "IMDi Bosetting (Saksbehandling). Pipeline 517 = Saksbehandling Backend Build&Release.";
+    }
     # Add more orgs/projects here.
   ];
 

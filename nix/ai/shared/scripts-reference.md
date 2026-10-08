@@ -19,6 +19,7 @@ source and rebuild.
 
 | I want to… | Use | Notes |
 | --- | --- | --- |
+| Get a **working** ADO session for an org (fixes the 401/stale-token mess) | `ado-login -o <org>` | Clears the stale token cache and logs in with the **ADO resource scope** (a plain `az login` yields a token the org rejects). Idempotent: does nothing if already valid. `--check` to test only. The toolkit scripts call this automatically on auth failure. |
 | List **all** active PRs for the repo I'm standing in (any author) | `find-prs` | Derives org/project/repo from the current git `origin`. Must be run inside a clone. |
 | Fan out an AI review across every active PR in the current repo | `find-prs --review` | One `pr-review` per PR, each in its own tmux window. |
 | List **my** open PRs across **all** projects in an org | `azprs <org>` | e.g. `azprs urholm`. Not repo-bound; spans the whole org. |
@@ -31,6 +32,9 @@ source and rebuild.
 | List open work items assigned to me (or someone) | `ado-my-items -o <org> -p <project>` | `-o`/`-p` **required** (no default); assignee defaults `@me`. `-a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
 | Approve a pipeline ManualValidation gate (promote dev→test/qa/prod) | `ado-approve-deploy -o <org> -p <project> --build <id> --stage test` | Resumes a paused `ManualValidation@0` stage. `-o -p --build` all **required** (no defaults; never picks a run for you). `--list`, `--reject`, `--dry-run`. Deploy approvals are deliberate — ask if the build/stage isn't explicit. |
+| Classify **one** build's failure kind (timeline + failing-task log) | `ado-build-classify -o <org> -p <project> <buildId>` | The atom of the failure toolkit. Emits one JSON record `{category, failures[], url, …}`. Category = `ok`/`cancelled`/`infra/agent`/`timeout`/`security-gate`/`dependency`/`compile/build`/`test-failure`/`analyzer/lint`/`auth/secret`/`unknown`. Reuses `$ADO_TOKEN` if set. Use this instead of hand-rolling build/timeline/log `az` calls. |
+| List (and optionally classify) builds of **one** pipeline in a window | `ado-builds-by-pipeline -o <org> -p <project> --pipeline-id <id> [--days 14\|--weeks N\|--since YYYY-MM-DD]` | Lists completed runs for one definition. `--classify` runs the atom per run → JSON array (mints one token for all). `--failed-only`, `-f table\|json`. |
+| Scan **all** pipelines + classify failures + write a report | `ado-builds-scan -o <org> -p <project> [--days 14\|--weeks N\|--since YYYY-MM-DD]` | Enumerates every build pipeline, classifies every run, writes `pipeline-failures.{md,csv,json}` to `--output-dir` (pass rate, per-category, per-pipeline, top failing tasks). `--name-filter`, `--pipeline-ids`. This is the "which builds are failing and why" one-shot. |
 | Retire (disable+hide) a repo and archive the pipelines it orphans | `ado-retire-repo -o <org> -p <project> -r <repo> [--apply] [--delete]` | Dry-run plan by default. Disables the repo (reversible; **never deleted**) and disables+moves its bound build pipelines & releases into `\Retired\<repo>`. `-o -p -r` required; `--apply` to execute, `--delete` to remove instead of archive. |
 | Draft (or send) a formatted HTML email in Outlook | `outlook-draft -s <subj> -t <to> [-c <cc>] --html <file>` | macOS only. Recipients comma/semicolon-sep, bare or `Name <addr>`. Body from `--html <file>` or `--stdin`. Opens a draft by default; `--send` to send. `--dry-run` to preview. |
 | Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` (plain text, HTML-escaped, newlines → `<br>`), `--html <file>` (raw HTML), or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
@@ -158,6 +162,63 @@ Keep targeting out of committed code (public repo). Use the placeholder template
 fill in real org/project/area-path there, `source` it, and pass the vars to
 `ado-dora`. Not in prod yet? Point `--prod-env` at the most prod-like env (e.g.
 `qa`).
+
+### ADO authentication
+
+- **`ado-login -o <org>` (bash)** — the single source of truth for getting a
+  *working* Azure DevOps session, encapsulating two hard-won gotchas so no other
+  script (or you) needs to know them:
+  1. **Stale token cache.** `az` happily keeps minting tokens from a stale cache
+     that the org then rejects with `401` / an HTML sign-in page. A plain
+     `az login` does **not** fix it — you must `az account clear` + `az logout`
+     **first**. `ado-login` does this automatically.
+  2. **Wrong token scope.** A default `az login` yields a token **without** the
+     conditional-access/MFA claims the org demands, so ADO 401s it. `ado-login`
+     logs in with `--scope <ADO-resource>/.default`, which triggers the right CA
+     policy and produces a token the org accepts.
+  It preflights by minting a token and hitting `connectionData` **over curl**
+  (not `az rest`, which returns the sign-in page even when curl works — a false
+  negative). Idempotent: a no-op if the session is already valid. `--check` tests
+  only; `<org>-<project>` config name resolves org + `azureConfigDir`;
+  `--config-dir` isolates identities. The pipeline toolkit calls it on auth
+  failure, so `ado-builds-scan` "just works" even from a cold/revoked session.
+
+### Pipeline failure analysis
+
+Composable toolkit — reach for these instead of regenerating build/timeline/log
+`az` calls every time you need to know why a pipeline is red. Three layers; the
+atom owns the classification rules, the others reuse it. All take `-o`/`-p`
+**required, no default**. Each mints one ADO token (with the `connectionData`
+preflight) and exports `$ADO_TOKEN`, so a parent passes its token down to every
+child — one auth for a whole scan. On auth failure they self-heal via `ado-login`.
+
+- **`ado-build-classify -o <org> -p <project> <buildId>` (bash)** — the atom.
+  Fetches the build, walks its timeline, finds the failing task(s), downloads the
+  **tail** of each failing task's log (`--tail N`, default 120), and rule-classifies
+  into one `category`. Succeeded → `ok`; cancelled → `cancelled`. Emits one JSON
+  object: `{buildId, pipeline, pipelineId, result, category, failures:[{stage,
+  task, category, logUrl, snippet}], url, …}`. It inspects `failed`,
+  `succeededWithIssues` and `canceled` timeline records (so `partiallySucceeded`
+  runs classify too), with the task log tail or the timeline `issues[]` message as
+  the snippet. Categories (first rule wins): `cancelled` (incl. approval gates),
+  `infra/agent`, `timeout`, `security-gate` (Trivy/CVE/npm-audit), `deploy/runtime`
+  (container crash-loop / revision / traffic-shift), `test-failure`, `dependency`
+  (pnpm/npm/NuGet restore+feed), `publish/release`, `compile/build` (CS/TS/MSB),
+  `analyzer/lint` (Sonar/Roslynator/ESLint), `auth/secret` (401/403/AADSTS),
+  `script/exit` (generic non-zero step), `unknown` (snippet kept for triage).
+- **`ado-builds-by-pipeline -o <org> -p <project> --pipeline-id <id> [date-pred]` (bash)**
+  — lists completed runs of one definition in a window. Date predicate (pick one,
+  default `--days 14`): `--days N` / `--weeks N` / `--since YYYY-MM-DD`.
+  `--failed-only` drops successes. `--classify` runs the atom per run and emits a
+  JSON array (reusing one token). Plain mode: `-f table|json`.
+- **`ado-builds-scan -o <org> -p <project> [date-pred]` (bash)** — the "get all".
+  Enumerates every build pipeline (`--name-filter REGEX` / `--pipeline-ids CSV`
+  to scope), calls `ado-builds-by-pipeline --classify` per pipeline, and writes to
+  `--output-dir` (default cwd): `pipeline-failures.json` (every run, classified),
+  `pipeline-failures.csv` (one row per run), and `pipeline-failures.md` (pass
+  rate, failures by category, by pipeline, top failing tasks, failed-run table
+  with links). This is the one-shot "which builds are failing and what's the
+  common theme" report.
 
 ### ADO work items
 

@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+#
+# ado-builds-scan - Scan ALL build pipelines in an Azure DevOps project over a
+#                   time window, classify every failing run, and write a report.
+#
+# The top layer of the pipeline-failure toolkit. It enumerates every build
+# pipeline (definition) in the project, calls ado-builds-by-pipeline --classify
+# for each (which calls the ado-build-classify atom per run), aggregates the
+# classified records, and writes three artifacts:
+#
+#   <output-dir>/pipeline-failures.json  - every run (ok + failed), classified
+#   <output-dir>/pipeline-failures.csv   - one row per run, for drill-down
+#   <output-dir>/pipeline-failures.md    - human summary: pass rate, per-pipeline
+#                                          and per-category breakdown, top tasks
+#
+# Usage:
+#   ado-builds-scan -o imdidev -p Bosettingsprosjekt --days 14
+#   ado-builds-scan -o imdidev -p Bosettingsprosjekt --weeks 2 --output-dir ./report
+#   ado-builds-scan -o imdidev -p Bosettingsprosjekt --since 2026-09-24 --name-filter backend
+#
+# Options:
+#   -o, --org          org name (imdidev) or full URL     (required, no default)
+#   -p, --project      project name                        (required, no default)
+#   Date predicate (pick one; default --days 14):
+#       --days N  | --weeks N | --since YYYY-MM-DD
+#       --pipeline-ids CSV   limit to these definition ids
+#       --name-filter REGEX  only pipelines whose name matches (case-insensitive)
+#       --tail N             log tail lines per task          [default: 120]
+#       --output-dir DIR     where to write artifacts         [default: .]
+#   -h, --help         show this help
+#
+# Auth: mints one ADO token (preflighted), exports $ADO_TOKEN so every child
+#       reuses it. Honours ambient AZURE_CONFIG_DIR.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+API="7.1"
+
+ORG=""
+PROJECT=""
+DAYS=""
+WEEKS=""
+SINCE=""
+PIPELINE_IDS=""
+NAME_FILTER=""
+TAIL=120
+JOBS=6
+OUTPUT_DIR="."
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)         ORG="${2:-}"; shift 2 ;;
+    -p|--project)     PROJECT="${2:-}"; shift 2 ;;
+    --days)           DAYS="${2:-}"; shift 2 ;;
+    --weeks)          WEEKS="${2:-}"; shift 2 ;;
+    --since)          SINCE="${2:-}"; shift 2 ;;
+    --pipeline-ids)   PIPELINE_IDS="${2:-}"; shift 2 ;;
+    --name-filter)    NAME_FILTER="${2:-}"; shift 2 ;;
+    --tail)           TAIL="${2:-}"; shift 2 ;;
+    --jobs)           JOBS="${2:-}"; shift 2 ;;
+    --output-dir)     OUTPUT_DIR="${2:-}"; shift 2 ;;
+    -h|--help)        usage 0 ;;
+    *)                die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]     || die "missing org: pass -o <org> (e.g. -o imdidev); no default"
+[ -n "$PROJECT" ] || die "missing project: pass -p <project>; no default"
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+# Build the date-predicate args to forward verbatim to ado-builds-by-pipeline.
+set_count=0
+[ -n "$DAYS" ]  && set_count=$((set_count+1))
+[ -n "$WEEKS" ] && set_count=$((set_count+1))
+[ -n "$SINCE" ] && set_count=$((set_count+1))
+[ "$set_count" -le 1 ] || die "pick only one of --days / --weeks / --since"
+if   [ -n "$SINCE" ]; then PRED=(--since "$SINCE"); WINDOW="since ${SINCE}"
+elif [ -n "$WEEKS" ]; then PRED=(--weeks "$WEEKS"); WINDOW="last ${WEEKS} week(s)"
+else PRED=(--days "${DAYS:-14}"); WINDOW="last ${DAYS:-14} day(s)"
+fi
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+PROJ_ENC=$(jq -rn --arg p "$PROJECT" '$p|@uri')
+BASE="${ORG_URL}/${PROJ_ENC}/_apis/build"
+
+# --- auth: mint once, export for all children; self-heal via ado-login --------
+if [ -z "${ADO_TOKEN:-}" ]; then
+  _preflight() {
+    local t; t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+    [ -n "$t" ] || return 1
+    curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+      | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+  }
+  if ! _preflight; then
+    login_bin="$(command -v ado-login || true)"
+    [ -n "$login_bin" ] || login_bin="$(cd "$(dirname "$0")" && pwd)/ado-login"
+    [ -x "$login_bin" ] || die "not authenticated against ${ORG_URL} and ado-login not found"
+    bash "$login_bin" -o "$ORG_URL" >/dev/null || die "ado-login failed for ${ORG_URL}"
+  fi
+  ADO_TOKEN=$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null) \
+    || die "could not mint ADO token after login"
+  [ -n "$ADO_TOKEN" ] || die "empty ADO token after login"
+fi
+export ADO_TOKEN
+
+api_get() { curl -s -u ":$ADO_TOKEN" "$1"; }
+
+# --- enumerate build definitions ---------------------------------------------
+defs_json="$(api_get "${BASE}/definitions?\$top=1000&api-version=${API}")"
+echo "$defs_json" | jq -e '.value' >/dev/null 2>&1 \
+  || die "could not list build definitions in ${ORG}/${PROJECT}"
+
+defs="$(echo "$defs_json" | jq -c '[.value[] | {id, name}]')"
+if [ -n "$PIPELINE_IDS" ]; then
+  defs="$(echo "$defs" | jq -c --arg ids "$PIPELINE_IDS" \
+    '($ids|split(",")|map(gsub("^\\s+|\\s+$";"")|select(length>0)|tonumber)) as $w | [.[] | select(.id as $i | $w|index($i))]')"
+fi
+if [ -n "$NAME_FILTER" ]; then
+  defs="$(echo "$defs" | jq -c --arg re "$NAME_FILTER" '[.[] | select(.name|test($re;"i"))]')"
+fi
+
+ndefs="$(echo "$defs" | jq 'length')"
+[ "$ndefs" != "0" ] || die "no build pipelines matched in ${ORG}/${PROJECT}"
+echo "Scanning ${ndefs} pipeline(s) in ${PROJECT} (${WINDOW})..." >&2
+
+self_dir="$(cd "$(dirname "$0")" && pwd)"
+bypipe_bin="${self_dir}/ado-builds-by-pipeline"
+[ -x "$bypipe_bin" ] || bypipe_bin="$(command -v ado-builds-by-pipeline || true)"
+[ -n "$bypipe_bin" ] || die "ado-builds-by-pipeline not found (needed to scan)"
+
+# --- collect classified records for every pipeline ---------------------------
+all='[]'
+pids="$(echo "$defs" | jq -r '.[].id')"
+for pid in $pids; do
+  [ -n "$pid" ] || continue
+  pname="$(echo "$defs" | jq -r --argjson i "$pid" '.[] | select(.id==$i) | .name')"
+  arr="$(bash "$bypipe_bin" -o "$ORG" -p "$PROJECT" --pipeline-id "$pid" "${PRED[@]}" --classify --tail "$TAIL" --jobs "$JOBS" 2>/dev/null || echo '[]')"
+  cnt="$(echo "$arr" | jq 'length' 2>/dev/null || echo 0)"
+  echo "  • ${pname} (${pid}): ${cnt} run(s)" >&2
+  all="$(echo "$all" | jq --argjson a "$arr" '. + $a')"
+done
+
+mkdir -p "$OUTPUT_DIR"
+json_path="${OUTPUT_DIR%/}/pipeline-failures.json"
+csv_path="${OUTPUT_DIR%/}/pipeline-failures.csv"
+md_path="${OUTPUT_DIR%/}/pipeline-failures.md"
+
+echo "$all" | jq 'sort_by(.finishedAt) | reverse' > "$json_path"
+
+# --- CSV (one row per run) ---------------------------------------------------
+{
+  echo "finishedAt,pipeline,pipelineId,buildId,buildNumber,result,category,sourceBranch,failingStage,failingTask,url"
+  echo "$all" | jq -r '
+    sort_by(.finishedAt) | reverse | .[] |
+    [ .finishedAt, .pipeline, (.pipelineId|tostring), (.buildId|tostring), .buildNumber,
+      .result, .category, .sourceBranch,
+      ((.failures[0].stage) // ""), ((.failures[0].task) // ""), .url ] | @csv'
+} > "$csv_path"
+
+# --- Markdown summary --------------------------------------------------------
+total="$(echo "$all" | jq 'length')"
+failed="$(echo "$all" | jq '[.[] | select(.result!="succeeded")] | length')"
+succeeded="$(echo "$all" | jq '[.[] | select(.result=="succeeded")] | length')"
+passrate="$(echo "$all" | jq -r 'if length>0 then ((([.[]|select(.result=="succeeded")]|length) / length)*100 | .*10|round|./10) else 0 end')"
+now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+{
+  echo "# Build pipeline failures - ${PROJECT}"
+  echo
+  echo "- Org/project: \`${ORG}\` / \`${PROJECT}\`"
+  echo "- Window: ${WINDOW} (generated ${now})"
+  echo "- Runs: **${total}** total, **${succeeded}** succeeded, **${failed}** not-succeeded (pass rate **${passrate}%**)"
+  echo "- Pipelines scanned: ${ndefs}"
+  echo
+  echo "## Failures by category"
+  echo
+  echo "| Category | Count |"
+  echo "|---|---|"
+  echo "$all" | jq -r '
+    [.[] | select(.result!="succeeded") | .category]
+    | group_by(.) | map({c: .[0], n: length}) | sort_by(-.n) | .[]
+    | "| \(.c) | \(.n) |"'
+  echo
+  echo "## Failures by pipeline"
+  echo
+  echo "| Pipeline | Runs | Failed | Top category |"
+  echo "|---|---|---|---|"
+  echo "$all" | jq -r '
+    group_by(.pipeline) | map({
+      pipeline: .[0].pipeline,
+      runs: length,
+      failed: ([.[]|select(.result!="succeeded")]|length),
+      top: ( [.[]|select(.result!="succeeded")|.category]
+             | group_by(.) | map({c:.[0], n:length}) | sort_by(-.n) | (.[0].c // "-") )
+    }) | sort_by(-.failed) | .[]
+    | "| \(.pipeline) | \(.runs) | \(.failed) | \(.top) |"'
+  echo
+  echo "## Top failing tasks"
+  echo
+  echo "| Pipeline | Stage | Task | Category | Count |"
+  echo "|---|---|---|---|---|"
+  echo "$all" | jq -r '
+    [.[] | select(.result!="succeeded") | .pipeline as $p | .failures[]
+      | {p:$p, stage:.stage, task:.task, c:.category}]
+    | group_by([.p,.stage,.task,.c]) | map({p:.[0].p, stage:.[0].stage, task:.[0].task, c:.[0].c, n:length})
+    | sort_by(-.n) | .[0:15] | .[]
+    | "| \(.p) | \(.stage) | \(.task) | \(.c) | \(.n) |"'
+  echo
+  echo "## Failed runs (newest first)"
+  echo
+  echo "| Finished | Pipeline | Build | Category | Stage/Task | Link |"
+  echo "|---|---|---|---|---|---|"
+  echo "$all" | jq -r '
+    sort_by(.finishedAt) | reverse | .[] | select(.result!="succeeded")
+    | "| \(.finishedAt) | \(.pipeline) | #\(.buildId) \(.buildNumber) | \(.category) | \((.failures[0].stage) // "-") / \((.failures[0].task) // "-") | [run](\(.url)) |"'
+} > "$md_path"
+
+echo >&2
+echo "Wrote:" >&2
+echo "  $json_path" >&2
+echo "  $csv_path" >&2
+echo "  $md_path" >&2
+echo >&2
+echo "Summary: ${total} runs, ${failed} not-succeeded, pass rate ${passrate}%." >&2

@@ -42,12 +42,20 @@ export AZURE_CONFIG_DIR=$(jq -r .azureConfigDir "$CFG")
 
 ## Authentication
 
+> **Easiest path: `ado-login -o <org>`.** It encapsulates the whole mess below
+> (clear stale cache → log in with the ADO scope → curl-preflight) and is a no-op
+> when already valid. Prefer it over hand-running `az login`. The pipeline toolkit
+> calls it automatically on auth failure.
+
 Authenticate per machine with `az login` (interactive browser). **Device-code login (`--use-device-code`) does not work in this environment — don't use it; use the browser flow.** Then set defaults:
 ```bash
 az devops configure --defaults organization="$ORG" project="$PROJ"
 ```
 
 **Gotchas (hard-won):**
+- **Stale token cache → 401 / sign-in HTML (the big one):** `az account get-access-token` keeps minting tokens from a **stale cache** that the org rejects (`401`, or an HTML `_signin` page). A plain `az login` does **not** clear it. The fix is to `az account clear && az logout` **before** logging in. `ado-login` does this.
+- **Wrong token scope → rejected token:** a default `az login` yields a token **without** the conditional-access/MFA claims the org demands, so ADO 401s it (the token even looks shorter). Log in requesting the ADO resource scope: `az login --scope 499b84ac-1321-427f-aa17-267ca6975798/.default --allow-no-subscriptions`. This triggers the right CA/MFA policy. `ado-login` uses this.
+- **Preflight with curl, not `az rest`:** on this machine `az rest …/connectionData` returns the sign-in HTML page even when a freshly minted token works via `curl -u ":$TOKEN"` — a false negative. Test auth the way the scripts actually call the API: `curl -s -u ":$TOKEN" "$ORG/_apis/connectionData?api-version=7.1-preview" | jq -e '.authenticatedUser.isActive==true'`.
 - **MSA bearer bug (`TF400813`):** the `az devops` extension wraps Entra JWTs as `Authorization: Basic`, which **MSA-federated** identities (`live.com#…`) fail on. Use an **Entra-native** account for ADO automation, not an MSA.
 - **Isolate identities on a shared machine:** to keep a project's ADO login separate from another `~/.azure` profile (e.g. a day-job tenant), run everything under an isolated config dir:
   ```bash
@@ -188,6 +196,15 @@ Inline comments need TWO top-level objects:
 - `changeTrackingId` comes from the iteration-changes API. Delete a bad thread via `pullRequestThreadComments` with its `commentId`.
 
 ## Pipelines, builds & deployments
+
+> **Analysing build failures/logs? Use the toolkit, not ad-hoc `az`.** For "why is
+> this build/pipeline red" and "which builds failed in the last N days and what's
+> the common theme", reach for `ado-build-classify` (one build → classified JSON),
+> `ado-builds-by-pipeline` (one pipeline, by `--days`/`--weeks`/`--since`), and
+> `ado-builds-scan` (all pipelines → `pipeline-failures.{md,csv,json}`). They bake
+> in the timeline walk + failing-task log fetch + rule classification below, and
+> mint one token for a whole scan. See `scripts-reference.md` → "Pipeline failure
+> analysis". Drop to the raw calls below only when no script fits.
 
 **API version is `7.1-preview`** for `az devops invoke` build calls — *not* `7.1-preview.3` (errors with `could not convert string to float: '7.1.3'`).
 

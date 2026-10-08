@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+#
+# ado-builds-by-pipeline - List (and optionally classify) the builds of ONE
+#                          Azure DevOps build pipeline within a time window.
+#
+# The middle layer of the pipeline-failure toolkit. Given a single build
+# definition (pipeline) id and a date predicate, it lists the completed runs in
+# that window. With --classify it runs ado-build-classify on each run and emits
+# a JSON array of classified records (reusing one minted token for all of them).
+#
+# Usage:
+#   ado-builds-by-pipeline -o imdidev -p Bosettingsprosjekt --pipeline-id 517 --days 14
+#   ado-builds-by-pipeline -o imdidev -p Bosettingsprosjekt --pipeline-id 517 --weeks 2 --classify
+#   ado-builds-by-pipeline -o imdidev -p Bosettingsprosjekt --pipeline-id 517 --since 2026-09-24 -f json
+#
+# Options:
+#   -o, --org          org name (imdidev) or full URL     (required, no default)
+#   -p, --project      project name                        (required, no default)
+#       --pipeline-id  build definition id                 (required, no default)
+#   Date predicate (pick one; default --days 14):
+#       --days N       runs finished in the last N days
+#       --weeks N      runs finished in the last N weeks
+#       --since DATE   runs finished on/after YYYY-MM-DD
+#       --failed-only  keep only non-succeeded runs
+#       --classify     classify each run via ado-build-classify (implies JSON)
+#       --tail N       log tail lines per task when classifying   [default: 120]
+#   -f, --format       table (default) | json   (ignored when --classify)
+#   -h, --help         show this help
+#
+# Auth: mints one ADO token (preflighted) and exports $ADO_TOKEN so each
+#       ado-build-classify child reuses it. Honours ambient AZURE_CONFIG_DIR.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+API="7.1"
+
+ORG=""
+PROJECT=""
+PIPELINE_ID=""
+DAYS=""
+WEEKS=""
+SINCE=""
+FAILED_ONLY=0
+CLASSIFY=0
+TAIL=120
+JOBS=6
+FORMAT="table"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)        ORG="${2:-}"; shift 2 ;;
+    -p|--project)    PROJECT="${2:-}"; shift 2 ;;
+    --pipeline-id)   PIPELINE_ID="${2:-}"; shift 2 ;;
+    --days)          DAYS="${2:-}"; shift 2 ;;
+    --weeks)         WEEKS="${2:-}"; shift 2 ;;
+    --since)         SINCE="${2:-}"; shift 2 ;;
+    --failed-only)   FAILED_ONLY=1; shift ;;
+    --classify)      CLASSIFY=1; shift ;;
+    --tail)          TAIL="${2:-}"; shift 2 ;;
+    --jobs)          JOBS="${2:-}"; shift 2 ;;
+    -f|--format)     FORMAT="${2:-}"; shift 2 ;;
+    -h|--help)       usage 0 ;;
+    *)               die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]         || die "missing org: pass -o <org> (e.g. -o imdidev); no default"
+[ -n "$PROJECT" ]     || die "missing project: pass -p <project>; no default"
+[ -n "$PIPELINE_ID" ] || die "missing pipeline id: pass --pipeline-id <id>; no default"
+case "$PIPELINE_ID" in *[!0-9]*) die "pipeline id must be numeric: $PIPELINE_ID";; esac
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+# --- resolve the time window -> minTime (ISO8601 UTC) ------------------------
+# BSD date (macOS): date -u -v-Nd / -Nw. Exactly one predicate; default 14 days.
+set_count=0
+[ -n "$DAYS" ]  && set_count=$((set_count+1))
+[ -n "$WEEKS" ] && set_count=$((set_count+1))
+[ -n "$SINCE" ] && set_count=$((set_count+1))
+[ "$set_count" -le 1 ] || die "pick only one of --days / --weeks / --since"
+
+if [ -n "$SINCE" ]; then
+  case "$SINCE" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) die "--since must be YYYY-MM-DD";; esac
+  MIN_TIME="${SINCE}T00:00:00Z"
+elif [ -n "$WEEKS" ]; then
+  case "$WEEKS" in *[!0-9]*) die "--weeks must be a number";; esac
+  MIN_TIME="$(date -u -v-"${WEEKS}"w +%Y-%m-%dT%H:%M:%SZ)"
+else
+  DAYS="${DAYS:-14}"
+  case "$DAYS" in *[!0-9]*) die "--days must be a number";; esac
+  MIN_TIME="$(date -u -v-"${DAYS}"d +%Y-%m-%dT%H:%M:%SZ)"
+fi
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+PROJ_ENC=$(jq -rn --arg p "$PROJECT" '$p|@uri')
+BASE="${ORG_URL}/${PROJ_ENC}/_apis/build"
+
+# --- auth: mint once, export for children; self-heal via ado-login -----------
+if [ -z "${ADO_TOKEN:-}" ]; then
+  _preflight() {
+    local t; t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+    [ -n "$t" ] || return 1
+    curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+      | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+  }
+  if ! _preflight; then
+    login_bin="$(command -v ado-login || true)"
+    [ -n "$login_bin" ] || login_bin="$(cd "$(dirname "$0")" && pwd)/ado-login"
+    [ -x "$login_bin" ] || die "not authenticated against ${ORG_URL} and ado-login not found"
+    bash "$login_bin" -o "$ORG_URL" >/dev/null || die "ado-login failed for ${ORG_URL}"
+  fi
+  ADO_TOKEN=$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null) \
+    || die "could not mint ADO token after login"
+  [ -n "$ADO_TOKEN" ] || die "empty ADO token after login"
+fi
+export ADO_TOKEN
+
+api_get() { curl -s -u ":$ADO_TOKEN" "$1"; }
+
+# --- list completed builds for the definition in the window ------------------
+url="${BASE}/builds?definitions=${PIPELINE_ID}&minTime=${MIN_TIME}&statusFilter=completed&queryOrder=finishTimeDescending&\$top=500&api-version=${API}"
+builds_json="$(api_get "$url")"
+echo "$builds_json" | jq -e '.value' >/dev/null 2>&1 \
+  || die "could not list builds for pipeline ${PIPELINE_ID} in ${ORG}/${PROJECT}"
+
+builds="$(echo "$builds_json" | jq -c '[.value[] | {
+    buildId: .id,
+    pipelineId: (.definition.id // null),
+    pipeline: (.definition.name // ""),
+    buildNumber: (.buildNumber // ""),
+    result: (.result // ""),
+    finishedAt: (.finishTime // ""),
+    sourceBranch: ((.sourceBranch // "") | sub("^refs/heads/"; "")),
+    url: ((._links.web.href) // "")
+  }]')"
+
+if [ "$FAILED_ONLY" -eq 1 ]; then
+  builds="$(echo "$builds" | jq -c '[.[] | select(.result != "succeeded")]')"
+fi
+
+# --- classify path -----------------------------------------------------------
+# Succeeded runs are classified "ok" inline (no subprocess). Only non-succeeded
+# runs go through the atom, run in parallel (xargs -P). ADO_TOKEN is exported so
+# every child reuses this token - no per-child login, no interactive hang.
+if [ "$CLASSIFY" -eq 1 ]; then
+  self_dir="$(cd "$(dirname "$0")" && pwd)"
+  classify_bin="${self_dir}/ado-build-classify"
+  [ -x "$classify_bin" ] || classify_bin="$(command -v ado-build-classify || true)"
+  [ -n "$classify_bin" ] || die "ado-build-classify not found (needed for --classify)"
+
+  ok_records="$(echo "$builds" | jq -c --arg org "$ORG" --arg proj "$PROJECT" \
+    '[.[] | select(.result=="succeeded")
+      | {org:$org, project:$proj, buildId, pipelineId, pipeline, buildNumber,
+         status:"completed", result, reason:"", finishedAt, sourceBranch,
+         category:"ok", failures:[], url}]')"
+
+  fail_ids="$(echo "$builds" | jq -r '.[] | select(.result!="succeeded") | .buildId')"
+
+  classified='[]'
+  if [ -n "$fail_ids" ]; then
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    export ADO_TOKEN CLASSIFY_BIN="$classify_bin" C_ORG="$ORG" C_PROJECT="$PROJECT" C_TAIL="$TAIL" C_TMP="$tmp"
+    printf '%s\n' $fail_ids | xargs -P "$JOBS" -I{} bash -c '
+      id="{}"
+      rec="$(bash "$CLASSIFY_BIN" -o "$C_ORG" -p "$C_PROJECT" --tail "$C_TAIL" "$id" 2>/dev/null || true)"
+      [ -n "$rec" ] && printf "%s" "$rec" > "$C_TMP/$id.json" || echo "warn: classify failed for build $id" >&2
+    '
+    if ls "$tmp"/*.json >/dev/null 2>&1; then
+      classified="$(jq -cs '.' "$tmp"/*.json)"
+    fi
+  fi
+
+  echo "$ok_records" | jq -c --argjson f "$classified" '. + $f | sort_by(.finishedAt) | reverse'
+  exit 0
+fi
+
+# --- listing path ------------------------------------------------------------
+case "$FORMAT" in
+  json)
+    echo "$builds"
+    ;;
+  table|*)
+    count="$(echo "$builds" | jq 'length')"
+    echo "Builds for pipeline ${PIPELINE_ID} in ${PROJECT} since ${MIN_TIME} (${count}):"
+    echo "$builds" | jq -r '.[] | "  • #\(.buildId) [\(.result)] \(.buildNumber) (\(.sourceBranch))\n    \(.finishedAt)  \(.url)"'
+    ;;
+esac

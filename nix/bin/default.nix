@@ -10,6 +10,22 @@
       source = ./ado-approve-deploy;
       executable = true;
     };
+    "bin/ado-login" = {
+      source = ./ado-login;
+      executable = true;
+    };
+    "bin/ado-build-classify" = {
+      source = ./ado-build-classify;
+      executable = true;
+    };
+    "bin/ado-builds-by-pipeline" = {
+      source = ./ado-builds-by-pipeline;
+      executable = true;
+    };
+    "bin/ado-builds-scan" = {
+      source = ./ado-builds-scan;
+      executable = true;
+    };
     "bin/ado-bugs-export" = {
       source = ./ado-bugs-export;
       executable = true;

@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+#
+# ado-login - Get a WORKING Azure DevOps session for an org, no fuss.
+#
+# Azure DevOps auth on this machine has a nasty failure mode: `az` keeps minting
+# tokens from a STALE cache that the org then rejects with 401 / an HTML sign-in
+# page (conditional-access / CAE revocation). A plain `az login` does NOT fix it -
+# only clearing the cache first does. This script encapsulates that so callers can
+# just say "log me into <org>" and trust the result.
+#
+# What it does:
+#   1. Preflight: is the current session already valid for the org? If yes, done.
+#   2. Otherwise nuke the cache (az account clear + az logout) and `az login`.
+#   3. Preflight again; succeed loudly or fail loudly. Never leaves you with a
+#      half-working session that 401s on the next call.
+#
+# Usage:
+#   ado-login -o imdidev                      # log in, preflight imdidev
+#   ado-login imdidev-Bosettingsprosjekt      # resolve org + config dir from config
+#   ado-login -o urholm --config-dir ~/git/urholm/.az
+#   ado-login -o imdidev --check              # only check; never log in (exit 1 if bad)
+#
+# Options:
+#   -o, --org          org name (imdidev) or full URL   (required unless a config name is given)
+#       <config>       a config name <org>-<project> matching
+#                      ~/.claude/ado/configs/<name>.json; supplies org + azureConfigDir
+#       --config-dir D use AZURE_CONFIG_DIR=D (identity isolation). Overrides config.
+#       --check        preflight only; do not clear/login. Exit 0 ok, 1 not.
+#   -h, --help         show this help
+#
+# After a successful login the correct AZURE_CONFIG_DIR is printed to stdout as a
+# ready-to-eval line, so callers can `eval "$(ado-login -o imdidev)"` to inherit it.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+CFG_DIR_ROOT="$HOME/.claude/ado/configs"
+
+ORG=""
+CONFIG_NAME=""
+CONFIG_DIR=""
+CHECK_ONLY=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)       ORG="${2:-}"; shift 2 ;;
+    --config-dir)   CONFIG_DIR="${2:-}"; shift 2 ;;
+    --check)        CHECK_ONLY=1; shift ;;
+    -h|--help)      usage 0 ;;
+    -*)             die "unknown argument: $1 (try --help)" ;;
+    *)              [ -z "$CONFIG_NAME" ] || die "unexpected extra argument: $1"; CONFIG_NAME="$1"; shift ;;
+  esac
+done
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+# Resolve org + config dir from a named config file when given.
+if [ -n "$CONFIG_NAME" ]; then
+  cfg="${CFG_DIR_ROOT}/${CONFIG_NAME}.json"
+  [ -f "$cfg" ] || die "config not found: $cfg"
+  [ -n "$ORG" ] || ORG="$(jq -r '.organizationUrl // .org' "$cfg")"
+  [ -n "$CONFIG_DIR" ] || CONFIG_DIR="$(jq -r '.azureConfigDir // empty' "$cfg")"
+fi
+
+[ -n "$ORG" ] || die "missing org: pass -o <org> or a <org>-<project> config name"
+
+case "$ORG" in
+  http*://*) ORG_URL="${ORG%/}" ;;
+  *)         ORG_URL="https://dev.azure.com/${ORG}" ;;
+esac
+
+# Identity isolation: honour an explicit/config AZURE_CONFIG_DIR, else inherit.
+if [ -n "$CONFIG_DIR" ]; then
+  export AZURE_CONFIG_DIR="$CONFIG_DIR"
+fi
+EFFECTIVE_DIR="${AZURE_CONFIG_DIR:-$HOME/.azure}"
+
+# True iff the CURRENT cached session yields a token the org actually accepts.
+# Must mint + curl (not `az rest`): on this machine `az rest` returns the HTML
+# sign-in page even when a freshly minted token works via curl, so it gives
+# false negatives. We test exactly what the toolkit scripts use: a minted token
+# over curl against connectionData.
+auth_ok() {
+  local t
+  t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+  [ -n "$t" ] || return 1
+  curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+    | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+}
+
+emit() { echo "export AZURE_CONFIG_DIR=\"${EFFECTIVE_DIR}\""; }
+
+if auth_ok; then
+  echo "already authenticated against ${ORG_URL} (AZURE_CONFIG_DIR=${EFFECTIVE_DIR})" >&2
+  emit; exit 0
+fi
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  echo "NOT authenticated against ${ORG_URL} (AZURE_CONFIG_DIR=${EFFECTIVE_DIR})" >&2
+  exit 1
+fi
+
+# The fix that actually works, in order:
+#   1. clear the stale token cache (az keeps minting rejected tokens otherwise)
+#   2. log in requesting the ADO resource scope directly - a plain `az login`
+#      yields a token WITHOUT the conditional-access/MFA claims the org demands,
+#      which it then rejects. `--scope <ADO>/.default` triggers the right policy.
+echo "session invalid for ${ORG_URL}; clearing stale cache and logging in (ADO scope)..." >&2
+az account clear >/dev/null 2>&1 || true
+az logout >/dev/null 2>&1 || true
+az login --scope "${ADO_RESOURCE}/.default" --allow-no-subscriptions --only-show-errors >/dev/null \
+  || die "az login failed (browser auth needed? complete the opened window)"
+
+if auth_ok; then
+  who="$(az account show --query 'user.name' -o tsv 2>/dev/null || echo '?')"
+  echo "authenticated against ${ORG_URL} as ${who} (AZURE_CONFIG_DIR=${EFFECTIVE_DIR})" >&2
+  emit; exit 0
+fi
+
+die "still not authenticated against ${ORG_URL} after a clean ADO-scoped login (right account? member of org?)"
