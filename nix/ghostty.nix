@@ -33,7 +33,7 @@ in {
 
       # Visual
       window-decoration = true
-      macos-titlebar-style = tabs
+      macos-titlebar-style = native
     '';
   };
 }
