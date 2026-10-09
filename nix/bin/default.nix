@@ -26,6 +26,18 @@
       source = ./ado-builds-scan;
       executable = true;
     };
+    "bin/ado-release-classify" = {
+      source = ./ado-release-classify;
+      executable = true;
+    };
+    "bin/ado-releases-by-definition" = {
+      source = ./ado-releases-by-definition;
+      executable = true;
+    };
+    "bin/ado-releases-scan" = {
+      source = ./ado-releases-scan;
+      executable = true;
+    };
     "bin/ado-bugs-export" = {
       source = ./ado-bugs-export;
       executable = true;

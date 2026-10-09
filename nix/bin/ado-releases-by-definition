@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+#
+# ado-releases-by-definition - List (and optionally classify) the environment
+#                              deployments of ONE classic Release pipeline in a
+#                              time window.
+#
+# Middle layer of the release-failure toolkit (the vsrm release host). Uses the
+# release/deployments API - one record per environment deployment attempt, with a
+# clean deploymentStatus + operationStatus. With --classify it runs
+# ado-release-classify per non-succeeded deployment (parallel, one shared token).
+#
+# Usage:
+#   ado-releases-by-definition -o imdidev -p Bosettingsprosjekt --definition-id 3 --days 14
+#   ado-releases-by-definition -o imdidev -p Bosettingsprosjekt --definition-id 3 --weeks 2 --classify
+#
+# Options:
+#   -o, --org           org name or full URL          (required, no default)
+#   -p, --project       project name                   (required, no default)
+#       --definition-id release definition id          (required, no default)
+#   Date predicate (pick one; default --days 14):
+#       --days N | --weeks N | --since YYYY-MM-DD
+#       --failed-only   keep only non-succeeded deployments
+#       --classify      classify each via ado-release-classify (implies JSON)
+#       --deep          with --classify, also fetch failing-task logs
+#       --tail N        log tail lines when --deep      [default: 120]
+#       --jobs N        parallel classify workers       [default: 6]
+#   -f, --format        table (default) | json   (ignored when --classify)
+#   -h, --help
+#
+# Auth: mints one token (self-heals via ado-login), exports $ADO_TOKEN downward.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+API="7.1"
+
+ORG=""; PROJECT=""; DEF_ID=""
+DAYS=""; WEEKS=""; SINCE=""
+FAILED_ONLY=0; CLASSIFY=0; DEEP=0; TAIL=120; JOBS=6; FORMAT="table"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)          ORG="${2:-}"; shift 2 ;;
+    -p|--project)      PROJECT="${2:-}"; shift 2 ;;
+    --definition-id)   DEF_ID="${2:-}"; shift 2 ;;
+    --days)            DAYS="${2:-}"; shift 2 ;;
+    --weeks)           WEEKS="${2:-}"; shift 2 ;;
+    --since)           SINCE="${2:-}"; shift 2 ;;
+    --failed-only)     FAILED_ONLY=1; shift ;;
+    --classify)        CLASSIFY=1; shift ;;
+    --deep)            DEEP=1; shift ;;
+    --tail)            TAIL="${2:-}"; shift 2 ;;
+    --jobs)            JOBS="${2:-}"; shift 2 ;;
+    -f|--format)       FORMAT="${2:-}"; shift 2 ;;
+    -h|--help)         usage 0 ;;
+    *)                 die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]     || die "missing org: pass -o <org>; no default"
+[ -n "$PROJECT" ] || die "missing project: pass -p <project>; no default"
+[ -n "$DEF_ID" ]  || die "missing --definition-id; no default"
+case "$DEF_ID" in *[!0-9]*) die "--definition-id must be numeric: $DEF_ID";; esac
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+set_count=0
+[ -n "$DAYS" ]  && set_count=$((set_count+1))
+[ -n "$WEEKS" ] && set_count=$((set_count+1))
+[ -n "$SINCE" ] && set_count=$((set_count+1))
+[ "$set_count" -le 1 ] || die "pick only one of --days / --weeks / --since"
+if [ -n "$SINCE" ]; then
+  case "$SINCE" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) die "--since must be YYYY-MM-DD";; esac
+  MIN_TIME="${SINCE}T00:00:00Z"
+elif [ -n "$WEEKS" ]; then
+  case "$WEEKS" in *[!0-9]*) die "--weeks must be a number";; esac
+  MIN_TIME="$(date -u -v-"${WEEKS}"w +%Y-%m-%dT%H:%M:%SZ)"
+else
+  DAYS="${DAYS:-14}"; case "$DAYS" in *[!0-9]*) die "--days must be a number";; esac
+  MIN_TIME="$(date -u -v-"${DAYS}"d +%Y-%m-%dT%H:%M:%SZ)"
+fi
+
+case "$ORG" in
+  http*://*) ORG_NAME="${ORG##*/}" ;;
+  *)         ORG_NAME="$ORG" ;;
+esac
+ORG_URL="https://dev.azure.com/${ORG_NAME}"
+VSRM="https://vsrm.dev.azure.com/${ORG_NAME}"
+PROJ_ENC=$(jq -rn --arg p "$PROJECT" '$p|@uri')
+RBASE="${VSRM}/${PROJ_ENC}/_apis/release"
+
+if [ -z "${ADO_TOKEN:-}" ]; then
+  _preflight() {
+    local t; t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+    [ -n "$t" ] || return 1
+    curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+      | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+  }
+  if ! _preflight; then
+    login_bin="$(command -v ado-login || true)"
+    [ -n "$login_bin" ] || login_bin="$(cd "$(dirname "$0")" && pwd)/ado-login"
+    [ -x "$login_bin" ] || die "not authenticated against ${ORG_URL} and ado-login not found"
+    bash "$login_bin" -o "$ORG_URL" >/dev/null || die "ado-login failed for ${ORG_URL}"
+  fi
+  ADO_TOKEN=$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null) \
+    || die "could not mint ADO token after login"
+  [ -n "$ADO_TOKEN" ] || die "empty ADO token after login"
+fi
+export ADO_TOKEN
+api_get() { curl -s -u ":$ADO_TOKEN" "$1"; }
+
+# --- list deployments for the definition in the window -----------------------
+url="${RBASE}/deployments?definitionId=${DEF_ID}&minStartedTime=${MIN_TIME}&queryOrder=descending&\$top=500&api-version=${API}"
+dep_json="$(api_get "$url")"
+echo "$dep_json" | jq -e '.value' >/dev/null 2>&1 \
+  || die "could not list deployments for release definition ${DEF_ID} in ${ORG_NAME}/${PROJECT}"
+
+deps="$(echo "$dep_json" | jq -c --arg base "${ORG_URL}/${PROJ_ENC}" '[.value[] | {
+    releaseId: .release.id,
+    releaseName: (.release.name // ""),
+    pipelineId: (.releaseDefinition.id // null),
+    pipeline: (.releaseDefinition.name // ""),
+    environmentId: .releaseEnvironment.id,
+    environment: (.releaseEnvironment.name // ""),
+    status: (.deploymentStatus // ""),
+    operationStatus: (.operationStatus // ""),
+    finishedAt: (.completedOn // .startedOn // ""),
+    url: ($base + "/_release?releaseId=" + ((.release.id)|tostring) + "&_a=release-environment-logs&environmentId=" + ((.releaseEnvironment.id)|tostring))
+  }]')"
+
+[ "$FAILED_ONLY" -eq 1 ] && deps="$(echo "$deps" | jq -c '[.[] | select(.status != "succeeded")]')"
+
+# --- classify path -----------------------------------------------------------
+if [ "$CLASSIFY" -eq 1 ]; then
+  self_dir="$(cd "$(dirname "$0")" && pwd)"
+  rc_bin="${self_dir}/ado-release-classify"
+  [ -x "$rc_bin" ] || rc_bin="$(command -v ado-release-classify || true)"
+  [ -n "$rc_bin" ] || die "ado-release-classify not found (needed for --classify)"
+
+  ok_records="$(echo "$deps" | jq -c --arg org "$ORG_NAME" --arg proj "$PROJECT" \
+    '[.[] | select(.status=="succeeded")
+      | {org:$org, project:$proj, kind:"release", releaseId, releaseName, pipelineId,
+         pipeline, environmentId, environment, status, operationStatus,
+         category:"ok", finishedAt, failures:[], url}]')"
+
+  deep_flag=""; [ "$DEEP" -eq 1 ] && deep_flag="--deep"
+  n="$(echo "$deps" | jq '[.[]|select(.status!="succeeded")]|length')"
+  classified='[]'
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    row="$(echo "$deps" | jq -c "[.[]|select(.status!=\"succeeded\")][$i]")"
+    rid="$(echo "$row" | jq -r '.releaseId')"
+    eid="$(echo "$row" | jq -r '.environmentId')"
+    env="$(echo "$row" | jq -r '.environment')"
+    st="$(echo "$row" | jq -r '.status')"
+    op="$(echo "$row" | jq -r '.operationStatus')"
+    rn="$(echo "$row" | jq -r '.releaseName')"
+    pl="$(echo "$row" | jq -r '.pipeline')"
+    did="$(echo "$row" | jq -r '.pipelineId')"
+    u="$(echo "$row" | jq -r '.url')"
+    fin="$(echo "$row" | jq -r '.finishedAt')"
+    rec="$(bash "$rc_bin" -o "$ORG_NAME" -p "$PROJECT" --release-id "$rid" --env-id "$eid" \
+             --env-name "$env" --status "$st" --op "$op" --release-name "$rn" \
+             --pipeline "$pl" --def-id "$did" --url "$u" --finished "$fin" $deep_flag 2>/dev/null || true)"
+    if [ -n "$rec" ]; then
+      classified="$(echo "$classified" | jq --argjson r "$rec" '. + [$r]')"
+    else
+      echo "warn: release classify failed for $rid/$eid" >&2
+    fi
+    i=$((i + 1))
+  done
+
+  echo "$ok_records" | jq -c --argjson f "$classified" '. + $f | sort_by(.finishedAt) | reverse'
+  exit 0
+fi
+
+# --- listing path ------------------------------------------------------------
+case "$FORMAT" in
+  json) echo "$deps" ;;
+  table|*)
+    count="$(echo "$deps" | jq 'length')"
+    echo "Deployments for release def ${DEF_ID} in ${PROJECT} since ${MIN_TIME} (${count}):"
+    echo "$deps" | jq -r '.[] | "  • rel#\(.releaseId) [\(.status)/\(.operationStatus)] \(.environment)\n    \(.finishedAt)  \(.url)"'
+    ;;
+esac

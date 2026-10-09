@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+#
+# ado-releases-scan - Scan ALL classic Release pipelines in a project over a time
+#                     window, classify every environment deployment, write a report.
+#
+# Top layer of the release-failure toolkit (mirrors ado-builds-scan, but for the
+# classic Release host). Enumerates every release definition, calls
+# ado-releases-by-definition --classify for each, aggregates, and writes:
+#
+#   <output-dir>/release-failures.json  - every deployment (ok + failed), classified
+#   <output-dir>/release-failures.csv   - one row per environment deployment
+#   <output-dir>/release-failures.md    - human summary: success rate, per-category,
+#                                         per-pipeline, per-environment
+#
+# Usage:
+#   ado-releases-scan -o imdidev -p Bosettingsprosjekt --days 14
+#   ado-releases-scan -o imdidev -p Bosettingsprosjekt --weeks 2 --deep --output-dir ./rel
+#
+# Options:
+#   -o, --org          org name or full URL        (required, no default)
+#   -p, --project      project name                 (required, no default)
+#   Date predicate (pick one; default --days 14): --days N | --weeks N | --since YYYY-MM-DD
+#       --definition-ids CSV  limit to these release definition ids
+#       --name-filter REGEX   only definitions whose name matches (case-insensitive)
+#       --deep                fetch failing-task logs for a precise category
+#       --tail N              log tail lines when --deep     [default: 120]
+#       --output-dir DIR      where to write artifacts       [default: .]
+#   -h, --help
+#
+# Auth: mints one token (self-heals via ado-login), exports $ADO_TOKEN downward.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+API="7.1"
+
+ORG=""; PROJECT=""
+DAYS=""; WEEKS=""; SINCE=""
+DEF_IDS=""; NAME_FILTER=""; DEEP=0; TAIL=120; OUTPUT_DIR="."
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)            ORG="${2:-}"; shift 2 ;;
+    -p|--project)        PROJECT="${2:-}"; shift 2 ;;
+    --days)              DAYS="${2:-}"; shift 2 ;;
+    --weeks)             WEEKS="${2:-}"; shift 2 ;;
+    --since)             SINCE="${2:-}"; shift 2 ;;
+    --definition-ids)    DEF_IDS="${2:-}"; shift 2 ;;
+    --name-filter)       NAME_FILTER="${2:-}"; shift 2 ;;
+    --deep)              DEEP=1; shift ;;
+    --tail)              TAIL="${2:-}"; shift 2 ;;
+    --output-dir)        OUTPUT_DIR="${2:-}"; shift 2 ;;
+    -h|--help)           usage 0 ;;
+    *)                   die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]     || die "missing org: pass -o <org>; no default"
+[ -n "$PROJECT" ] || die "missing project: pass -p <project>; no default"
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+set_count=0
+[ -n "$DAYS" ]  && set_count=$((set_count+1))
+[ -n "$WEEKS" ] && set_count=$((set_count+1))
+[ -n "$SINCE" ] && set_count=$((set_count+1))
+[ "$set_count" -le 1 ] || die "pick only one of --days / --weeks / --since"
+if   [ -n "$SINCE" ]; then PRED=(--since "$SINCE"); WINDOW="since ${SINCE}"
+elif [ -n "$WEEKS" ]; then PRED=(--weeks "$WEEKS"); WINDOW="last ${WEEKS} week(s)"
+else PRED=(--days "${DAYS:-14}"); WINDOW="last ${DAYS:-14} day(s)"
+fi
+
+case "$ORG" in
+  http*://*) ORG_NAME="${ORG##*/}" ;;
+  *)         ORG_NAME="$ORG" ;;
+esac
+ORG_URL="https://dev.azure.com/${ORG_NAME}"
+VSRM="https://vsrm.dev.azure.com/${ORG_NAME}"
+PROJ_ENC=$(jq -rn --arg p "$PROJECT" '$p|@uri')
+RBASE="${VSRM}/${PROJ_ENC}/_apis/release"
+
+if [ -z "${ADO_TOKEN:-}" ]; then
+  _preflight() {
+    local t; t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+    [ -n "$t" ] || return 1
+    curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+      | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+  }
+  if ! _preflight; then
+    login_bin="$(command -v ado-login || true)"
+    [ -n "$login_bin" ] || login_bin="$(cd "$(dirname "$0")" && pwd)/ado-login"
+    [ -x "$login_bin" ] || die "not authenticated against ${ORG_URL} and ado-login not found"
+    bash "$login_bin" -o "$ORG_URL" >/dev/null || die "ado-login failed for ${ORG_URL}"
+  fi
+  ADO_TOKEN=$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null) \
+    || die "could not mint ADO token after login"
+  [ -n "$ADO_TOKEN" ] || die "empty ADO token after login"
+fi
+export ADO_TOKEN
+api_get() { curl -s -u ":$ADO_TOKEN" "$1"; }
+
+# --- enumerate release definitions -------------------------------------------
+defs_json="$(api_get "${RBASE}/definitions?\$top=1000&api-version=${API}")"
+echo "$defs_json" | jq -e '.value' >/dev/null 2>&1 \
+  || die "could not list release definitions in ${ORG_NAME}/${PROJECT}"
+
+defs="$(echo "$defs_json" | jq -c '[.value[] | {id, name}]')"
+if [ -n "$DEF_IDS" ]; then
+  defs="$(echo "$defs" | jq -c --arg ids "$DEF_IDS" \
+    '($ids|split(",")|map(gsub("^\\s+|\\s+$";"")|select(length>0)|tonumber)) as $w | [.[] | select(.id as $i | $w|index($i))]')"
+fi
+[ -n "$NAME_FILTER" ] && defs="$(echo "$defs" | jq -c --arg re "$NAME_FILTER" '[.[] | select(.name|test($re;"i"))]')"
+
+ndefs="$(echo "$defs" | jq 'length')"
+[ "$ndefs" != "0" ] || die "no release pipelines matched in ${ORG_NAME}/${PROJECT}"
+echo "Scanning ${ndefs} release pipeline(s) in ${PROJECT} (${WINDOW})..." >&2
+
+self_dir="$(cd "$(dirname "$0")" && pwd)"
+bydef_bin="${self_dir}/ado-releases-by-definition"
+[ -x "$bydef_bin" ] || bydef_bin="$(command -v ado-releases-by-definition || true)"
+[ -n "$bydef_bin" ] || die "ado-releases-by-definition not found (needed to scan)"
+
+deep_flag=""; [ "$DEEP" -eq 1 ] && deep_flag="--deep"
+all='[]'
+ids="$(echo "$defs" | jq -r '.[].id')"
+for did in $ids; do
+  [ -n "$did" ] || continue
+  dname="$(echo "$defs" | jq -r --argjson i "$did" '.[] | select(.id==$i) | .name')"
+  arr="$(bash "$bydef_bin" -o "$ORG_NAME" -p "$PROJECT" --definition-id "$did" "${PRED[@]}" --classify --tail "$TAIL" $deep_flag 2>/dev/null || echo '[]')"
+  cnt="$(echo "$arr" | jq 'length' 2>/dev/null || echo 0)"
+  echo "  • ${dname} (${did}): ${cnt} deployment(s)" >&2
+  all="$(echo "$all" | jq --argjson a "$arr" '. + $a')"
+done
+
+mkdir -p "$OUTPUT_DIR"
+json_path="${OUTPUT_DIR%/}/release-failures.json"
+csv_path="${OUTPUT_DIR%/}/release-failures.csv"
+md_path="${OUTPUT_DIR%/}/release-failures.md"
+
+echo "$all" | jq 'sort_by(.finishedAt) | reverse' > "$json_path"
+
+{
+  echo "finishedAt,pipeline,pipelineId,releaseId,releaseName,environment,status,operationStatus,category,failingTask,url"
+  echo "$all" | jq -r '
+    sort_by(.finishedAt) | reverse | .[] |
+    [ .finishedAt, .pipeline, (.pipelineId|tostring), (.releaseId|tostring), .releaseName,
+      .environment, .status, .operationStatus, .category, ((.failures[0].task) // ""), .url ] | @csv'
+} > "$csv_path"
+
+total="$(echo "$all" | jq 'length')"
+failed="$(echo "$all" | jq '[.[] | select(.status!="succeeded")] | length')"
+succeeded="$(echo "$all" | jq '[.[] | select(.status=="succeeded")] | length')"
+passrate="$(echo "$all" | jq -r 'if length>0 then ((([.[]|select(.status=="succeeded")]|length) / length)*100 | .*10|round|./10) else 0 end')"
+now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+{
+  echo "# Classic release-pipeline failures - ${PROJECT}"
+  echo
+  echo "- Org/project: \`${ORG_NAME}\` / \`${PROJECT}\`"
+  echo "- Window: ${WINDOW} (generated ${now})"
+  echo "- Environment deployments: **${total}** total, **${succeeded}** succeeded, **${failed}** not-succeeded (success rate **${passrate}%**)"
+  echo "- Release pipelines scanned: ${ndefs}"
+  echo
+  echo "## Failures by category"
+  echo
+  echo "| Category | Count |"
+  echo "|---|---|"
+  echo "$all" | jq -r '[.[] | select(.status!="succeeded") | .category]
+    | group_by(.) | map({c:.[0], n:length}) | sort_by(-.n) | .[] | "| \(.c) | \(.n) |"'
+  echo
+  echo "## Failures by release pipeline"
+  echo
+  echo "| Pipeline | Deployments | Failed | Top category |"
+  echo "|---|---|---|---|"
+  echo "$all" | jq -r 'group_by(.pipeline) | map({
+      pipeline: .[0].pipeline, runs: length,
+      failed: ([.[]|select(.status!="succeeded")]|length),
+      top: ([.[]|select(.status!="succeeded")|.category]|group_by(.)|map({c:.[0],n:length})|sort_by(-.n)|(.[0].c // "-"))
+    }) | sort_by(-.failed) | .[] | "| \(.pipeline) | \(.runs) | \(.failed) | \(.top) |"'
+  echo
+  echo "## Failures by environment"
+  echo
+  echo "| Pipeline | Environment | Failed | Top category |"
+  echo "|---|---|---|---|"
+  echo "$all" | jq -r '[.[]|select(.status!="succeeded")] | group_by([.pipeline,.environment]) | map({
+      pipeline:.[0].pipeline, env:.[0].environment, failed:length,
+      top:([.[]|.category]|group_by(.)|map({c:.[0],n:length})|sort_by(-.n)|(.[0].c // "-"))
+    }) | sort_by(-.failed) | .[0:20] | .[] | "| \(.pipeline) | \(.env) | \(.failed) | \(.top) |"'
+  echo
+  echo "## Failed deployments (newest first)"
+  echo
+  echo "| Finished | Pipeline | Env | Status/Op | Category | Link |"
+  echo "|---|---|---|---|---|---|"
+  echo "$all" | jq -r 'sort_by(.finishedAt) | reverse | .[] | select(.status!="succeeded")
+    | "| \(.finishedAt) | \(.pipeline) | \(.environment) | \(.status)/\(.operationStatus) | \(.category) | [rel](\(.url)) |"'
+} > "$md_path"
+
+echo >&2
+echo "Wrote:" >&2
+echo "  $json_path" >&2
+echo "  $csv_path" >&2
+echo "  $md_path" >&2
+echo >&2
+echo "Summary: ${total} deployments, ${failed} not-succeeded, success rate ${passrate}%." >&2

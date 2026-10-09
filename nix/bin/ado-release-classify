@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+#
+# ado-release-classify - Classify ONE Azure DevOps CLASSIC RELEASE environment
+#                        deployment by failure kind.
+#
+# The atom of the release-failure toolkit, mirroring ado-build-classify but for
+# classic Release pipelines (the vsrm host). A classic release deploys to several
+# environments (Deploy Dev, Test Qa, Execute X pipeline, ...); the unit of
+# analysis is ONE environment deployment attempt.
+#
+# Classification signals (first matching rule wins):
+#   * operationStatus  (Rejected/Canceled -> cancelled, PhaseFailed -> deploy)
+#   * the failing task's log snippet  (only with --deep; agentless phases have no
+#     task log, so this is best-effort)
+#   * the environment NAME heuristic  (Test*/Execute*pipeline -> test-failure,
+#     Deploy*/Migrate* -> deploy/runtime)
+#
+# This is the one place the RELEASE classification rules live; the higher layers
+# (ado-releases-by-definition, ado-releases-scan) reuse it.
+#
+# Usage (normally driven by the higher layers, which fill the flags from the
+# deployments list; can also be run standalone):
+#   ado-release-classify -o imdidev -p Bosettingsprosjekt \
+#     --release-id 3510 --env-id 20808 --env-name "Test Development" \
+#     --status failed --op PhaseFailed --deep
+#
+# Options:
+#   -o, --org          org name or full URL        (required, no default)
+#   -p, --project      project name                 (required, no default)
+#       --release-id   classic release id           (required)
+#       --env-id       release environment id       (required)
+#       --env-name     environment name             (recommended; drives heuristic)
+#       --status       deploymentStatus             (failed|partiallySucceeded|succeeded|...)
+#       --op           operationStatus              (PhaseFailed|Rejected|Canceled|...)
+#       --release-name release name                 (passthrough)
+#       --pipeline     release definition name      (passthrough)
+#       --def-id       release definition id        (passthrough)
+#       --url          web url for the release       (passthrough)
+#       --finished     completedOn timestamp         (passthrough)
+#       --deep         fetch the failing task log for a precise category
+#       --tail N       log tail lines when --deep    [default: 120]
+#   -h, --help
+#
+# Auth: reuses $ADO_TOKEN if set (callers mint once), else self-heals via
+#       ado-login. Uses the vsrm.dev.azure.com release host.
+#
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit "${1:-0}"; }
+
+ADO_RESOURCE="499b84ac-1321-427f-aa17-267ca6975798"
+API="7.1"
+
+ORG=""; PROJECT=""; RELEASE_ID=""; ENV_ID=""; ENV_NAME=""
+STATUS=""; OP=""; RELEASE_NAME=""; PIPELINE=""; DEF_ID=""; URL=""; FINISHED=""
+DEEP=0; TAIL=120
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|--org)       ORG="${2:-}"; shift 2 ;;
+    -p|--project)   PROJECT="${2:-}"; shift 2 ;;
+    --release-id)   RELEASE_ID="${2:-}"; shift 2 ;;
+    --env-id)       ENV_ID="${2:-}"; shift 2 ;;
+    --env-name)     ENV_NAME="${2:-}"; shift 2 ;;
+    --status)       STATUS="${2:-}"; shift 2 ;;
+    --op)           OP="${2:-}"; shift 2 ;;
+    --release-name) RELEASE_NAME="${2:-}"; shift 2 ;;
+    --pipeline)     PIPELINE="${2:-}"; shift 2 ;;
+    --def-id)       DEF_ID="${2:-}"; shift 2 ;;
+    --url)          URL="${2:-}"; shift 2 ;;
+    --finished)     FINISHED="${2:-}"; shift 2 ;;
+    --deep)         DEEP=1; shift ;;
+    --tail)         TAIL="${2:-}"; shift 2 ;;
+    -h|--help)      usage 0 ;;
+    *)              die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+[ -n "$ORG" ]        || die "missing org: pass -o <org>; no default"
+[ -n "$PROJECT" ]    || die "missing project: pass -p <project>; no default"
+[ -n "$RELEASE_ID" ] || die "missing --release-id; no default"
+[ -n "$ENV_ID" ]     || die "missing --env-id; no default"
+
+command -v az >/dev/null   || die "az CLI not found"
+command -v jq >/dev/null   || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
+
+case "$ORG" in
+  http*://*) ORG_HOST="${ORG#http*://}"; ORG_NAME="${ORG_HOST##*/}" ;;
+  *)         ORG_NAME="$ORG" ;;
+esac
+ORG_URL="https://dev.azure.com/${ORG_NAME}"
+VSRM="https://vsrm.dev.azure.com/${ORG_NAME}"
+PROJ_ENC=$(jq -rn --arg p "$PROJECT" '$p|@uri')
+RBASE="${VSRM}/${PROJ_ENC}/_apis/release"
+
+# --- auth (reuse caller token, else self-heal) -------------------------------
+if [ -z "${ADO_TOKEN:-}" ]; then
+  _preflight() {
+    local t; t="$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null)" || return 1
+    [ -n "$t" ] || return 1
+    curl -s -u ":$t" "${ORG_URL}/_apis/connectionData?api-version=7.1-preview" 2>/dev/null \
+      | jq -e '.authenticatedUser.isActive == true' >/dev/null 2>&1
+  }
+  if ! _preflight; then
+    login_bin="$(command -v ado-login || true)"
+    [ -n "$login_bin" ] || login_bin="$(cd "$(dirname "$0")" && pwd)/ado-login"
+    [ -x "$login_bin" ] || die "not authenticated against ${ORG_URL} and ado-login not found"
+    bash "$login_bin" -o "$ORG_URL" >/dev/null || die "ado-login failed for ${ORG_URL}"
+  fi
+  ADO_TOKEN=$(az account get-access-token --resource "$ADO_RESOURCE" --query accessToken -o tsv 2>/dev/null) \
+    || die "could not mint ADO token after login"
+  [ -n "$ADO_TOKEN" ] || die "empty ADO token after login"
+fi
+export ADO_TOKEN
+api_get() { curl -s -u ":$ADO_TOKEN" "$1"; }
+
+# --- classify: stdin text -> one category (shares the build taxonomy) --------
+classify() {
+  local text; text="$(cat)"
+  _m() { printf '%s' "$text" | grep -qiE "$1"; }
+  # Release-specific gate signals first.
+  if   _m 'op:rejected|rejected by|approval.*(reject|abandon)|manual.*reject'; then echo cancelled
+  elif _m 'op:canceled|^canceled$|deployment .*cancel|was canceled'; then echo cancelled
+  # Log-based (same vocabulary as ado-build-classify).
+  elif _m 'we stopped hearing from agent|agent (lost|went offline|did not (connect|run|respond))|no .* agent .* (found|available)|connection reset|getaddrinfo|socket hang up|50[234] (bad gateway|service unavailable|gateway time)|tf400898'; then echo infra/agent
+  elif _m 'timed out|timeout|exceeded the maximum|did not finish within|ran longer than'; then echo timeout
+  elif _m 'trivy|cve-[0-9]|vulnerabilit|security scan .*fail|snyk'; then echo security-gate
+  elif _m 'entered failure state|activationfailed|crash-loop|container (restarted|failed to start|crashed)|revision .*(fail|unhealthy|not running)|readiness probe|liveness probe|kubernetes error|rollout (failed|timed)|helm '; then echo deploy/runtime
+  elif _m 'one or more test failures|test failures detected|publish test (results|report)|tests? run:.*fail|[0-9]+ (test|spec)s? (failed|failing)|assert(ion)?|vitest|playwright|cypress|xunit|nunit|✕'; then echo test-failure
+  elif _m 'err_pnpm|pnpm|npm err|npm error|install dependencies|restore failed|could not resolve|unable to resolve|nu[0-9]{3,4}:|enotfound'; then echo dependency
+  elif _m 'error cs[0-9]|error ts[0-9]|error msb[0-9]|build failed|compilation (error|failed)|dotnet build'; then echo compile/build
+  elif _m '\b401\b|\b403\b|unauthorized|forbidden|service connection|aadsts[0-9]|authentication failed|permission denied'; then echo auth/secret
+  # Environment-name heuristic (reliable when there is no task log).
+  elif _m 'env:.*(test|execute .*pipeline|accessibilit|regression|smoke|automation|questionnar|alpha)'; then echo test-failure
+  elif _m 'env:.*(deploy|migrat|container|app |infra|cosmos|aks|letsencrypt|acr)'; then echo deploy/runtime
+  # Operation fallback.
+  elif _m 'op:phasefailed'; then echo deploy/runtime
+  else echo unknown
+  fi
+}
+
+# --- resolve overall + dig the log (best effort, only with --deep) -----------
+overall=""
+case "$STATUS" in
+  succeeded) overall="ok" ;;
+  canceled)  overall="cancelled" ;;
+esac
+
+snippet=""; task=""; logUrl=""
+if [ "$STATUS" != "succeeded" ] && [ "$DEEP" -eq 1 ]; then
+  env_json="$(api_get "${RBASE}/releases/${RELEASE_ID}/environments/${ENV_ID}?api-version=${API}" || true)"
+  if echo "$env_json" | jq -e '.deploySteps' >/dev/null 2>&1; then
+    read -r task logUrl <<<"$(echo "$env_json" | jq -r '
+      [.deploySteps[]?.releaseDeployPhases[]?.deploymentJobs[]?.tasks[]?
+        | select(.status=="failed" or .status=="partiallySucceeded")] 
+      | (.[0] // {}) | "\(.name // "")\t\(.logUrl // "")"')"
+    if [ -n "$logUrl" ] && [ "$logUrl" != "null" ]; then
+      raw="$(api_get "$logUrl" | tail -n "$TAIL" || true)"
+      snippet="$(printf '%s' "$raw" | grep -iE '##\[error\]|error|fail|exception|cve-|timed out|unauthorized' | tail -n 8 || true)"
+      [ -n "$snippet" ] || snippet="$(printf '%s' "$raw" | tail -n 5)"
+    fi
+  fi
+fi
+
+# Build the text the classifier sees: env + op signals + any log snippet.
+cat_text="env:${ENV_NAME}
+op:${OP}
+${task}
+${snippet}"
+
+if [ -z "$overall" ]; then
+  overall="$(printf '%s' "$cat_text" | classify)"
+fi
+
+jq -cn \
+  --arg org "$ORG_NAME" --arg project "$PROJECT" \
+  --arg relId "$RELEASE_ID" --arg relName "$RELEASE_NAME" \
+  --arg defId "$DEF_ID" --arg pipeline "$PIPELINE" \
+  --arg envId "$ENV_ID" --arg env "$ENV_NAME" \
+  --arg status "$STATUS" --arg op "$OP" \
+  --arg category "$overall" --arg finished "$FINISHED" \
+  --arg task "$task" --arg snippet "$snippet" --arg logUrl "$logUrl" \
+  --arg url "$URL" '
+  {
+    org: $org, project: $project, kind: "release",
+    releaseId: ($relId|tonumber? // $relId), releaseName: $relName,
+    pipelineId: ($defId|tonumber? // null), pipeline: $pipeline,
+    environmentId: ($envId|tonumber? // $envId), environment: $env,
+    status: $status, operationStatus: $op,
+    category: $category, finishedAt: $finished,
+    failures: (if $status=="succeeded" then []
+               else [{task: $task, category: $category, logUrl: $logUrl, snippet: $snippet}] end),
+    url: $url
+  }'
