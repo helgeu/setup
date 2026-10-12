@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+#
+# oc-error-reduce - one-go session error reduction: sensor + headless AI pass.
+#
+# Runs oc-error-scan (the deterministic sensor) over the local opencode session
+# DB, then runs opencode (the `error-reduction` agent + skill) to turn the
+# error signals into a plan doc of improvement suggestions. It does NOT
+# implement anything: review the plan doc, approve proposals, then ship them
+# yourself via the nix pipeline (the plan doc lists exact ship steps per
+# proposal).
+#
+# Usage:
+#   oc-error-reduce                     # last 90 days
+#   oc-error-reduce --days 30
+#   oc-error-reduce --since 2026-07-11
+#   oc-error-reduce -m github-copilot/claude-opus-4.8
+#
+# Options:
+#   -d, --days N         window in days                [default: 90]
+#       --since DATE     window start YYYY-MM-DD (overrides --days)
+#   -m, --model <model>  opencode model id (overrides ERROR_REDUCE_MODEL)
+#       --variant <v>    model reasoning-effort variant (e.g. low, medium,
+#                        high, max). Overrides ERROR_REDUCE_VARIANT.
+#       --db PATH        opencode session DB (default: `opencode db path`,
+#                        falling back to ~/.local/share/opencode/opencode-stable.db)
+#   -h, --help           show this help
+#
+# Options (env vars):
+#   ERROR_REDUCE_MODEL        opencode model override (see --model)
+#   ERROR_REDUCE_VARIANT      opencode variant override (see --variant)
+#   ERROR_REDUCE_PLAN         override the plan doc output path
+#
+# Output:
+#   ~/.claude/error-reduction/scan-<date>.json            raw sensor output
+#   ~/git/github/setup/improvement-suggestions-<date>.md  plan doc (the artifact)
+#
+# Model selection (highest precedence first):
+#   1. --model / -m <model>   command-line flag
+#   2. ERROR_REDUCE_MODEL     environment variable
+#   3. interactive menu       if a TTY is available, the same model+variant
+#                              chooser find-prs uses (via pr-model-select)
+#   4. opencode default       non-interactive with no model set
+#
+# Hard rule: read-only against session data; aborts on any error and never
+# continues past a failed step.
+set -euo pipefail
+
+die() { echo "oc-error-reduce: error: $*" >&2; exit 1; }
+log() { echo "oc-error-reduce: $*" >&2; }
+
+# --- args --------------------------------------------------------------------
+DAYS=90
+SINCE=""
+MODEL="${ERROR_REDUCE_MODEL:-}"
+VARIANT="${ERROR_REDUCE_VARIANT:-}"
+DB_ARG=""
+PLAN_OVERRIDE="${ERROR_REDUCE_PLAN:-}"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -d|--days)
+      shift
+      [ "$#" -gt 0 ] || die "--days requires an argument, e.g. --days 30"
+      DAYS="$1"
+      ;;
+    --days=*) DAYS="${1#*=}" ;;
+    --since)
+      shift
+      [ "$#" -gt 0 ] || die "--since requires an argument, e.g. --since 2026-07-11"
+      SINCE="$1"
+      ;;
+    --since=*) SINCE="${1#*=}" ;;
+    -m|--model)
+      shift
+      [ "$#" -gt 0 ] || die "--model requires an argument, e.g. --model github-copilot/claude-opus-4.8"
+      MODEL="$1"
+      ;;
+    --model=*|-m=*) MODEL="${1#*=}" ;;
+    --variant)
+      shift
+      [ "$#" -gt 0 ] || die "--variant requires an argument, e.g. --variant high"
+      VARIANT="$1"
+      ;;
+    --variant=*) VARIANT="${1#*=}" ;;
+    --db)
+      shift
+      [ "$#" -gt 0 ] || die "--db requires an argument"
+      DB_ARG="$1"
+      ;;
+    --db=*) DB_ARG="${1#*=}" ;;
+    -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *) die "unexpected argument: $1 (usage: oc-error-reduce [--days N|--since DATE])" ;;
+  esac
+  shift
+done
+
+# --- tools -------------------------------------------------------------------
+for t in opencode jq oc-error-scan; do
+  command -v "$t" >/dev/null || die "$t not found on PATH"
+done
+
+# --- window ------------------------------------------------------------------
+if [ -n "$SINCE" ]; then
+  [[ "$SINCE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "--since must be YYYY-MM-DD, got: $SINCE"
+else
+  [[ "$DAYS" =~ ^[0-9]+$ ]] || die "--days must be a positive integer, got: $DAYS"
+  SINCE="$(date -v-"${DAYS}"d +%F)"   # BSD date (macOS)
+fi
+log "window: since $SINCE"
+
+# --- resolve the session DB ---------------------------------------------------
+# opencode exports OPENCODE_DB=<relative filename> into the shells it spawns,
+# which only resolves when the cwd happens to be the data dir. Honor it only
+# when it is an absolute, existing path; otherwise ask opencode, then fall
+# back to the stable default.
+DB="$DB_ARG"
+if [ -z "$DB" ]; then
+  case "${OPENCODE_DB:-}" in
+    /*) [ -f "$OPENCODE_DB" ] && DB="$OPENCODE_DB" ;;
+  esac
+fi
+if [ -z "$DB" ]; then
+  DB="$(opencode db path 2>/dev/null || true)"
+fi
+if [ -z "$DB" ] || [ ! -f "$DB" ]; then
+  DB="$HOME/.local/share/opencode/opencode-stable.db"
+fi
+[ -f "$DB" ] || die "opencode session DB not found at $DB (pass --db PATH)"
+log "session DB: $DB"
+
+# --- output paths -------------------------------------------------------------
+OUT_DIR="$HOME/.claude/error-reduction"
+mkdir -p "$OUT_DIR"
+STAMP="$(date +%F)"
+SCAN="$OUT_DIR/scan-${STAMP}.json"
+if [ -n "$PLAN_OVERRIDE" ]; then
+  PLAN="$PLAN_OVERRIDE"
+else
+  PLAN="$HOME/git/github/setup/improvement-suggestions-${STAMP}.md"
+  if [ -e "$PLAN" ]; then
+    PLAN="$HOME/git/github/setup/improvement-suggestions-${STAMP}-$(date +%H%M).md"
+  fi
+fi
+mkdir -p "$(dirname "$PLAN")"
+
+# --- sensor -------------------------------------------------------------------
+log "running sensor: oc-error-scan --json --since $SINCE"
+oc-error-scan --json --since "$SINCE" --db "$DB" > "$SCAN" \
+  || die "oc-error-scan failed"
+jq -e '.tool_errors.total' "$SCAN" >/dev/null \
+  || die "sensor output at $SCAN is not valid scan JSON"
+log "scan written to $SCAN"
+
+# --- interactive model/variant chooser ---------------------------------------
+# Same rule as pr-review: when no model was given and we have a TTY, offer the
+# shared chooser. When --model was supplied, honour it and never prompt.
+if [ -z "$MODEL" ] && [ -t 0 ] && command -v pr-model-select >/dev/null; then
+  if sel="$(pr-model-select --prompt "Select the model for the error-reduction pass:")"; then
+    MODEL="${sel%%$'\t'*}"
+    VARIANT="${sel#*$'\t'}"
+  else
+    exit 1
+  fi
+fi
+
+MODEL_ARGS=()
+if [ -n "$MODEL" ]; then
+  MODEL_ARGS=(--model "$MODEL")
+  log "using model: $MODEL"
+else
+  log "using opencode default model (set --model or ERROR_REDUCE_MODEL to override)"
+fi
+if [ -n "$VARIANT" ]; then
+  MODEL_ARGS+=(--variant "$VARIANT")
+  log "using variant: $VARIANT"
+fi
+
+# --- run opencode (headless) --------------------------------------------------
+PROMPT="Use the error-reduction skill. The error scan JSON is in ${SCAN} (sensor: oc-error-scan, window: since ${SINCE}; read it; do not re-run the sensor and do not touch the session databases). Write the plan doc to ${PLAN}. Do NOT implement anything, do NOT modify scripts, instructions, or skills, and do NOT commit."
+
+log "running opencode error-reduction agent (this can take a while)..."
+if [ "${#MODEL_ARGS[@]}" -gt 0 ]; then
+  opencode run --agent error-reduction --dir "$OUT_DIR" "${MODEL_ARGS[@]}" "$PROMPT" \
+    || die "opencode run failed"
+else
+  opencode run --agent error-reduction --dir "$OUT_DIR" "$PROMPT" \
+    || die "opencode run failed"
+fi
+
+[ -s "$PLAN" ] || die "opencode finished but no plan doc at $PLAN"
+
+echo
+log "done. plan doc written to:"
+echo "  $PLAN"
+log "raw scan kept at:"
+echo "  $SCAN"
+log "next: review the plan doc, approve proposals, then ship them via the nix"
+log "pipeline listed in the doc (edit nix source -> git add -> check.sh/eval.sh"
+log "-> commit -> switch.sh -> restart client -> re-run oc-error-scan to verify)"

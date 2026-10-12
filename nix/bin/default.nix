@@ -90,6 +90,14 @@
       source = ./oc;
       executable = true;
     };
+    "bin/oc-error-reduce" = {
+      source = ./oc-error-reduce;
+      executable = true;
+    };
+    "bin/oc-error-scan" = {
+      source = ./oc-error-scan;
+      executable = true;
+    };
     "bin/outlook-draft" = {
       source = ./outlook-draft;
       executable = true;

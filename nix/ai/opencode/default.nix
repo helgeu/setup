@@ -53,6 +53,12 @@ in
   # script together with the ~/.claude/skills/pr-review skill.
   home.file.".config/opencode/agent/pr-review.md".source = ./agents/pr-review.md;
 
+  # Headless error-reduction agent (scoped permissions). Used by the
+  # `oc-error-reduce` script together with the ~/.claude/skills/error-reduction
+  # skill: reads a pre-generated error scan and writes a plan doc of improvement
+  # suggestions; never modifies scripts/instructions/sessions and never commits.
+  home.file.".config/opencode/agent/error-reduction.md".source = ./agents/error-reduction.md;
+
   # Headless spike fact-finder agent (scoped permissions: question disabled,
   # ADO read-only, no push/commit). Used by the `spike-factfind` script to
   # investigate a work item at origin/main and emit a findings draft plus an

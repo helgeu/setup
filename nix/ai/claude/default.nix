@@ -52,6 +52,7 @@ in {
     ".claude/skills/pr-review/SKILL.md".source = ./skills/pr-review/SKILL.md;
     ".claude/skills/kickoff/SKILL.md".source = ./skills/kickoff/SKILL.md;
     ".claude/skills/standup/SKILL.md".source = ./skills/standup/SKILL.md;
+    ".claude/skills/error-reduction/SKILL.md".source = ./skills/error-reduction/SKILL.md;
     ".claude/agents/pr-review.md".source = ./agents/pr-review.md;
     ".claude/agents/azure-app-triage.md".source = ./agents/azure-app-triage.md;
     ".claude/ado/Ado.Common.ps1".source = ./ado/Ado.Common.ps1;
