@@ -150,11 +150,19 @@ esac
 
 snippet=""; task=""; logUrl=""
 if [ "$STATUS" != "succeeded" ] && [ "$DEEP" -eq 1 ]; then
-  env_json="$(api_get "${RBASE}/releases/${RELEASE_ID}/environments/${ENV_ID}?api-version=${API}" || true)"
+  # NOTE: the environment sub-resource
+  # (/releases/{id}/environments/{envId}) returns deploymentJobs as an EMPTY
+  # array — it carries no per-task breakdown, so there are no task logUrls to
+  # dig. The per-task list (with logUrls) only exists on the FULL release
+  # endpoint under .environments[].deploySteps[...]. Fetch that and pick the env.
+  env_json="$(api_get "${RBASE}/releases/${RELEASE_ID}?api-version=${API}" \
+    | jq --argjson eid "${ENV_ID}" '.environments[]? | select(.id==$eid)' 2>/dev/null || true)"
   if echo "$env_json" | jq -e '.deploySteps' >/dev/null 2>&1; then
-    read -r task logUrl <<<"$(echo "$env_json" | jq -r '
-      [.deploySteps[]?.releaseDeployPhases[]?.deploymentJobs[]?.tasks[]?
-        | select(.status=="failed" or .status=="partiallySucceeded")] 
+    # Prefer a genuinely failed task over a merely partiallySucceeded one, and
+    # tab-split so task names containing spaces stay intact.
+    IFS=$'\t' read -r task logUrl <<<"$(echo "$env_json" | jq -r '
+      [.deploySteps[]?.releaseDeployPhases[]?.deploymentJobs[]?.tasks[]?]
+      | (map(select(.status=="failed")) + map(select(.status=="partiallySucceeded")))
       | (.[0] // {}) | "\(.name // "")\t\(.logUrl // "")"')"
     if [ -n "$logUrl" ] && [ "$logUrl" != "null" ]; then
       raw="$(api_get "$logUrl" | tail -n "$TAIL" || true)"

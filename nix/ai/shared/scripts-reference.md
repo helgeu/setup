@@ -35,7 +35,7 @@ source and rebuild.
 | Classify **one** build's failure kind (timeline + failing-task log) | `ado-build-classify -o <org> -p <project> <buildId>` | The atom of the failure toolkit. Emits one JSON record `{category, failures[], url, …}`. Category = `ok`/`cancelled`/`infra/agent`/`timeout`/`security-gate`/`dependency`/`compile/build`/`test-failure`/`analyzer/lint`/`auth/secret`/`unknown`. Reuses `$ADO_TOKEN` if set. Use this instead of hand-rolling build/timeline/log `az` calls. |
 | List (and optionally classify) builds of **one** pipeline in a window | `ado-builds-by-pipeline -o <org> -p <project> --pipeline-id <id> [--days 14\|--weeks N\|--since YYYY-MM-DD]` | Lists completed runs for one definition. `--classify` runs the atom per run → JSON array (mints one token for all). `--failed-only`, `-f table\|json`. |
 | Scan **all** pipelines + classify failures + write a report | `ado-builds-scan -o <org> -p <project> [--days 14\|--weeks N\|--since YYYY-MM-DD]` | Enumerates every build pipeline, classifies every run, writes `pipeline-failures.{md,csv,json}` to `--output-dir` (pass rate, per-category, per-pipeline, top failing tasks). `--name-filter`, `--pipeline-ids`. This is the "which builds are failing and why" one-shot. |
-| Classify **one** classic-release environment deployment | `ado-release-classify -o <org> -p <project> --release-id <id> --env-id <id>` | Release counterpart of `ado-build-classify` (vsrm host). Classifies from deploymentStatus/operationStatus/env-name; `--deep` also digs the failing task log. Normally driven by the layers below. |
+| Classify **one** classic-release environment deployment | `ado-releases-by-definition … --definition-id <id> --classify --deep` | Release counterpart of `ado-build-classify` (vsrm host). For a one-off use the **parent layer** `ado-releases-by-definition` (or `ado-releases-scan`); it feeds the atom. **Do NOT run the `ado-release-classify` atom standalone** — it classifies from the `--status`/`--op`/`--env-name` flags its parent pipes in (Unix-style composition), not by self-fetching them, so bare with only `--release-id`/`--env-id` it returns `unknown`. `--deep` digs the failing task log. |
 | Scan **all** classic Release pipelines + classify + report | `ado-releases-scan -o <org> -p <project> [--days 14\|--weeks N\|--since YYYY-MM-DD]` | Covers the classic **Release** pipelines that `ado-builds-scan` does NOT (separate API). Writes `release-failures.{md,csv,json}` (per environment deployment). `ado-releases-by-definition --definition-id <id>` is the one-pipeline layer. `--deep`, `--name-filter`, `--definition-ids`. |
 | Retire (disable+hide) a repo and archive the pipelines it orphans | `ado-retire-repo -o <org> -p <project> -r <repo> [--apply] [--delete]` | Dry-run plan by default. Disables the repo (reversible; **never deleted**) and disables+moves its bound build pipelines & releases into `\Retired\<repo>`. `-o -p -r` required; `--apply` to execute, `--delete` to remove instead of archive. |
 | Draft (or send) a formatted HTML email in Outlook | `outlook-draft -s <subj> -t <to> [-c <cc>] --html <file>` | macOS only. Recipients comma/semicolon-sep, bare or `Name <addr>`. Body from `--html <file>` or `--stdin`. Opens a draft by default; `--send` to send. `--dry-run` to preview. |
@@ -230,13 +230,19 @@ different API and are invisible to the build toolkit. The release toolkit mirror
 it, with the **environment deployment** as the unit (a release deploys to several
 environments; each attempt has its own `deploymentStatus`).
 
-- **`ado-release-classify … --release-id <id> --env-id <id>` (bash)** — the release
-  atom. Classifies one environment deployment from `operationStatus`
+- **`ado-release-classify … --status <s> --op <o> --env-name <n>` (bash)** — the release
+  atom. **Not a standalone tool** — it is composed, Unix-style, by a parent layer
+  (`ado-releases-by-definition` / `ado-releases-scan`) that reads the deployments
+  list and pipes each deployment's fields in as flags (`--status`, `--op`,
+  `--env-name`, `--release-name`, `--pipeline`, `--url`). It does **not** self-fetch
+  those from `--release-id`/`--env-id`, so run bare it classifies `unknown`. Given
+  the flags it classifies one environment deployment from `operationStatus`
   (Rejected/Canceled → `cancelled`, PhaseFailed → `deploy/runtime`), the
   **environment-name heuristic** (`Test*`/`Execute…pipeline` → `test-failure`,
   `Deploy*`/`Migrate*` → `deploy/runtime`), and — with `--deep` — the failing
   task's log (agentless phases have no task log, so `--deep` is best-effort). Same
-  category vocabulary as the build atom.
+  category vocabulary as the build atom. For a single release, call the parent
+  layer below, not this directly.
 - **`ado-releases-by-definition … --definition-id <id> [date-pred]` (bash)** — lists
   deployments of one release pipeline via the `release/deployments` API; `--classify`
   runs the atom per non-succeeded deployment. `--failed-only`, `--deep`, `-f`.
