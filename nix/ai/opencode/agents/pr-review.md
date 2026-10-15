@@ -4,6 +4,13 @@ mode: primary
 permission:
   edit: allow
   webfetch: deny
+  read:
+    "*": allow
+    "*.env": deny
+    "*.env.*": deny
+    "*.env.example": allow
+    "*.env.template": allow
+    "*.env.sample": allow
   bash:
     "*": allow
     "rm *": deny
