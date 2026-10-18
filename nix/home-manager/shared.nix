@@ -2,16 +2,19 @@
   pkgs,
   lib,
   ...
-}: let
+}:
+let
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
-  combinedDotnet = with pkgs.dotnetCorePackages;
+  combinedDotnet =
+    with pkgs.dotnetCorePackages;
     combinePackages [
       sdk_8_0
       sdk_9_0
       sdk_10_0
       runtime_8_0
     ];
-in {
+in
+{
   imports = [
     ../git.nix
     ../zsh.nix
@@ -22,51 +25,55 @@ in {
   ];
 
   # Shared packages (cross-platform)
-  home.packages = with pkgs; [
-    # Azure / Cloud
-    (azure-cli.withExtensions [
-      azure-cli-extensions.azure-devops
-      azure-cli-extensions.resource-graph
-      azure-cli-extensions.application-insights
-    ])
+  home.packages =
+    with pkgs;
+    [
+      # Azure / Cloud
+      (azure-cli.withExtensions [
+        azure-cli-extensions.azure-devops
+        azure-cli-extensions.resource-graph
+        azure-cli-extensions.application-insights
+      ])
 
-    # .NET development
-    combinedDotnet
-    temurin-bin-21  # JDK 21 (LTS) for dotnet-sonarscanner; Java 17 is deprecated as a scanner runtime
-    # Shell tools
-    delta
-    fd
-    ripgrep
+      # .NET development
+      combinedDotnet
+      temurin-bin-21 # JDK 21 (LTS) for dotnet-sonarscanner; Java 17 is deprecated as a scanner runtime
+      # Shell tools
+      delta
+      fd
+      ripgrep
 
-    # JS/Node
-    fnm
+      # JS/Node
+      fnm
 
-    # Dev tools
-    (python3.withPackages (ps: [ ps.xlsxwriter ]))  # ado-prs-export/chart
-    pandoc
-    texliveSmall  # Needed for pandoc PDF output (xcolor + recommended LaTeX pkgs)
-    powershell
-    nixfmt
-    gitleaks
+      # Dev tools
+      (python3.withPackages (ps: [ ps.xlsxwriter ])) # ado-prs-export/chart
+      pandoc
+      texliveSmall # Needed for pandoc PDF output (xcolor + recommended LaTeX pkgs)
+      powershell
+      nixfmt
+      gitleaks
+      shellcheck
 
-    # Git
-    git-credential-manager
+      # Git
+      git-credential-manager
 
-    # Utilities
-    zip
+      # Utilities
+      zip
 
-    # Nvim tools
-    tree-sitter      # Parser generator (for treesitter CLI)
-    imagemagick      # Image manipulation (magick)
-    mermaid-cli      # Diagram generation (mmdc)
-  ] ++ lib.optionals isDarwin [
-    # macOS-only
-    xcodegen  # Swift project generation
-    # alt-tab-macos: installed via Homebrew cask instead (system/shared.nix).
-    # The nixpkgs build is ad-hoc signed, which fails macOS TCC's stored
-    # Developer-ID code requirement for Screen Recording -> permission prompt
-    # loops forever. The official signed cask satisfies TCC and persists grants.
-  ];
+      # Nvim tools
+      tree-sitter # Parser generator (for treesitter CLI)
+      imagemagick # Image manipulation (magick)
+      mermaid-cli # Diagram generation (mmdc)
+    ]
+    ++ lib.optionals isDarwin [
+      # macOS-only
+      xcodegen # Swift project generation
+      # alt-tab-macos: installed via Homebrew cask instead (system/shared.nix).
+      # The nixpkgs build is ad-hoc signed, which fails macOS TCC's stored
+      # Developer-ID code requirement for Screen Recording -> permission prompt
+      # loops forever. The official signed cask satisfies TCC and persists grants.
+    ];
 
   home.sessionVariables = {
     MANPAGER = "nvim +Man!";
@@ -88,8 +95,8 @@ in {
 
   programs.tmux = {
     enable = true;
-    mouse = true;            # click windows in the status bar, scroll, resize panes by drag
-    baseIndex = 1;           # windows start at 1 (matches prefix + 1)
+    mouse = true; # click windows in the status bar, scroll, resize panes by drag
+    baseIndex = 1; # windows start at 1 (matches prefix + 1)
     terminal = "tmux-256color";
     historyLimit = 50000;
     extraConfig = ''
@@ -132,17 +139,20 @@ in {
     settings = {
       gui = {
         theme = {
-          activeBorderColor = ["#89b4fa" "bold"];
-          inactiveBorderColor = ["#a6adc8"];
-          optionsTextColor = ["#89b4fa"];
-          selectedLineBgColor = ["#313244"];
-          defaultFgColor = ["#cdd6f4"];
-          unstagedChangesColor = ["#f38ba8"];
-          stagedChangesColor = ["#fae3b0"];
-          trackedFgColor = ["#a6da95"];
-          cherryPickedCommitBgColor = ["#45475a"];
-          cherryPickedCommitFgColor = ["#89b4fa"];
-          searchingActiveBorderColor = ["#f9e2af"];
+          activeBorderColor = [
+            "#89b4fa"
+            "bold"
+          ];
+          inactiveBorderColor = [ "#a6adc8" ];
+          optionsTextColor = [ "#89b4fa" ];
+          selectedLineBgColor = [ "#313244" ];
+          defaultFgColor = [ "#cdd6f4" ];
+          unstagedChangesColor = [ "#f38ba8" ];
+          stagedChangesColor = [ "#fae3b0" ];
+          trackedFgColor = [ "#a6da95" ];
+          cherryPickedCommitBgColor = [ "#45475a" ];
+          cherryPickedCommitFgColor = [ "#89b4fa" ];
+          searchingActiveBorderColor = [ "#f9e2af" ];
         };
       };
     };

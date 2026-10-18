@@ -2,16 +2,53 @@
   config,
   pkgs,
   ...
-}: {
+}:
+{
   home.file."githooks/pre-commit" = {
     executable = true;
     text = ''
       #!/usr/bin/env bash
-      ${pkgs.gitleaks}/bin/gitleaks protect --staged --no-banner
-      if [ $? -ne 0 ]; then
-        echo "gitleaks: secrets detected in staged changes. Commit blocked."
+      set -e
+
+      FAILED=0
+
+      # Get staged files (added, copied, modified — not deleted)
+      STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+      # nixfmt check on staged .nix files
+      NIX_FILES=$(echo "$STAGED" | grep '\.nix$' || true)
+      if [ -n "$NIX_FILES" ]; then
+        echo "→ nixfmt"
+        if ! echo "$NIX_FILES" | xargs ${pkgs.nixfmt}/bin/nixfmt --check; then
+          echo "  Fix: run 'nixfmt <file>' and re-stage"
+          FAILED=1
+        fi
+      fi
+
+      # shellcheck on staged bash scripts (.sh, .bash, and extensionless nix/bin/*)
+      SHELL_FILES=$(echo "$STAGED" | grep -E '(\.sh|\.bash|^nix/bin/[^/]+)$' || true)
+      if [ -n "$SHELL_FILES" ]; then
+        echo "→ shellcheck"
+        if ! echo "$SHELL_FILES" | xargs ${pkgs.shellcheck}/bin/shellcheck --shell=bash --severity=warning; then
+          echo "  Fix: address shellcheck warnings and re-stage"
+          FAILED=1
+        fi
+      fi
+
+      # gitleaks secret scanning
+      echo "→ gitleaks"
+      if ! ${pkgs.gitleaks}/bin/gitleaks protect --staged --no-banner; then
+        echo "  Secrets detected in staged changes. Commit blocked."
+        FAILED=1
+      fi
+
+      if [ $FAILED -ne 0 ]; then
+        echo ""
+        echo "❌ Pre-commit checks failed. Fix issues above and re-stage."
         exit 1
       fi
+
+      echo "✓ All checks passed"
     '';
   };
 
@@ -26,9 +63,10 @@
       enable = true;
       signing.format = null;
       package =
-        if pkgs.stdenv.hostPlatform.isDarwin
-        then pkgs.git.override {osxkeychainSupport = false;}
-        else pkgs.git;
+        if pkgs.stdenv.hostPlatform.isDarwin then
+          pkgs.git.override { osxkeychainSupport = false; }
+        else
+          pkgs.git;
       settings = {
         user.email = "helge@urholm.no";
         user.name = "helgereneurholm";
