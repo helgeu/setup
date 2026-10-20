@@ -11,7 +11,9 @@ failed=0
 eval_config() {
     local type=$1 name=$2
     echo "Evaluating $type configuration for $name..."
-    if nix eval "$FLAKE_DIR#${type}Configurations.$name.config.system.build.toplevel" > /dev/null; then
+    # Force .drvPath: evaluating the toplevel attrset alone is lazy and can
+    # report OK while a dependency (e.g. a broken package) fails evaluation.
+    if nix eval --raw "$FLAKE_DIR#${type}Configurations.$name.config.system.build.toplevel.drvPath" > /dev/null; then
         echo "  OK"
     else
         echo "  FAILED"

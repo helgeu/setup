@@ -65,6 +65,7 @@
       overlays = [
         inputs.nix-vscode-extensions.overlays.default
         (import ./overlays/bicep-protoc.nix)
+        (import ./overlays/fabric-invoke3.nix)
       ];
 
       # Shared home-manager config for all platforms
