@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+# dotnet-402-investigate — reproduce and probe the dotnet 10.0.402 (4xx VMR)
+# source-build failure that blocks nixpkgs PR #574338:
+#   https://github.com/NixOS/nixpkgs/pull/574338
+#
+# Failure (reported by corngood on the PR):
+#   error NU1102: Unable to find package Microsoft.NETCore.App.Ref (= 8.0.32)
+#   (and Microsoft.AspNetCore.App.Ref 8.0.32), in src/arcade.
+#
+# Why we think it happens: nixpkgs builds the 4xx VMR with the 1xx
+# source-built SDK (10.0.113) as bootstrap. The only package feed it gets is
+# that SDK's `artifacts`, which has no 8.0.32 ref packs.
+#
+# Phases (each one writes a marker; a re-run skips finished phases):
+#   fetch       check out nixpkgs at the pinned PR commit
+#   inspect     unpack the 10.0.402 source and find what pins 8.0.32
+#   prefetch    pin the hashes of the two 8.0.32 ref-pack nupkgs
+#   repro       build the 4xx VMR unchanged (expect NU1102)
+#   experiment  build the 4xx VMR with the ref packs added to the artifacts
+#   report      write reports/summary.md (a draft PR comment)
+#
+# The first build also source-builds the 1xx VMR (not in cache.nixos.org).
+# That takes hours. The Nix store keeps it, so a re-run continues cheaply.
+#
+#   dotnet-402-investigate                # run all unfinished phases
+#   dotnet-402-investigate <phase>        # run one phase (forces a re-run)
+#   dotnet-402-investigate status         # show finished phases
+#   dotnet-402-investigate reset [phase]  # clear one marker, or all
+#
+# Env: STATE_DIR (default ~/.cache/dotnet-402-investigate)
+#      PR_SHA    (default: the PR head this script was written against)
+
+set -euo pipefail
+
+STATE="${STATE_DIR:-$HOME/.cache/dotnet-402-investigate}"
+PR_SHA="${PR_SHA:-659c15701f113dea6828bf1953d2b3dc44e34550}"
+NIXPKGS="$STATE/nixpkgs"
+PHASES=(fetch inspect prefetch repro experiment report)
+REFPACKS=(microsoft.netcore.app.ref microsoft.aspnetcore.app.ref)
+REFVER="8.0.32"
+
+mkdir -p "$STATE/done" "$STATE/logs" "$STATE/reports"
+
+log() { printf '\n==> [%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
+done_mark() { echo "$PR_SHA" >"$STATE/done/$1"; }
+is_done() { [ -f "$STATE/done/$1" ] && [ "$(cat "$STATE/done/$1")" = "$PR_SHA" ]; }
+
+# Nix expression for all build targets. It is written on every run, so it
+# always matches this script.
+write_expr() {
+  cat >"$STATE/targets.nix" <<'EOF'
+{ nixpkgs ? ./nixpkgs }:
+let
+  p = import nixpkgs { };
+  d = p.dotnetCorePackages;
+  ver = "8.0.32";
+  hashes =
+    if builtins.pathExists ./refpacks.json
+    then builtins.fromJSON (builtins.readFile ./refpacks.json)
+    else { };
+  nupkg = name: p.fetchurl {
+    url = "https://api.nuget.org/v3-flatcontainer/${name}/${ver}/${name}.${ver}.nupkg";
+    hash = hashes.${name};
+  };
+  bootstrap = d.dotnet_10.sdk;
+  artifacts = p.runCommand "${bootstrap.artifacts.name}-plus-refpacks-${ver}" { } ''
+    mkdir -p $out
+    cp -r ${bootstrap.artifacts}/. $out/
+    chmod -R u+w $out
+    cp ${nupkg "microsoft.netcore.app.ref"} $out/microsoft.netcore.app.ref.${ver}.nupkg
+    cp ${nupkg "microsoft.aspnetcore.app.ref"} $out/microsoft.aspnetcore.app.ref.${ver}.nupkg
+  '';
+  patchedBootstrap = bootstrap.overrideAttrs (o: {
+    passthru = o.passthru // { inherit artifacts; };
+  });
+in
+{
+  src = d.dotnet_10_0_4xx.vmr.src;
+  original = d.dotnet_10_0_4xx.vmr;
+  patched = d.dotnet_10_0_4xx.vmr.override { bootstrapSdk = patchedBootstrap; };
+}
+EOF
+}
+
+# Build one target. Log to logs/<name>.log. Record the exit code. Never abort.
+build() {
+  local name="$1" attr="$2" rc=0
+  write_expr
+  log "building $attr (log: $STATE/logs/$name.log)"
+  nix build --impure -L --keep-going --file "$STATE/targets.nix" "$attr" \
+    --out-link "$STATE/result-$name" 2>&1 | tee "$STATE/logs/$name.log" || rc=${PIPESTATUS[0]}
+  echo "$rc" >"$STATE/reports/$name.rc"
+  rg -o 'error NU1102: Unable to find package [^ ]+ with version \([^)]*\)' \
+    "$STATE/logs/$name.log" | sort -u >"$STATE/reports/$name.nu1102" || true
+  rg -m 40 -i 'error (NU|CS|MSB|NETSDK)[0-9]+' "$STATE/logs/$name.log" \
+    | sort -u | head -40 >"$STATE/reports/$name.errors" || true
+  log "$name: exit $rc, NU1102 lines: $(wc -l <"$STATE/reports/$name.nu1102" | tr -d ' ')"
+}
+
+phase_fetch() {
+  if [ ! -d "$NIXPKGS/.git" ]; then
+    mkdir -p "$NIXPKGS"
+    git -C "$NIXPKGS" init -q
+  fi
+  if [ "$(git -C "$NIXPKGS" rev-parse HEAD 2>/dev/null || true)" != "$PR_SHA" ]; then
+    git -C "$NIXPKGS" fetch -q --depth=1 https://github.com/NixOS/nixpkgs.git "$PR_SHA"
+    git -C "$NIXPKGS" -c advice.detachedHead=false checkout -q FETCH_HEAD
+  fi
+  log "nixpkgs at $(git -C "$NIXPKGS" log --oneline -1)"
+}
+
+phase_inspect() {
+  write_expr
+  local tarball
+  tarball=$(nix build --impure --no-link --print-out-paths --file "$STATE/targets.nix" src)
+  if [ ! -d "$STATE/src/eng" ]; then
+    log "unpacking $tarball"
+    rm -rf "$STATE/src" && mkdir -p "$STATE/src"
+    tar -xzf "$tarball" -C "$STATE/src" --strip-components=1
+  fi
+  local out="$STATE/reports/inspect.txt"
+  {
+    echo "# Files in the 10.0.402 source that mention $REFVER"
+    rg -n --no-heading -F "$REFVER" "$STATE/src" \
+      -g '*.props' -g '*.targets' -g '*.json' -g '*.xml' -g '*.csproj' -g '*.proj' || true
+    echo
+    echo "# How the SDK computes the net8 pack version (VersionFeature80)"
+    rg -n --no-heading 'VersionSDKMinorPatch|VersionFeature80>' "$STATE/src/src/sdk/eng/Versions.props" || true
+    rg -n --no-heading '_NET80TargetingPackVersion|_AspNet80TargetingPackVersion' "$STATE/src/src/sdk" \
+      -g 'GenerateBundledVersions.targets' || true
+    echo
+    echo "# Target frameworks of ArcadeAzureIntegration"
+    rg -n --no-heading 'TargetFramework' \
+      "$STATE/src/src/arcade/src/Microsoft.DotNet.ArcadeAzureIntegration" || true
+    echo
+    echo "# arcade global.json"
+    cat "$STATE/src/src/arcade/global.json" 2>/dev/null || true
+  } >"$out"
+  log "wrote $out"
+}
+
+phase_prefetch() {
+  local json="{" sep="" name hash
+  for name in "${REFPACKS[@]}"; do
+    hash=$(nix store prefetch-file --json \
+      "https://api.nuget.org/v3-flatcontainer/$name/$REFVER/$name.$REFVER.nupkg" | jq -r .hash)
+    json="$json$sep\"$name\":\"$hash\""
+    sep=","
+  done
+  echo "$json}" | jq . >"$STATE/refpacks.json"
+  log "pinned hashes in $STATE/refpacks.json"
+}
+
+phase_repro() { build repro original; }
+phase_experiment() { build experiment patched; }
+
+phase_report() {
+  local out="$STATE/reports/summary.md" sys
+  sys=$(nix eval --impure --raw --expr builtins.currentSystem)
+  {
+    echo "Tested on \`$sys\` at $PR_SHA."
+    echo
+    echo "**Repro** (\`dotnet_10_0_4xx.vmr\` unchanged): exit $(cat "$STATE/reports/repro.rc" 2>/dev/null || echo '?')"
+    echo '```'
+    cat "$STATE/reports/repro.nu1102" 2>/dev/null || true
+    echo '```'
+    echo
+    echo "**Experiment**: bootstrap artifacts (10.0.113) plus Microsoft.NETCore.App.Ref and"
+    echo "Microsoft.AspNetCore.App.Ref $REFVER from nuget.org: exit $(cat "$STATE/reports/experiment.rc" 2>/dev/null || echo '?')"
+    echo '```'
+    cat "$STATE/reports/experiment.errors" 2>/dev/null || true
+    echo '```'
+    echo
+    echo "<details><summary>What pins $REFVER in the 10.0.402 source</summary>"
+    echo
+    echo '```'
+    head -60 "$STATE/reports/inspect.txt" 2>/dev/null || true
+    echo '```'
+    echo "</details>"
+  } >"$out"
+  log "wrote $out (review before you post it)"
+}
+
+run_phase() {
+  local p="$1"
+  log "phase: $p"
+  "phase_$p"
+  done_mark "$p"
+}
+
+cmd="${1:-all}"
+case "$cmd" in
+  all)
+    for p in "${PHASES[@]}"; do
+      if is_done "$p"; then log "skip $p (done)"; else run_phase "$p"; fi
+    done
+    log "finished. Summary: $STATE/reports/summary.md"
+    ;;
+  status)
+    for p in "${PHASES[@]}"; do
+      if is_done "$p"; then echo "done     $p"; else echo "pending  $p"; fi
+    done
+    ;;
+  reset)
+    if [ -n "${2:-}" ]; then rm -f "$STATE/done/$2"; else rm -f "$STATE/done/"*; fi
+    ;;
+  fetch|inspect|prefetch|repro|experiment|report)
+    run_phase "$cmd"
+    ;;
+  -h|--help)
+    sed -n '2,35p' "$0"
+    ;;
+  *)
+    echo "unknown command: $cmd (try --help)" >&2
+    exit 2
+    ;;
+esac
