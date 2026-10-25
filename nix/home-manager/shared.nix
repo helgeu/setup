@@ -1,6 +1,7 @@
 {
   pkgs,
   lib,
+  beads,
   ...
 }:
 let
@@ -54,6 +55,7 @@ in
       nixfmt
       gitleaks
       shellcheck
+      beads.packages.${pkgs.stdenv.hostPlatform.system}.default # Yegge's beads (bd) - issue tracker for AI agents, latest from upstream flake
 
       # Git
       git-credential-manager

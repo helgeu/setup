@@ -35,6 +35,11 @@
 
     claude-code.url = "github:sadjow/claude-code-nix";
 
+    beads = {
+      url = "github:gastownhall/beads";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     rtk = {
       url = "github:helgeu/rtk/feat/nix-flake";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -76,6 +81,7 @@
         home-manager.backupFileExtension = "backup";
         home-manager.extraSpecialArgs = {
           claude-code = inputs.claude-code;
+          beads = inputs.beads;
         };
         home-manager.users.${user} = { ... }: {
           imports = [

@@ -183,6 +183,92 @@ Examples:
 - Prefer `gh` CLI over web UI or API calls
 - Commands: `gh repo create`, `gh pr create`, `gh run list`, `gh workflow run`
 
+## Issue Tracking with Beads
+
+**Beads (`bd`)** is a local-first, git-backed issue tracker designed for AI coding agents. It stores issues in a Dolt database inside your project's `.beads/` directory.
+
+### When to Use Beads
+
+- **Track work items** — bugs, features, tasks, refactoring, docs
+- **Multi-step tasks** — break down complex work into trackable issues with dependencies
+- **Agent coordination** — use `bd ready` to find unblocked work, `bd update --claim` to take ownership
+- **Project memory** — `bd remember "insight"` stores durable facts about the project
+- **Avoid markdown TODO lists** — beads is the source of truth, not `TODO.md` files
+
+### Quick Start
+
+```bash
+# Initialize in a project (creates .beads/ directory)
+cd your-project
+bd init
+
+# Create an issue
+bd create "Fix login timeout" -p 1 -t bug
+
+# See what's ready to work on (no blockers)
+bd ready
+
+# Claim work
+bd update bd-a1b2 --claim
+
+# Complete work
+bd close bd-a1b2 "Fixed by increasing timeout"
+
+# Store project knowledge
+bd remember "API uses JWT with 15min expiry"
+
+# Get workflow context (use at session start)
+bd prime
+```
+
+### Key Commands
+
+| Command | Purpose |
+|---------|---------|
+| `bd init` | Initialize beads in current project |
+| `bd create "title" -p 0-4` | Create issue (priority 0=critical, 4=backlog) |
+| `bd ready` | List actionable issues (no blockers) |
+| `bd list` | List all issues with filters |
+| `bd show <id>` | Show issue details |
+| `bd update <id> --claim` | Claim issue for work |
+| `bd update <id> -s in_progress` | Update status |
+| `bd close <id> "reason"` | Close completed issue |
+| `bd dep add <child> <parent>` | Add dependency (child blocked by parent) |
+| `bd dep tree <id>` | Show dependency tree |
+| `bd remember "fact"` | Store project memory |
+| `bd prime` | Print workflow context + memories |
+| `bd sync` | Sync database with git |
+
+### Workflow for AI Agents
+
+1. **Start session:** Run `bd prime` to get workflow context and project memories
+2. **Find work:** Run `bd ready` to see unblocked issues
+3. **Claim work:** Run `bd update <id> --claim` to take ownership
+4. **Track progress:** Create child issues for sub-tasks, add dependencies with `bd dep add`
+5. **Complete:** Run `bd close <id> "summary"` when done
+6. **Remember:** Use `bd remember "insight"` for learnings that should persist
+
+### Important Notes
+
+- **Hierarchical IDs:** `bd-a1b2` (epic) → `bd-a1b2.1` (task) → `bd-a1b2.1.1` (subtask)
+- **JSON output:** Add `--json` to any command for machine-readable output
+- **Git integration:** `.beads/` is committed to git; run `bd sync` before committing
+- **Storage:** Uses Dolt (version-controlled SQL) — works offline, syncs via git
+- **Agent setup:** `bd init` creates/updates `AGENTS.md` with workflow instructions
+
+### Project-Specific Setup
+
+After installing beads via nix, initialize it in each project where you want issue tracking:
+
+```bash
+cd ~/git/github/your-project
+bd init
+bd setup claude    # For Claude Code integration
+bd setup codex     # For Codex CLI integration
+```
+
+
+
 ## Docker
 
 - Always multi-arch: `linux/amd64,linux/arm64`
