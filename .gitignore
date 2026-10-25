@@ -18,3 +18,10 @@ ado_deployments.csv.summary.json
 dora-summary.json
 dora-summary.md
 dora_trends.xlsx
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*

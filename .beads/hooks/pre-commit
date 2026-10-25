@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -e
+
+FAILED=0
+
+# Get staged files (added, copied, modified — not deleted)
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+# nixfmt check on staged .nix files
+NIX_FILES=$(echo "$STAGED" | grep '\.nix$' || true)
+if [ -n "$NIX_FILES" ]; then
+  echo "→ nixfmt"
+  if ! echo "$NIX_FILES" | xargs /nix/store/asmrz8zq07gg333j3s83fk6ijv27yvf7-nixfmt-1.5.0/bin/nixfmt --check; then
+    echo "  Fix: run 'nixfmt <file>' and re-stage"
+    FAILED=1
+  fi
+fi
+
+# shellcheck on staged bash scripts (.sh, .bash, and extensionless nix/bin/*)
+SHELL_FILES=$(echo "$STAGED" | grep -E '(\.sh|\.bash|^nix/bin/[^/]+)$' || true)
+if [ -n "$SHELL_FILES" ]; then
+  echo "→ shellcheck"
+  if ! echo "$SHELL_FILES" | xargs /nix/store/7i826r202acdz8c2q6hsggy44s1rkk0k-shellcheck-0.11.0-bin/bin/shellcheck --shell=bash --severity=warning; then
+    echo "  Fix: address shellcheck warnings and re-stage"
+    FAILED=1
+  fi
+fi
+
+# gitleaks secret scanning
+echo "→ gitleaks"
+if ! /nix/store/bgrdsikks2p2isryllrb3hqysbbirvli-gitleaks-8.30.1/bin/gitleaks protect --staged --no-banner; then
+  echo "  Secrets detected in staged changes. Commit blocked."
+  FAILED=1
+fi
+
+if [ $FAILED -ne 0 ]; then
+  echo ""
+  echo "❌ Pre-commit checks failed. Fix issues above and re-stage."
+  exit 1
+fi
+
+echo "✓ All checks passed"
+
+# --- BEGIN BEADS INTEGRATION v1.3.2 ---
+# This section is managed by beads. Do not remove these markers.
+if command -v bd >/dev/null 2>&1; then
+  export BD_GIT_HOOK=1
+  _bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+  case "$_bd_timeout" in
+    *[!0-9]*|'') _bd_timeout_invalid=1 ;;
+    *[1-9]*) _bd_timeout_invalid=0 ;;
+    *) _bd_timeout_invalid=1 ;;
+  esac
+  if [ "$_bd_timeout_invalid" -eq 1 ]; then
+    echo >&2 "beads: invalid BEADS_HOOK_TIMEOUT; using 300 seconds"
+    _bd_timeout=300
+  fi
+  _bd_timeout_backend=none
+  _bd_timeout_command=
+  for _bd_timeout_candidate in timeout gtimeout; do
+    if command -v "$_bd_timeout_candidate" >/dev/null 2>&1; then
+      if _bd_timeout_version="$("$_bd_timeout_candidate" --version 2>/dev/null)"; then
+        case "$_bd_timeout_version" in
+          "timeout (GNU coreutils) "*|"timeout (uutils coreutils) "*) _bd_timeout_command=$_bd_timeout_candidate; break ;;
+        esac
+      fi
+    fi
+  done
+  if [ -n "$_bd_timeout_command" ]; then
+    _bd_timeout_backend=coreutils
+    if "$_bd_timeout_command" -- "$_bd_timeout" bd hooks run pre-commit "$@"; then
+      _bd_exit=0
+    else
+      _bd_exit=$?
+    fi
+  elif command -v perl >/dev/null 2>&1; then
+    _bd_timeout_backend=perl
+    if perl -e 'alarm shift; exec @ARGV' -- "$_bd_timeout" bd hooks run pre-commit "$@"; then
+      _bd_exit=0
+    else
+      _bd_exit=$?
+    fi
+  else
+    echo >&2 "beads: hook 'pre-commit' running without timeout; install coreutils or perl to enable BEADS_HOOK_TIMEOUT"
+    if bd hooks run pre-commit "$@"; then
+      _bd_exit=0
+    else
+      _bd_exit=$?
+    fi
+  fi
+  if { [ "$_bd_timeout_backend" = coreutils ] && [ "$_bd_exit" -eq 124 ]; } || { [ "$_bd_timeout_backend" = perl ] && [ "$_bd_exit" -eq 142 ]; }; then
+    echo >&2 "beads: hook 'pre-commit' timed out after ${_bd_timeout}s — continuing without beads"
+    _bd_exit=0
+  fi
+  if [ "$_bd_exit" -eq 3 ]; then
+    echo >&2 "beads: database not initialized — skipping hook 'pre-commit'"
+    _bd_exit=0
+  fi
+  if [ "$_bd_exit" -ne 0 ]; then exit "$_bd_exit"; fi
+fi
+# --- END BEADS INTEGRATION v1.3.2 ---
