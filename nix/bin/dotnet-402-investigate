@@ -17,6 +17,7 @@
 #   prefetch    pin the hashes of the two 8.0.32 ref-pack nupkgs
 #   repro       build the 4xx VMR unchanged (expect NU1102)
 #   experiment  build the 4xx VMR with the ref packs added to the artifacts
+#   fixup       build the 4xx VMR with corngood's fix (drop net8 from arcade)
 #   report      write reports/summary.md (a draft PR comment)
 #
 # The first build also source-builds the 1xx VMR (not in cache.nixos.org).
@@ -35,7 +36,7 @@ set -euo pipefail
 STATE="${STATE_DIR:-$HOME/.cache/dotnet-402-investigate}"
 PR_SHA="${PR_SHA:-659c15701f113dea6828bf1953d2b3dc44e34550}"
 NIXPKGS="$STATE/nixpkgs"
-PHASES=(fetch inspect prefetch repro experiment report)
+PHASES=(fetch inspect prefetch repro experiment fixup report)
 REFPACKS=(microsoft.netcore.app.ref microsoft.aspnetcore.app.ref)
 REFVER="8.0.32"
 
@@ -78,6 +79,15 @@ in
   src = d.dotnet_10_0_4xx.vmr.src;
   original = d.dotnet_10_0_4xx.vmr;
   patched = d.dotnet_10_0_4xx.vmr.override { bootstrapSdk = patchedBootstrap; };
+  # corngood's fixup from the PR (2026-10-23), same edit as his vmr.nix patch.
+  # https://github.com/dotnet/dotnet/issues/10416
+  fixup = d.dotnet_10_0_4xx.vmr.overrideAttrs (o: {
+    postPatch = o.postPatch + ''
+      substituteInPlace \
+        src/arcade/src/Microsoft.DotNet.ArcadeAzureIntegration/Microsoft.DotNet.ArcadeAzureIntegration.csproj \
+          --replace-fail ';$(NetMinimum)' ""
+    '';
+  });
 }
 EOF
 }
@@ -153,6 +163,7 @@ phase_prefetch() {
 
 phase_repro() { build repro original; }
 phase_experiment() { build experiment patched; }
+phase_fixup() { build fixup fixup; }
 
 phase_report() {
   local out="$STATE/reports/summary.md" sys
@@ -169,6 +180,12 @@ phase_report() {
     echo "Microsoft.AspNetCore.App.Ref $REFVER from nuget.org: exit $(cat "$STATE/reports/experiment.rc" 2>/dev/null || echo '?')"
     echo '```'
     cat "$STATE/reports/experiment.errors" 2>/dev/null || true
+    echo '```'
+    echo
+    echo "**corngood's fixup** (drop \`;\$(NetMinimum)\` from ArcadeAzureIntegration.csproj, via"
+    echo "\`postPatch\`, no prebuilts): exit $(cat "$STATE/reports/fixup.rc" 2>/dev/null || echo '?')"
+    echo '```'
+    cat "$STATE/reports/fixup.errors" 2>/dev/null || true
     echo '```'
     echo
     echo "<details><summary>What pins $REFVER in the 10.0.402 source</summary>"
@@ -204,7 +221,7 @@ case "$cmd" in
   reset)
     if [ -n "${2:-}" ]; then rm -f "$STATE/done/$2"; else rm -f "$STATE/done/"*; fi
     ;;
-  fetch|inspect|prefetch|repro|experiment|report)
+  fetch|inspect|prefetch|repro|experiment|fixup|report)
     run_phase "$cmd"
     ;;
   -h|--help)
