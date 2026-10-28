@@ -53,6 +53,7 @@ in
       texliveSmall # Needed for pandoc PDF output (xcolor + recommended LaTeX pkgs)
       powershell
       nixfmt
+      nixpkgs-review # Test nixpkgs PRs locally before review/approval
       gitleaks
       shellcheck
       beads.packages.${pkgs.stdenv.hostPlatform.system}.default # Yegge's beads (bd) - issue tracker for AI agents, latest from upstream flake
