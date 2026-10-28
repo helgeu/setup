@@ -78,6 +78,10 @@
       source = ./azprs;
       executable = true;
     };
+    "bin/dotnet-402-investigate" = {
+      source = ./dotnet-402-investigate;
+      executable = true;
+    };
     "bin/copilot-usage" = {
       source = ./copilot-usage;
       executable = true;
