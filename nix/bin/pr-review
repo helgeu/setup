@@ -272,11 +272,23 @@ fi
 PROMPT="Use the pr-review skill. The verified PR context is in ${CTX} (read it; do not re-fetch PR metadata). The current working directory is a fresh, isolated worktree checked out at the PR source branch '${SRC_BRANCH}' (target branch '${TGT_BRANCH}'). Review Azure DevOps pull request #${PR_ID}. Write the structured findings JSON to ${FINDINGS}. Do NOT post any comments."
 
 log "running opencode pr-review agent (this can take a while)..."
+RUN_START="$(mktemp)"
+RUN_STATUS=0
 # opencode V2 has no --dir flag; the run uses the current directory.
 (cd "$WT" && opencode run --agent pr-review "${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}" "$PROMPT") \
-  || die "opencode run failed"
+  || RUN_STATUS=$?
 
-[ -s "$FINDINGS" ] || die "opencode finished but no findings file at $FINDINGS"
+# opencode V2 exits non-zero when any error occurred in the session, also a
+# transient provider error that the agent recovered from. A findings file
+# written during this run is the real success signal.
+if [ -s "$FINDINGS" ] && [ "$FINDINGS" -nt "$RUN_START" ]; then
+  rm -f "$RUN_START"
+  [ "$RUN_STATUS" -eq 0 ] || log "warning: opencode run exited with $RUN_STATUS, but this run wrote the findings file; check the output above for errors"
+else
+  rm -f "$RUN_START"
+  [ "$RUN_STATUS" -eq 0 ] || die "opencode run failed (exit $RUN_STATUS)"
+  die "opencode finished but did not write a findings file at $FINDINGS"
+fi
 
 echo
 log "done. findings written to:"
