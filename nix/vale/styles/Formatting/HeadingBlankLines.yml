@@ -1,0 +1,7 @@
+extends: existence
+message: "Headings must have exactly one blank line above and below (MD022)."
+level: warning
+nonword: true
+raw:
+  - '(?m)\S[^\n]*\n#{1,6}\s'
+  - '(?m)^#{1,6}\s.*\n[ \t]*\S'

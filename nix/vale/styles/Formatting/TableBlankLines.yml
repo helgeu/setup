@@ -1,0 +1,7 @@
+extends: existence
+message: "Tables should be surrounded by blank lines (MD058)."
+level: warning
+nonword: true
+raw:
+  - '(?m)\S[^\n]*\n\|.*\|\s*$'
+  - '(?m)^\|.*\|\s*$\n[ \t]*\S'

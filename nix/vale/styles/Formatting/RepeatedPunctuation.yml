@@ -1,0 +1,5 @@
+extends: existence
+message: "Avoid repeated punctuation ('%s')."
+level: warning
+raw:
+  - '[!?]{2,}'

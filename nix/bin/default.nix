@@ -150,6 +150,10 @@
       source = ./standup;
       executable = true;
     };
+    "bin/vale-check" = {
+      source = ./vale-check;
+      executable = true;
+    };
   };
 
   # Ensure ~/bin is on PATH everywhere.

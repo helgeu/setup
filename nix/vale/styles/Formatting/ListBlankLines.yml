@@ -1,0 +1,6 @@
+extends: existence
+message: "Lists should be surrounded by blank lines (MD032)."
+level: warning
+nonword: true
+raw:
+  - '(?m)\S[^\n]*\n(?:\*|-|\+|\d+\.)\s'

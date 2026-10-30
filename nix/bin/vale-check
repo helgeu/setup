@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# vale-check - Run Vale prose checks with the global base configuration.
+#
+# English files get the Vale, Microsoft and Formatting styles. Norwegian
+# Bokmal files get the Formatting and NB (Hunspell nb_NO) styles. The base
+# configuration is managed by nix (nix/vale) and lives in ~/.config/vale.
+#
+# Language selection (default --lang auto):
+#   A file is Norwegian when a folder in its path is "no" or "nb", or when its
+#   name ends in .no.md, .nb.md, .no.txt or .nb.txt. All other files are English.
+#
+# Vocabularies (project terms) are not part of the base configuration. vale-check
+# adds them from these places:
+#   1. <repo root>/.vale/vocabularies   (the repository you stand in)
+#   2. --vocab DIR, or VALE_CHECK_VOCAB=DIR (colon-separated for more than one)
+# Each place holds one folder per vocabulary, with accept.txt and/or reject.txt:
+#   <Name>-en/   used for English files only
+#   <Name>-nb/   used for Norwegian files only
+#   <Name>/      used for both languages
+#
+# A repository with its own .vale.ini wins: vale-check then runs plain `vale`
+# and lets that file decide. Use --global to ignore the repository file.
+#
+# Usage:
+#   vale-check FILE|DIR...            # summary per rule and per file
+#   vale-check --full FILE...         # every alert, one per line
+#   vale-check --lang nb FILE...      # force Norwegian rules
+#   vale-check --lang en FILE...      # force English rules
+#   vale-check --vocab DIR FILE...    # add vocabularies from DIR
+#   vale-check --global FILE...       # ignore a repository .vale.ini
+#
+# Exit code: 1 when Vale reports at least one error-level alert, else 0.
+
+CONFIG_DIR="${VALE_CHECK_CONFIG_DIR:-$HOME/.config/vale}"
+
+log() { printf '%s\n' "$*" >&2; }
+die() { printf 'error: %s\n' "$*" >&2; exit 2; }
+
+LANG_MODE="auto"
+FULL=0
+GLOBAL=0
+PATHS=()
+VOCAB_ROOTS=()
+if [ -n "${VALE_CHECK_VOCAB:-}" ]; then
+  IFS=':' read -r -a VOCAB_ROOTS <<< "$VALE_CHECK_VOCAB"
+fi
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --lang) LANG_MODE="${2:?--lang requires en, nb or auto}"; shift 2 ;;
+    --vocab) VOCAB_ROOTS+=("${2:?--vocab requires a folder}"); shift 2 ;;
+    --full) FULL=1; shift ;;
+    --global) GLOBAL=1; shift ;;
+    -h|--help) sed -n '4,35p' "$0"; exit 0 ;;
+    --) shift; PATHS+=("$@"); break ;;
+    -*) die "unknown option: $1" ;;
+    *) PATHS+=("$1"); shift ;;
+  esac
+done
+
+case "$LANG_MODE" in en|nb|auto) ;; *) die "--lang must be en, nb or auto" ;; esac
+[ ${#PATHS[@]} -gt 0 ] || die "give at least one file or folder (see --help)"
+command -v vale >/dev/null || die "vale is not on PATH (it is installed by nix/vale)"
+[ -f "$CONFIG_DIR/.vale.ini" ] || die "no Vale configuration in $CONFIG_DIR (run the nix switch)"
+
+FILES=()
+for p in "${PATHS[@]}"; do
+  if [ -d "$p" ]; then
+    while IFS= read -r f; do FILES+=("$f"); done < <(find "$p" -type f \( -name '*.md' -o -name '*.txt' \) -not -path '*/.git/*' -not -path '*/node_modules/*' | sort)
+  elif [ -f "$p" ]; then
+    FILES+=("$p")
+  else
+    die "not found: $p"
+  fi
+done
+[ ${#FILES[@]} -gt 0 ] || die "no .md or .txt files found"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+
+repo_config() {
+  if [ -f ./.vale.ini ]; then printf '%s\n' "./.vale.ini"
+  elif [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.vale.ini" ]; then printf '%s\n' "$REPO_ROOT/.vale.ini"
+  fi
+}
+
+is_norwegian() {
+  case "/$1" in
+    */no/*|*/nb/*|*.no.md|*.nb.md|*.no.txt|*.nb.txt) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+EN_FILES=()
+NB_FILES=()
+for f in "${FILES[@]}"; do
+  case "$LANG_MODE" in
+    en) EN_FILES+=("$f") ;;
+    nb) NB_FILES+=("$f") ;;
+    auto) if is_norwegian "$f"; then NB_FILES+=("$f"); else EN_FILES+=("$f"); fi ;;
+  esac
+done
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# build_config LANG BASE_INI -> prints the path of a config that links the base
+# styles and adds every vocabulary that applies to LANG.
+build_config() {
+  local lang="$1" base="$2" dir="$TMP/config-$1" names=() root v name
+  mkdir -p "$dir/styles/config/vocabularies"
+  for entry in "$CONFIG_DIR/styles"/*; do
+    [ "$(basename "$entry")" = "config" ] || ln -s "$entry" "$dir/styles/"
+  done
+  for entry in "$CONFIG_DIR/styles/config"/*; do
+    ln -s "$entry" "$dir/styles/config/"
+  done
+  local roots=()
+  [ -z "$REPO_ROOT" ] || [ ! -d "$REPO_ROOT/.vale/vocabularies" ] || roots+=("$REPO_ROOT/.vale/vocabularies")
+  roots+=(${VOCAB_ROOTS[@]+"${VOCAB_ROOTS[@]}"})
+  for root in ${roots[@]+"${roots[@]}"}; do
+    [ -d "$root" ] || die "vocabulary folder not found: $root"
+    for v in "$root"/*/; do
+      [ -d "$v" ] || continue
+      name="$(basename "$v")"
+      case "$name" in
+        *-en) [ "$lang" = en ] || continue ;;
+        *-nb) [ "$lang" = nb ] || continue ;;
+      esac
+      if [ -e "$dir/styles/config/vocabularies/$name" ]; then
+        log "warning: vocabulary $name found more than once; using the first one"
+        continue
+      fi
+      ln -s "${v%/}" "$dir/styles/config/vocabularies/$name"
+      names+=("$name")
+    done
+  done
+  {
+    printf 'StylesPath = %s\n' "$dir/styles"
+    if [ ${#names[@]} -gt 0 ]; then
+      local IFS=','
+      printf 'Vocab = %s\n' "${names[*]}"
+    fi
+    grep -v '^StylesPath' "$base"
+  } > "$dir/vale.ini"
+  [ ${#names[@]} -eq 0 ] || log "Vocabularies ($lang): ${names[*]}"
+  printf '%s\n' "$dir/vale.ini"
+}
+
+# run_vale NAME CONFIG FILE...  (an empty CONFIG lets Vale find .vale.ini itself)
+run_vale() {
+  local name="$1" config="$2"; shift 2
+  [ $# -gt 0 ] || return 0
+  local args=()
+  [ -z "$config" ] || args+=("--config=$config")
+  if [ "$FULL" -eq 1 ]; then
+    vale "${args[@]+"${args[@]}"}" --output=line "$@" || true
+  else
+    vale "${args[@]+"${args[@]}"}" --output=JSON "$@" > "$TMP/$name.json" || true
+  fi
+}
+
+REPO_CONFIG=""
+[ "$GLOBAL" -eq 1 ] || REPO_CONFIG="$(repo_config)"
+
+if [ -n "$REPO_CONFIG" ]; then
+  log "Using the repository configuration: $REPO_CONFIG"
+  run_vale repo "" "${FILES[@]}"
+else
+  if [ ${#EN_FILES[@]} -gt 0 ]; then
+    run_vale en "$(build_config en "$CONFIG_DIR/.vale.ini")" "${EN_FILES[@]}"
+  fi
+  if [ ${#NB_FILES[@]} -gt 0 ]; then
+    run_vale nb "$(build_config nb "$CONFIG_DIR/vale-nb.ini")" "${NB_FILES[@]}"
+  fi
+fi
+
+if [ "$FULL" -eq 1 ]; then
+  exit 0
+fi
+
+python3 - "$TMP" <<'PY'
+import json, sys, pathlib, collections
+alerts = []
+for f in sorted(pathlib.Path(sys.argv[1]).glob("*.json")):
+    text = f.read_text().strip()
+    if not text:
+        continue
+    data = json.loads(text)
+    if isinstance(data, dict) and "Code" in data:
+        sys.exit(f"vale failed: {data.get('Text', data)}")
+    for path, items in data.items():
+        for a in items:
+            alerts.append((path, a["Severity"], a["Check"]))
+if not alerts:
+    print("No alerts.")
+    sys.exit(0)
+by_rule = collections.Counter((s, c) for _, s, c in alerts)
+by_file = collections.Counter(p for p, _, _ in alerts)
+by_sev = collections.Counter(s for _, s, _ in alerts)
+print(f"{len(alerts)} alerts: " + ", ".join(f"{n} {s}" for s, n in sorted(by_sev.items())))
+print("\nPer rule:")
+for (sev, check), n in by_rule.most_common():
+    print(f"  {n:5}  {sev:10}  {check}")
+print("\nPer file:")
+for path, n in by_file.most_common():
+    print(f"  {n:5}  {path}")
+print("\nRun with --full to see every alert.")
+sys.exit(1 if by_sev.get("error") else 0)
+PY

@@ -1,0 +1,6 @@
+extends: existence
+message: "Headings must start at the beginning of the line (MD023)."
+level: warning
+nonword: true
+raw:
+  - '(?m)^[ \t]+#{1,6}\s'

@@ -1,0 +1,6 @@
+extends: existence
+message: "Use '*' for unordered list markers."
+level: warning
+nonword: true
+raw:
+  - '(?m)^\s*(?:>\s*)*[-+](?=\s)'

@@ -1,0 +1,6 @@
+extends: existence
+message: "Use a single space, not multiple spaces."
+level: warning
+nonword: true
+raw:
+  - '\S {2,}\S'

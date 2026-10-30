@@ -1,0 +1,8 @@
+extends: existence
+message: "Use at most one consecutive blank line, and end files with exactly one newline (MD012/MD047-compatible)."
+level: warning
+nonword: true
+raw:
+  - '(?m)\n[ \t]*\n[ \t]*\n+'
+  - '(?s)[^\n]\z'
+  - '(?s)\n{2,}\z'

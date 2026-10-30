@@ -1,0 +1,6 @@
+extends: existence
+message: "Do not use empty links (MD042)."
+level: warning
+nonword: true
+raw:
+  - '\[[^\]]*\]\(\s*(?:<\s*>)?\s*\)'

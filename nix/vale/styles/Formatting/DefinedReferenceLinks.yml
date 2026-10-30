@@ -1,0 +1,6 @@
+extends: existence
+message: "Reference links/images must use a defined label (MD052-compatible)."
+level: warning
+nonword: true
+raw:
+  - '(?ms)!?\[[^\]]+\]\[([^\]]+)\](?![\s\S]*^\[\1\]:\s+\S)'

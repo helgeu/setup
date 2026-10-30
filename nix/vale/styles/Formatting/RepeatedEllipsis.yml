@@ -1,0 +1,5 @@
+extends: existence
+message: "Use a proper ellipsis ('...'), not 4+ periods."
+level: warning
+raw:
+  - '\.{4,}'

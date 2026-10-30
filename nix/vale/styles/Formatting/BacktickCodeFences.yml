@@ -1,0 +1,6 @@
+extends: existence
+message: "Use backticks for fenced code blocks, not tildes (MD048)."
+level: warning
+nonword: true
+raw:
+  - '(?m)^\s*~~~+'

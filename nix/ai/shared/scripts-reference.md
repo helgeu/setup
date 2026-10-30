@@ -41,6 +41,7 @@ source and rebuild.
 | Draft (or send) a formatted HTML email in Outlook | `outlook-draft -s <subj> -t <to> [-c <cc>] --html <file>` | macOS only. Recipients comma/semicolon-sep, bare or `Name <addr>`. Body from `--html <file>` or `--stdin`. Opens a draft by default; `--send` to send. `--dry-run` to preview. |
 | Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` (plain text, HTML-escaped, newlines → `<br>`), `--html <file>` (raw HTML), or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
+| Check prose (English or Norwegian) with Vale | `vale-check [--lang en\|nb] [--vocab DIR] [--full] <files/dirs>` | Microsoft + Formatting for English, NB spelling (Hunspell nb_NO) + Formatting for Norwegian. Adds project vocabularies from `<repo>/.vale/vocabularies` or `--vocab`. A repo `.vale.ini` wins (`--global` ignores it). See "Prose checks" below. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads the local opencode session DB. Pairs with the `standup` skill for ADO cross-ref. |
 | Close stale opencode session todos whose PR/WI is done in ADO | `reconcile-todos [--apply]` | Dry-run by default. Closes a session's open todos iff every PR/WI its title references is terminal (PR completed/abandoned, WI Closed/Removed/Resolved/Ready for Production); keeps active PRs/open WIs; ignores bare numbers. `-o -p --db --json`. |
 | Repair opencode sessions broken by non-time-sortable message ids | `opencode-fix-message-ids [--all\|-s <id>] [--dry-run]` | Fixes the "conversation must end with a user message" prefill loop + out-of-order display (upstream anomalyco/opencode#38791). Renumbers messages by `time_created`; backs up first. |
@@ -120,6 +121,27 @@ source and rebuild.
   tomorrow 09:00 local; `--duration` defaults to 30 min. `--dry-run` prints the
   parsed attendees + generated AppleScript without touching Outlook. Requires
   classic Outlook (AppleScript-scriptable).
+
+### Prose checks (`~/bin`, bash)
+
+- **`vale-check [--lang en|nb|auto] [--vocab DIR] [--full] [--global] <files/dirs>`**
+  — runs Vale with the global base configuration from `nix/vale`, linked to
+  `~/.config/vale`. English files get `Vale`, `Microsoft` and `Formatting`
+  (Contractions and Quotes are off: full forms, logical quotes). Norwegian files
+  get `Formatting` and `NB` (Hunspell `nb_NO`, downloaded by nix because it is
+  GPL). `--lang auto` treats a path with a `no/` or `nb/` folder, or a
+  `.no.md`/`.nb.md` name, as Norwegian. Prints a summary per rule and file;
+  `--full` prints every alert. Exit 1 on error-level alerts.
+- **Vocabularies are not in the setup repo.** `vale-check` adds them from
+  `<repo root>/.vale/vocabularies` and from `--vocab DIR` / `VALE_CHECK_VOCAB`.
+  Folder names decide the language: `<Name>-en`, `<Name>-nb`, or `<Name>` for
+  both. The IMDi lists live in the wiki repo:
+  `~/ado/Bosettingsprosjekt.wiki/.vale/vocabularies` (`IMDi-en`, `IMDi-nb`).
+- **Gotcha:** keep English and Norwegian lists apart. Vale also enforces the
+  exact case of every accepted term, so an English word such as `The` in an
+  English-text list makes `Vale.Terms` flag every "the".
+- Do not use Vale alone as a Norwegian spell check. It misses real typos (see
+  `vale-readability-reference.md`).
 
 ### PR analytics (`~/bin`, python)
 

@@ -1,0 +1,7 @@
+extends: existence
+message: "Use asterisks for emphasis/strong (*text*, **text**), not underscores (_text_, __text__) (MD049/MD050-compatible)."
+level: warning
+nonword: true
+raw:
+  - '(?<!_)_([^_\n]+)_(?!_)'
+  - '(?<!_)__([^_\n]+)__(?!_)'

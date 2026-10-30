@@ -23,6 +23,7 @@ in
     ../vscode.nix
     ../ai
     ../bin
+    ../vale
   ];
 
   # Shared packages (cross-platform)

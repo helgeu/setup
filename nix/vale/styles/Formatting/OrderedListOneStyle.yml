@@ -1,0 +1,6 @@
+extends: existence
+message: "Use '1.' for ordered list markers (MD029-compatible style)."
+level: warning
+nonword: true
+raw:
+  - '(?m)^(?:\s{0,3})[2-9]\d*\.\s'

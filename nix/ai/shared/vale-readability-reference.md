@@ -3,9 +3,37 @@
 ## Status
 
 - Research date: 2026-08-13.
-- State: Research complete. No active Nix configuration exists.
+- State: Base setup active (2026-10-30). Nix installs Vale and a global configuration (`nix/vale`). Run it with `vale-check`.
 - Goal: Test English and Norwegian prose checks with Vale and Nix.
-- Next result: A small, pinned Vale trial with measured false positives.
+- Next result: Calibrate LIX, and decide on STE rules and CI.
+
+## Current setup (2026-10-30)
+
+| Part | Location | Notes |
+| --- | --- | --- |
+| Vale | `nix/vale/default.nix` | From nixpkgs. Replaces the Homebrew install. |
+| English config | `nix/vale/vale.ini` | `Vale`, `Microsoft` (v0.15.1, pinned), `Formatting`. Contractions and Quotes are off. |
+| Norwegian config | `nix/vale/vale-nb.ini` | `Formatting` and `NB`. |
+| `Formatting`, `NB` | `nix/vale/styles` | Copied from SuperOfficeDocs/docs at commit `9fb4e84` (MIT). Identical to the earlier OneDrive copy. |
+| `nb_NO` dictionary | Downloaded by nix | npm `dictionary-nb` 3.0.0 (GPL-2.0), pinned by hash. Not stored in this repository. This closes the licence question below. |
+| IMDi vocabularies | Wiki repo, `.vale/vocabularies` | `IMDi-nb` (Norwegian spelling) and `IMDi-en` (English text). Not stored in this repository. |
+| Runner | `nix/bin/vale-check` | Picks the language, adds vocabularies, prints a summary. |
+
+The first setup lived in OneDrive (`IMDI - Bedre Bosetting-Bosetting - Analyser/helgeu`). That folder now has a note that points here.
+
+## Trial results
+
+| Text | Rules | Result |
+| --- | --- | --- |
+| ST-ARK 06 (Norwegian), September version | `NB`, `Formatting`, IMDi vocabulary | 186 alerts without vocabulary, 5 with vocabulary. All 5 were real. Vale missed 3 real typos. |
+| ST-ARK 06, current text extract | Same | 27 alerts. The old OneDrive setup gives the same 27. |
+| Four ADR drafts (English) | `Microsoft`, `Formatting`, `IMDi-en` | 199 alerts before edits, 27 after. The rest are title-line and false alerts. |
+
+Lessons:
+
+- One shared word list for both languages does not work. Vale enforces the case of each accepted term (`Vale.Terms`), so English words from Norwegian quotes ("The", "Code") gave 111 false errors on English text.
+- `Microsoft.Contractions` conflicts with STE and the wiki style. It is off.
+- Vale over-flags Norwegian compound words and misses real typos. Use it for consistency, not as the only spell check.
 
 ## Main findings
 
@@ -231,11 +259,16 @@ Measure at least these values:
 
 ## Open decisions
 
-- Decide whether the first trial covers English only or both languages.
-- Select the document sample.
-- Decide whether GPL-2.0 dictionary files can be stored in this repository.
-- Select and pin package versions.
-- Define the IMDi vocabulary owner.
+Decided on 2026-10-30:
+
+- The trial covers both languages.
+- The GPL-2.0 dictionary is not stored here. Nix downloads it at a pinned version.
+- Package versions are pinned: Microsoft v0.15.1, `dictionary-nb` 3.0.0, SuperOffice styles at commit `9fb4e84`.
+- The IMDi vocabulary lives in the wiki repo. Changes go through pull requests there.
+
+Still open:
+
+- Select the document sample for LIX calibration.
 - Select the Norwegian klarsprak source that custom rules will implement.
 - Decide which alerts can block CI.
 - Decide whether LanguageTool adds enough value for its package size.
@@ -258,5 +291,5 @@ Do not implement this outline until the trial scope is approved.
 ## Resume prompt
 
 ```text
-Resume the Vale readability trial from `ai/shared/vale-readability-reference.md` in `~/git/github/setup/nix`. Read the document and inspect the current Nix configuration before editing. Confirm the trial language and document sample. Then implement the smallest pinned, non-blocking Vale trial. Use Nix only. Add tests and report false positives. Do not claim ASD-STE100 compliance.
+Resume the Vale work from `ai/shared/vale-readability-reference.md` in `~/git/github/setup/nix`. The base setup is active: `nix/vale` and `vale-check`. Read "Current setup" and "Open decisions" first. Next steps: calibrate LIX, select STE rules, and decide on CI. Use Nix only. Keep project vocabularies out of this repository. Do not claim ASD-STE100 compliance.
 ```
