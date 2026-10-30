@@ -29,19 +29,10 @@
   home.file.".config/opencode/plugins/rtk.ts".source = ./plugins/rtk-v2.ts;
 
   # Local TUI plugin: macOS/iOS-style double-space -> period in the prompt.
-  # NOTE: it lives OUTSIDE the auto-scanned `plugins/` dir on purpose. Files in
-  # `plugins/` are loaded by the SERVER plugin host, which rejects a tui-only
-  # module ("must default export server()"). TUI plugins are not auto-discovered;
-  # they must be listed in tui.json's `plugin` array (see below).
-  home.file.".config/opencode/tui-plugins/smart-punctuation.ts".source =
+  # OpenCode V2 discovers TUI plugins at <config>/plugins/<name>/tui.ts, so no
+  # cli.json entry is needed (cli.json is owned by the TUI settings dialog).
+  home.file.".config/opencode/plugins/smart-punctuation/tui.ts".source =
     ./plugins/smart-punctuation.ts;
-
-  # TUI-specific config. `plugin` here is read only by the TUI runtime, so the
-  # smart-punctuation plugin loads for the prompt without touching the server.
-  home.file.".config/opencode/tui.json".text = builtins.toJSON {
-    "$schema" = "https://opencode.ai/tui.json";
-    plugin = [ "./tui-plugins/smart-punctuation.ts" ];
-  };
 
   # Headless PR-review agent (scoped permissions). Used by the `pr-review`
   # script together with the ~/.claude/skills/pr-review skill.
