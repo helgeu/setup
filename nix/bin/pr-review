@@ -260,20 +260,21 @@ else
   log "using opencode default model (set --model or PR_REVIEW_MODEL to override)"
 fi
 if [ -n "$VARIANT" ]; then
-  MODEL_ARGS+=(--variant "$VARIANT")
-  log "using variant: $VARIANT"
+  if [ -n "$MODEL" ]; then
+    # opencode V2 has no --variant flag; the variant is part of the model ID.
+    MODEL_ARGS=(--model "${MODEL}#${VARIANT}")
+    log "using variant: $VARIANT"
+  else
+    log "warning: --variant needs --model in opencode V2; using the provider default"
+  fi
 fi
 
 PROMPT="Use the pr-review skill. The verified PR context is in ${CTX} (read it; do not re-fetch PR metadata). The current working directory is a fresh, isolated worktree checked out at the PR source branch '${SRC_BRANCH}' (target branch '${TGT_BRANCH}'). Review Azure DevOps pull request #${PR_ID}. Write the structured findings JSON to ${FINDINGS}. Do NOT post any comments."
 
 log "running opencode pr-review agent (this can take a while)..."
-if [ "${#MODEL_ARGS[@]}" -gt 0 ]; then
-  opencode run --agent pr-review --dir "$WT" "${MODEL_ARGS[@]}" "$PROMPT" \
-    || die "opencode run failed"
-else
-  opencode run --agent pr-review --dir "$WT" "$PROMPT" \
-    || die "opencode run failed"
-fi
+# opencode V2 has no --dir flag; the run uses the current directory.
+(cd "$WT" && opencode run --agent pr-review "${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}" "$PROMPT") \
+  || die "opencode run failed"
 
 [ -s "$FINDINGS" ] || die "opencode finished but no findings file at $FINDINGS"
 

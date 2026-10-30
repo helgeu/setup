@@ -193,14 +193,20 @@ fi
 MODEL_ARGS=(--model "$MODEL")
 log "using model: $MODEL"
 if [ -n "$VARIANT" ]; then
-  MODEL_ARGS+=(--variant "$VARIANT")
-  log "using variant: $VARIANT"
+  if [ -n "$MODEL" ]; then
+    # opencode V2 has no --variant flag; the variant is part of the model ID.
+    MODEL_ARGS=(--model "${MODEL}#${VARIANT}")
+    log "using variant: $VARIANT"
+  else
+    log "warning: --variant needs --model in opencode V2; using the provider default"
+  fi
 fi
 
 PROMPT="You are running the spike fact-find for Azure DevOps work item #${WI_ID} ('${WI_TITLE}'). The verified work-item context (id, title, description, acceptance criteria) is in ${CTX} — read it first; do not re-fetch it. The current working directory is a fresh, isolated worktree checked out at origin/main of the '${REPO_NAME}' repository. Investigate the code/DB to gather evidence for this spike. Write findings-draft.md and questions.json into ${OUTDIR}, following your agent instructions exactly. Non-interactive: capture every unresolved decision in questions.json with evidence — never ask, never block."
 
 log "running opencode spike agent (this can take a while); tee -> $RUNLOG"
-opencode run --agent spike --dir "$WT" "${MODEL_ARGS[@]}" "$PROMPT" 2>&1 | tee "$RUNLOG" \
+# opencode V2 has no --dir flag; the run uses the current directory.
+(cd "$WT" && opencode run --agent spike "${MODEL_ARGS[@]}" "$PROMPT") 2>&1 | tee "$RUNLOG" \
   || die "opencode run failed (see $RUNLOG)"
 
 [ -s "$FINDINGS" ]  || die "opencode finished but no findings draft at $FINDINGS"

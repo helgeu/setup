@@ -76,16 +76,12 @@ fi
 
 # --- pick the variant --------------------------------------------------------
 # Enumerate a model's reasoning-effort variants, live from opencode.
+# opencode V2: `opencode models` lists IDs only; variants come from the API.
 model_variants() {
-  local m="$1" prov="${1%%/*}"
-  opencode models "$prov" --verbose 2>/dev/null | awk -v m="$m" '
-    $0==m {cap=1; depth=0; buf=""; next}
-    cap {
-      buf=buf $0 "\n"
-      n=gsub(/{/,"{"); depth+=n
-      c=gsub(/}/,"}"); depth-=c
-      if (depth==0 && buf ~ /}/) { print buf; exit }
-    }' | jq -r '.variants // {} | keys[]' 2>/dev/null
+  local m="$1"
+  opencode api get /api/model 2>/dev/null \
+    | jq -r --arg p "${m%%/*}" --arg id "${m#*/}" \
+        '.data[] | select(.providerID == $p and .id == $id) | .variants[]?.id' 2>/dev/null
 }
 
 # Order variants lightest -> heaviest; append any unknown keys at the end.

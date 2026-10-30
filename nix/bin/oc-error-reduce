@@ -171,21 +171,22 @@ else
   log "using opencode default model (set --model or ERROR_REDUCE_MODEL to override)"
 fi
 if [ -n "$VARIANT" ]; then
-  MODEL_ARGS+=(--variant "$VARIANT")
-  log "using variant: $VARIANT"
+  if [ -n "$MODEL" ]; then
+    # opencode V2 has no --variant flag; the variant is part of the model ID.
+    MODEL_ARGS=(--model "${MODEL}#${VARIANT}")
+    log "using variant: $VARIANT"
+  else
+    log "warning: --variant needs --model in opencode V2; using the provider default"
+  fi
 fi
 
 # --- run opencode (headless) --------------------------------------------------
 PROMPT="Use the error-reduction skill. The error scan JSON is in ${SCAN} (sensor: oc-error-scan, window: since ${SINCE}; read it; do not re-run the sensor and do not touch the session databases). Write the plan doc to ${PLAN}. Do NOT implement anything, do NOT modify scripts, instructions, or skills, and do NOT commit."
 
 log "running opencode error-reduction agent (this can take a while)..."
-if [ "${#MODEL_ARGS[@]}" -gt 0 ]; then
-  opencode run --agent error-reduction --dir "$OUT_DIR" "${MODEL_ARGS[@]}" "$PROMPT" \
-    || die "opencode run failed"
-else
-  opencode run --agent error-reduction --dir "$OUT_DIR" "$PROMPT" \
-    || die "opencode run failed"
-fi
+# opencode V2 has no --dir flag; the run uses the current directory.
+(cd "$OUT_DIR" && opencode run --agent error-reduction "${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}" "$PROMPT") \
+  || die "opencode run failed"
 
 [ -s "$PLAN" ] || die "opencode finished but no plan doc at $PLAN"
 
