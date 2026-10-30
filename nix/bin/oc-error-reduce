@@ -163,6 +163,12 @@ if [ -z "$MODEL" ] && [ -t 0 ] && command -v pr-model-select >/dev/null; then
   fi
 fi
 
+# Fail fast on an unknown model or variant.
+if [ -n "$MODEL" ] && command -v pr-model-select >/dev/null; then
+  pr-model-select --model "$MODEL" --variant "${VARIANT:-default}" </dev/null >/dev/null \
+    || die "invalid model or variant (see the message above)"
+fi
+
 MODEL_ARGS=()
 if [ -n "$MODEL" ]; then
   MODEL_ARGS=(--model "$MODEL")
@@ -184,11 +190,23 @@ fi
 PROMPT="Use the error-reduction skill. The error scan JSON is in ${SCAN} (sensor: oc-error-scan, window: since ${SINCE}; read it; do not re-run the sensor and do not touch the session databases). Write the plan doc to ${PLAN}. Do NOT implement anything, do NOT modify scripts, instructions, or skills, and do NOT commit."
 
 log "running opencode error-reduction agent (this can take a while)..."
+RUN_START="$(mktemp)"
+RUN_STATUS=0
 # opencode V2 has no --dir flag; the run uses the current directory.
 (cd "$OUT_DIR" && opencode run --agent error-reduction "${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}" "$PROMPT") \
-  || die "opencode run failed"
+  || RUN_STATUS=$?
 
-[ -s "$PLAN" ] || die "opencode finished but no plan doc at $PLAN"
+# opencode V2 exits non-zero when any error occurred in the session, also a
+# transient provider error that the agent recovered from. A plan doc written
+# during this run is the real success signal.
+if [ -s "$PLAN" ] && [ "$PLAN" -nt "$RUN_START" ]; then
+  rm -f "$RUN_START"
+  [ "$RUN_STATUS" -eq 0 ] || log "warning: opencode run exited with $RUN_STATUS, but this run wrote the plan doc; check the output above for errors"
+else
+  rm -f "$RUN_START"
+  [ "$RUN_STATUS" -eq 0 ] || die "opencode run failed (exit $RUN_STATUS)"
+  die "opencode finished but did not write a plan doc at $PLAN"
+fi
 
 echo
 log "done. plan doc written to:"

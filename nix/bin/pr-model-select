@@ -59,9 +59,12 @@ mapfile -t MODELS < <(opencode models 2>/dev/null \
 [ "${#MODELS[@]}" -gt 0 ] || die "no github-copilot opus/gpt models found via 'opencode models'"
 
 if [ -n "$MODEL" ]; then
+  # Validate a given model against every model opencode knows, not only the
+  # copilot opus/gpt subset that the menu offers.
+  mapfile -t ALL_MODELS < <(opencode models 2>/dev/null)
   ok=""
-  for m in "${MODELS[@]}"; do [ "$m" = "$MODEL" ] && ok=1 && break; done
-  [ -n "$ok" ] || die "model '$MODEL' is not an available copilot opus/gpt model. Options: ${MODELS[*]}"
+  for m in "${ALL_MODELS[@]}"; do [ "$m" = "$MODEL" ] && ok=1 && break; done
+  [ -n "$ok" ] || die "model '$MODEL' is not available in opencode. Menu options: ${MODELS[*]} (see 'opencode models' for all)"
 else
   [ -t 0 ] || die "no --model given and no TTY for the interactive menu"
   echo >&2

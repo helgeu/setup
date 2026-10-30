@@ -19,12 +19,13 @@
 #   spike-factfind 83918
 #   spike-factfind 83918 imdidev
 #   spike-factfind 83918 --repo bosetting-backend
-#   spike-factfind 83918 -m github-copilot/gpt-5.5 --variant xhigh
+#   spike-factfind 83918 -m github-copilot/gpt-5.6-sol --variant xhigh
 #
 # Options:
-#   -m, --model <model>    opencode model id (default: github-copilot/gpt-5.5).
+#   -m, --model <model>    opencode model id. Without it: the model menu in a
+#                          terminal, else the opencode default model.
 #                          Overrides SPIKE_MODEL. Also accepts --model=<model>.
-#       --variant <v>      model reasoning-effort variant (default: xhigh).
+#       --variant <v>      model reasoning-effort variant (needs a model).
 #                          Overrides SPIKE_VARIANT. Use "default"/"" for the
 #                          provider default. Also accepts --variant=<v>.
 #       --repo <name>      repo to investigate (default: bosetting-backend).
@@ -53,8 +54,8 @@ log() { echo "spike-factfind: $*" >&2; }
 
 # --- args --------------------------------------------------------------------
 KEEP="${SPIKE_KEEP:-}"
-MODEL="${SPIKE_MODEL:-github-copilot/gpt-5.5}"
-VARIANT="${SPIKE_VARIANT:-xhigh}"
+MODEL="${SPIKE_MODEL:-}"
+VARIANT="${SPIKE_VARIANT:-}"
 REPO_NAME="${SPIKE_REPO:-bosetting-backend}"
 RESTORE=""
 ARGS=()
@@ -89,6 +90,24 @@ case "$VARIANT" in default) VARIANT="" ;; esac
 for t in az jq git opencode; do
   command -v "$t" >/dev/null || die "$t not found on PATH"
 done
+
+# --- interactive model/variant chooser ---------------------------------------
+# Same rule as pr-review: when no model was given and we have a TTY, offer the
+# shared chooser. When --model was supplied, honour it and never prompt.
+if [ -z "$MODEL" ] && [ -t 0 ] && command -v pr-model-select >/dev/null; then
+  if sel="$(pr-model-select --prompt "Select the model for spike #${WI_ID}:")"; then
+    MODEL="${sel%%$'\t'*}"
+    VARIANT="${sel#*$'\t'}"
+  else
+    exit 1
+  fi
+fi
+
+# Fail fast on an unknown model or variant, before the long checkout.
+if [ -n "$MODEL" ] && command -v pr-model-select >/dev/null; then
+  pr-model-select --model "$MODEL" --variant "${VARIANT:-default}" </dev/null >/dev/null \
+    || die "invalid model or variant (see the message above)"
+fi
 
 # --- resolve org -------------------------------------------------------------
 ORG_IN="${2:-${SPIKE_ORG:-imdidev}}"
@@ -190,8 +209,13 @@ if [ -n "$RESTORE" ]; then
 fi
 
 # --- run opencode (headless) -------------------------------------------------
-MODEL_ARGS=(--model "$MODEL")
-log "using model: $MODEL"
+MODEL_ARGS=()
+if [ -n "$MODEL" ]; then
+  MODEL_ARGS=(--model "$MODEL")
+  log "using model: $MODEL"
+else
+  log "using opencode default model (set --model or SPIKE_MODEL to override)"
+fi
 if [ -n "$VARIANT" ]; then
   if [ -n "$MODEL" ]; then
     # opencode V2 has no --variant flag; the variant is part of the model ID.
@@ -205,12 +229,24 @@ fi
 PROMPT="You are running the spike fact-find for Azure DevOps work item #${WI_ID} ('${WI_TITLE}'). The verified work-item context (id, title, description, acceptance criteria) is in ${CTX} — read it first; do not re-fetch it. The current working directory is a fresh, isolated worktree checked out at origin/main of the '${REPO_NAME}' repository. Investigate the code/DB to gather evidence for this spike. Write findings-draft.md and questions.json into ${OUTDIR}, following your agent instructions exactly. Non-interactive: capture every unresolved decision in questions.json with evidence — never ask, never block."
 
 log "running opencode spike agent (this can take a while); tee -> $RUNLOG"
+RUN_START="$(mktemp)"
+RUN_STATUS=0
 # opencode V2 has no --dir flag; the run uses the current directory.
-(cd "$WT" && opencode run --agent spike "${MODEL_ARGS[@]}" "$PROMPT") 2>&1 | tee "$RUNLOG" \
-  || die "opencode run failed (see $RUNLOG)"
+(cd "$WT" && opencode run --agent spike "${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}" "$PROMPT") 2>&1 | tee "$RUNLOG" \
+  || RUN_STATUS=$?
 
-[ -s "$FINDINGS" ]  || die "opencode finished but no findings draft at $FINDINGS"
-[ -s "$QUESTIONS" ] || die "opencode finished but no questions file at $QUESTIONS"
+# opencode V2 exits non-zero when any error occurred in the session, also a
+# transient provider error that the agent recovered from. Both output files
+# written during this run are the real success signal.
+if [ -s "$FINDINGS" ] && [ "$FINDINGS" -nt "$RUN_START" ] \
+  && [ -s "$QUESTIONS" ] && [ "$QUESTIONS" -nt "$RUN_START" ]; then
+  rm -f "$RUN_START"
+  [ "$RUN_STATUS" -eq 0 ] || log "warning: opencode run exited with $RUN_STATUS, but this run wrote both output files; check $RUNLOG for errors"
+else
+  rm -f "$RUN_START"
+  [ "$RUN_STATUS" -eq 0 ] || die "opencode run failed (exit $RUN_STATUS, see $RUNLOG)"
+  die "opencode finished but did not write both $FINDINGS and $QUESTIONS"
+fi
 
 echo
 log "done. spike fact-find outputs:"

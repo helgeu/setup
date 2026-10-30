@@ -2,7 +2,13 @@
 description: Headless session error-reduction analyzer. Produces a plan doc of improvement suggestions via the error-reduction skill; never modifies scripts, instructions, skills, or session data, and never commits. Driven by the `oc-error-reduce` script.
 mode: primary
 permission:
-  edit: allow
+  # opencode V2 matches external_directory against the folder boundary
+  # (".../setup/*"), not the file. The edit rules limit writes in the setup
+  # repo to the plan doc.
+  edit:
+    "*": deny
+    "~/.claude/**": allow
+    "~/git/github/setup/improvement-suggestions-*.md": allow
   webfetch: deny
   bash:
     "*": deny
@@ -10,7 +16,7 @@ permission:
   external_directory:
     "*": deny
     "~/.claude/**": allow
-    "~/git/github/setup/improvement-suggestions-*.md": allow
+    "~/git/github/setup/*": allow
 ---
 
 You are a headless session error-reduction analyzer.

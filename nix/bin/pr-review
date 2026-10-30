@@ -108,6 +108,12 @@ if [ -z "$MODEL" ] && [ -t 0 ] && command -v pr-model-select >/dev/null; then
   fi
 fi
 
+# Fail fast on an unknown model or variant, before the long checkout/install.
+if [ -n "$MODEL" ] && command -v pr-model-select >/dev/null; then
+  pr-model-select --model "$MODEL" --variant "${VARIANT:-default}" </dev/null >/dev/null \
+    || die "invalid model or variant (see the message above)"
+fi
+
 # --- resolve org -------------------------------------------------------------
 ORG_IN="${2:-${PR_REVIEW_ORG:-}}"
 PARAM_DIR="$HOME/.claude/pr-review"
