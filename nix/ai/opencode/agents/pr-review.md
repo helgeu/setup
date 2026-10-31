@@ -27,6 +27,8 @@ permission:
   external_directory:
     "*": deny
     "~/.claude/**": allow
+    # opencode tells agents to use its own temp folder (".../T/opencode").
+    "/private/var/folders/*/*/T/opencode/**": allow
 ---
 
 You are a headless Azure DevOps pull-request reviewer.

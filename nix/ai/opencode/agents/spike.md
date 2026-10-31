@@ -26,6 +26,8 @@ permission:
     "*": deny
     "~/ado/**": allow
     "~/.claude/**": allow
+    # opencode tells agents to use its own temp folder (".../T/opencode").
+    "/private/var/folders/*/*/T/opencode/**": allow
 ---
 
 You are a headless SPIKE fact-finder investigating a single Azure DevOps work item.

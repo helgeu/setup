@@ -17,6 +17,8 @@ permission:
     "*": deny
     "~/.claude/**": allow
     "~/git/github/setup/*": allow
+    # opencode tells agents to use its own temp folder (".../T/opencode").
+    "/private/var/folders/*/*/T/opencode/**": allow
 ---
 
 You are a headless session error-reduction analyzer.
