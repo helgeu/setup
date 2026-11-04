@@ -34,7 +34,9 @@ let
     cp -r ${./styles/NB} $out/styles/NB
     tar -xzf ${dictionaryNb} -C "$TMPDIR"
     cp "$TMPDIR/package/index.aff" $out/styles/config/dictionaries/nb_NO.aff
-    cp "$TMPDIR/package/index.dic" $out/styles/config/dictionaries/nb_NO.dic
+    # Vale cannot parse entries with an empty flag list ("og/"), and then
+    # flags common words. Remove the trailing slash.
+    sed 's#/$##' "$TMPDIR/package/index.dic" > $out/styles/config/dictionaries/nb_NO.dic
   '';
 in
 {
