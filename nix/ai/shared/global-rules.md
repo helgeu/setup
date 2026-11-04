@@ -37,7 +37,6 @@
 
 ## Editing files
 
-- **Never add a trailing newline to any file.** Files must not end with a trailing blank line. Do not introduce EOF newlines, and never add blank lines the change does not require. This is a hard, standing rule — never re-litigate it.
 - **Never reformat or re-indent lines you are not functionally changing.** Touch only what the task requires; gratuitous whitespace/format churn is noise.
 - **Read a file before editing or overwriting it.** Never edit blind.
 - **Make edit anchors unique and non-empty.** Give the match enough surrounding context to be unambiguous, and never submit an edit whose new content is identical to the old (a no-op edit is an error).

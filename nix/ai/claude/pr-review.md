@@ -272,4 +272,3 @@ This serves as a historical record and input for follow-up work items.
 - **Conventional commits**: `fix(<scope>): <description>` for any fix branches
 - **ADO `update`**: uses `--org` only, NO `--project`
 - **ADO PR comments**: use the thread API structure from the ADO CLI reference
-- **Never flag "missing trailing newline"** — this is not a valid finding. Do not mention it, post it, or suggest it in any review.
