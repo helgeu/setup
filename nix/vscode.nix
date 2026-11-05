@@ -3,11 +3,13 @@
   pkgs,
   lib,
   ...
-}: let
+}:
+let
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
   marketplace = pkgs.vscode-marketplace;
-in {
+in
+{
   programs = {
     vscode = {
       # Disable on Linux/WSL - use Windows VS Code with Remote-WSL extension
@@ -24,10 +26,11 @@ in {
       # win). Requires VS Code to be closed during `switch`.
       profiles.default.mutableUserSettings = true;
       profiles.default.userSettings = {
-        "editor.fontFamily" = "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
+        "editor.fontFamily" =
+          "'MesloLGM Nerd Font','MesloLGS Nerd Font','MesloLGL Nerd Font', Menlo, Monaco, 'Courier New', monospace";
         "terminal.integrated.fontFamily" = "MesloLGM Nerd Font";
         "editor.fontLigatures" = true;
-        "update.mode" = "none";  # Nix manages VS Code updates
+        "update.mode" = "none"; # Nix manages VS Code updates
         "chat.agent.enabled" = true;
         "fsharp.editor.inlayHints.enabled" = "off";
         "chat.agent.maxRequests" = 250;
@@ -41,12 +44,14 @@ in {
           "approve" = true;
           "matchCommandLine" = true;
         };
-      } // lib.optionalAttrs isDarwin {
+      }
+      // lib.optionalAttrs isDarwin {
         "terminal.integrated.defaultProfile.osx" = "pwsh";
         "powershell.powerShellAdditionalExePaths" = {
           "Nix pwsh" = "/etc/profiles/per-user/${config.home.username}/bin/pwsh";
         };
-      } // lib.optionalAttrs isLinux {
+      }
+      // lib.optionalAttrs isLinux {
         "terminal.integrated.defaultProfile.linux" = "pwsh";
       };
       # Extensions from VS Code marketplace via nix-vscode-extensions (updated daily)
@@ -55,7 +60,7 @@ in {
         # GitHub Copilot Chat is auto-installed by VS Code at runtime — do NOT add here
         # OpenAPI
         marketplace."42crunch".vscode-openapi
-        marketplace.redhat.vscode-yaml           # Required by vscode-openapi
+        marketplace.redhat.vscode-yaml # Required by vscode-openapi
         # .NET (nixpkgs - marketplace versions fail to build)
         pkgs.vscode-extensions.ms-dotnettools.vscode-dotnet-runtime
         pkgs.vscode-extensions.ms-dotnettools.csharp
@@ -85,11 +90,10 @@ in {
   # these are regenerated nix-store symlinks, not data. Real directories (e.g.
   # VS Code's runtime-installed Copilot Chat) are not symlinks, so they survive.
   home.activation = lib.mkIf isDarwin {
-    cleanVscodeExtensionConflicts =
-      lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
-        ext="$HOME/.vscode/extensions"
-        rm -rf "$ext.backup"
-        [ -d "$ext" ] && find "$ext" -maxdepth 1 -type l -delete
-      '';
+    cleanVscodeExtensionConflicts = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+      ext="$HOME/.vscode/extensions"
+      rm -rf "$ext.backup"
+      [ -d "$ext" ] && find "$ext" -maxdepth 1 -type l -delete
+    '';
   };
 }
