@@ -73,6 +73,8 @@ in
         marketplace.hediet.vscode-drawio
         marketplace.chrischinchilla.vscode-pandoc
         marketplace.bierner.markdown-mermaid
+        # Code quality (nixpkgs - bundles platform-specific JRE/analyzers)
+        pkgs.vscode-extensions.sonarsource.sonarlint-vscode
       ];
     };
   };
