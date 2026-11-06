@@ -1,0 +1,7 @@
+extends: existence
+message: "Use a hyphen between an abbreviation and a Norwegian ending: write '%s' as for example 'API-et', 'DAO-er'."
+link: https://www.sprakradet.no/sprakhjelp/Skriveregler/Forkortinger/
+level: error
+nonword: true
+tokens:
+  - '\b[A-ZÆØÅ]{2,}(?:en|et|er|ene|ens|ets|ers)\b'
