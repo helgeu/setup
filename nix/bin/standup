@@ -21,7 +21,6 @@
 
 set -euo pipefail
 
-DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode-stable.db}"
 MODE="standup"
 JSON=0
 
@@ -38,13 +37,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -f "$DB" ] || { echo "standup: opencode DB not found at $DB" >&2; exit 1; }
+# Session data lives in several stores (V2 + legacy V1); oc_sessions.py reads all.
+python3 - "$(dirname "$0")" "$MODE" "$JSON" <<'PY'
+import sys, json, time, datetime as dt
 
-python3 - "$DB" "$MODE" "$JSON" <<'PY'
-import sys, json, time, sqlite3, datetime as dt
+sys.path.insert(0, sys.argv[1])
+import oc_sessions as ocs
 
-db, mode, want_json = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
-c = sqlite3.connect(db)
+mode, want_json = sys.argv[2], sys.argv[3] == "1"
+stores = ocs.open_stores()
+if not stores:
+    sys.exit(f"standup: no opencode session DB found in {ocs.DATA_DIR}")
 
 now = dt.datetime.now()
 midnight = dt.datetime(now.year, now.month, now.day)
@@ -53,10 +56,9 @@ ms = lambda d: int(time.mktime(d.timetuple()) * 1000)
 fd = lambda d: d.strftime("%a %Y-%m-%d")
 
 def sessions(since, until):
-    return [dict(zip(("updated", "directory", "title"), r)) for r in c.execute(
-        "SELECT datetime(time_updated/1000,'unixepoch','localtime'),directory,title "
-        "FROM session WHERE parent_id IS NULL AND time_updated>=? AND time_updated<? "
-        "ORDER BY time_updated DESC", (since, until))]
+    return [{"updated": dt.datetime.fromtimestamp(s["updated"] / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+             "directory": s["directory"], "title": s["title"]}
+            for s in ocs.sessions(stores, since, until)]
 
 # --- DID window depends on the mode ---
 if mode == "standup":
@@ -87,11 +89,8 @@ else:  # week
 # (open todos from stale/abandoned sessions are dropped so "plan" stays current;
 #  4-day window covers a long weekend without resurfacing ancient scaffolding.)
 plan_since = ms(now - dt.timedelta(days=4))
-todos = [dict(zip(("status", "session", "content"), r)) for r in c.execute(
-    "SELECT t.status,s.title,t.content FROM todo t JOIN session s ON s.id=t.session_id "
-    "WHERE t.status IN ('pending','in_progress') AND s.time_updated>=? "
-    "ORDER BY (t.status='in_progress') DESC, s.time_updated DESC, t.position",
-    (plan_since,))]
+todos = [{"status": t["status"], "session": t["session_title"], "content": t["content"]}
+         for t in ocs.open_todos(stores, plan_since)]
 blockers = [t for t in todos if any(k in t["content"].upper()
             for k in ("BLOCK", "WAITING", "AVVENT"))]
 

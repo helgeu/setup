@@ -28,6 +28,11 @@
 #   opencode-fix-message-ids --all --dry-run # show what would change, touch nothing
 #   flags: --no-backup  --keep-empty  --yes  -h/--help
 #
+# SCOPE
+#   V1 store only (tables session/message/part, default opencode-stable.db).
+#   The V2 store (opencode.db, session_v2/session_message) orders messages by
+#   an explicit `seq` column, so this bug cannot occur there.
+#
 # SAFETY
 #   Makes a full online backup (sqlite .backup) before any write unless
 #   --no-backup. Runs in one transaction with foreign_key_check + quick_check.
@@ -36,7 +41,10 @@
 
 set -euo pipefail
 
-DB="${OPENCODE_DB:-$(opencode db path 2>/dev/null || echo "$HOME/.local/share/opencode/opencode-stable.db")}"
+case "${OPENCODE_DB:-}" in
+  /*) DB="$OPENCODE_DB" ;;
+  *)  DB="$HOME/.local/share/opencode/opencode-stable.db" ;;
+esac
 BACKUP_DIR="${OPENCODE_FIX_BACKUP_DIR:-$HOME/.local/share/opencode/backup}"
 
 MODE="detect"          # detect | fix
@@ -52,7 +60,7 @@ while [ $# -gt 0 ]; do
     --no-backup)    BACKUP=0; shift ;;
     --keep-empty)   CLEAN_EMPTY=0; shift ;;
     --yes|-y)       ASSUME_YES=1; shift ;;
-    -h|--help)      sed -n '2,33p' "$0"; exit 0 ;;
+    -h|--help)      sed -n '2,38p' "$0"; exit 0 ;;
     *) echo "opencode-fix-message-ids: unknown arg '$1'" >&2; exit 2 ;;
   esac
 done

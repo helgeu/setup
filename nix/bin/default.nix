@@ -102,6 +102,13 @@
       source = ./oc-error-scan;
       executable = true;
     };
+    "bin/oc-session-search" = {
+      source = ./oc-session-search;
+      executable = true;
+    };
+    "bin/oc_sessions.py" = {
+      source = ./oc_sessions.py;
+    };
     "bin/outlook-draft" = {
       source = ./outlook-draft;
       executable = true;

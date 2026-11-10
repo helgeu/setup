@@ -21,8 +21,8 @@
 #   -m, --model <model>  opencode model id (overrides ERROR_REDUCE_MODEL)
 #       --variant <v>    model reasoning-effort variant (e.g. low, medium,
 #                        high, max). Overrides ERROR_REDUCE_VARIANT.
-#       --db PATH        opencode session DB (default: `opencode db path`,
-#                        falling back to ~/.local/share/opencode/opencode-stable.db)
+#       --db PATH        scan only this DB (default: every opencode store,
+#                        V2 opencode.db + legacy V1 opencode-stable.db)
 #   -h, --help           show this help
 #
 # Options (env vars):
@@ -109,24 +109,16 @@ fi
 log "window: since $SINCE"
 
 # --- resolve the session DB ---------------------------------------------------
-# opencode exports OPENCODE_DB=<relative filename> into the shells it spawns,
-# which only resolves when the cwd happens to be the data dir. Honor it only
-# when it is an absolute, existing path; otherwise ask opencode, then fall
-# back to the stable default.
-DB="$DB_ARG"
-if [ -z "$DB" ]; then
-  case "${OPENCODE_DB:-}" in
-    /*) [ -f "$OPENCODE_DB" ] && DB="$OPENCODE_DB" ;;
-  esac
+# Default: let oc-error-scan read every store (V2 opencode.db + legacy V1
+# opencode-stable.db). --db narrows the scan to one file.
+DB_FLAG=()
+if [ -n "$DB_ARG" ]; then
+  [ -f "$DB_ARG" ] || die "opencode session DB not found at $DB_ARG"
+  DB_FLAG=(--db "$DB_ARG")
+  log "session DB: $DB_ARG"
+else
+  log "session DB: all opencode stores"
 fi
-if [ -z "$DB" ]; then
-  DB="$(opencode db path 2>/dev/null || true)"
-fi
-if [ -z "$DB" ] || [ ! -f "$DB" ]; then
-  DB="$HOME/.local/share/opencode/opencode-stable.db"
-fi
-[ -f "$DB" ] || die "opencode session DB not found at $DB (pass --db PATH)"
-log "session DB: $DB"
 
 # --- output paths -------------------------------------------------------------
 OUT_DIR="$HOME/.claude/error-reduction"
@@ -145,7 +137,7 @@ mkdir -p "$(dirname "$PLAN")"
 
 # --- sensor -------------------------------------------------------------------
 log "running sensor: oc-error-scan --json --since $SINCE"
-oc-error-scan --json --since "$SINCE" --db "$DB" > "$SCAN" \
+oc-error-scan --json --since "$SINCE" ${DB_FLAG[@]+"${DB_FLAG[@]}"} > "$SCAN" \
   || die "oc-error-scan failed"
 jq -e '.tool_errors.total' "$SCAN" >/dev/null \
   || die "sensor output at $SCAN is not valid scan JSON"

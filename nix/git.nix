@@ -25,8 +25,14 @@
         fi
       fi
 
-      # shellcheck on staged bash scripts (.sh, .bash, and extensionless nix/bin/*)
-      SHELL_FILES=$(echo "$STAGED" | grep -E '(\.sh|\.bash|^nix/bin/[^/.]+)$' || true)
+      # shellcheck on staged bash scripts (.sh, .bash, and extensionless nix/bin/*
+      # whose shebang is sh/bash; Python scripts in nix/bin are skipped)
+      SHELL_FILES=$(echo "$STAGED" | grep -E '(\.sh|\.bash|^nix/bin/[^/.]+)$' | while read -r f; do
+        case "$f" in
+          *.sh|*.bash) echo "$f" ;;
+          *) head -n1 "$f" 2>/dev/null | grep -qE '^#!.*(/|env )(ba)?sh( |$)' && echo "$f" ;;
+        esac
+      done || true)
       if [ -n "$SHELL_FILES" ]; then
         echo "→ shellcheck"
         if ! echo "$SHELL_FILES" | xargs ${pkgs.shellcheck}/bin/shellcheck --shell=bash --severity=warning; then

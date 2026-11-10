@@ -14,8 +14,10 @@ answers the standup for *today's* meeting:
 
 ## Step 1 — pull local activity (always)
 
-Run the `standup` helper (see `~/.claude/scripts-reference.md`). It reads the
-local opencode session DB and is the source of truth.
+Run the `standup` helper (see `~/.claude/scripts-reference.md`). It reads every
+local opencode session store (V2 `opencode.db` + legacy V1 `opencode-stable.db`)
+and is the source of truth. Never query one session DB by hand instead: a single
+store misses sessions (see "opencode session stores" in the reference).
 
 ```bash
 standup                  # standup frame: did=last active day, plan=today, blockers

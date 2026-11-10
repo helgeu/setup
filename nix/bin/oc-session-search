@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+#
+# oc-session-search - Find opencode sessions by text, across every local store.
+#
+# Searches session titles and full message content (user text, assistant text,
+# tool inputs and outputs) in BOTH the V2 store (opencode.db: session_v2 +
+# session_message) and the legacy V1 store (opencode-stable.db: session + part).
+# Reading only one store silently misses sessions.
+#
+# Usage:
+#   oc-session-search itera-recommendations
+#   oc-session-search Bouvet -n 10
+#   oc-session-search "PR 24211" --json
+#
+# Options:
+#   -n, --limit N   max sessions to show                [default: 30]
+#       --db PATH   search only this DB                 [default: every store]
+#       --json      emit JSON instead of a table
+#   -h, --help      show this help
+#
+# Resume a hit with: opencode -s <session-id>
+#
+import argparse
+import datetime as dt
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oc_sessions as ocs  # noqa: E402
+
+
+def show_help():
+    with open(__file__) as fh:
+        for line in fh.readlines()[2:]:
+            if line.startswith("import "):
+                break
+            if line.startswith("#"):
+                print(line.rstrip("\n").lstrip("#").lstrip())
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("needle", nargs="?")
+    p.add_argument("-n", "--limit", type=int, default=30)
+    p.add_argument("--db", default=None)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-h", "--help", action="store_true")
+    args = p.parse_args()
+
+    if args.help or not args.needle:
+        show_help()
+        sys.exit(0 if args.help else 2)
+
+    stores = ocs.open_stores(args.db)
+    if not stores:
+        print(f"error: no opencode session DB found ({args.db or ocs.DATA_DIR})",
+              file=sys.stderr)
+        sys.exit(1)
+    try:
+        rows = ocs.search(stores, args.needle, args.limit)
+    finally:
+        for s in stores:
+            s.close()
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
+    if not rows:
+        print(f"no sessions match '{args.needle}' "
+              f"(searched: {', '.join(s.path for s in stores)})")
+        return
+    for r in rows:
+        when = dt.datetime.fromtimestamp(r["updated"] / 1000).strftime("%Y-%m-%d %H:%M") \
+            if r["updated"] else "?"
+        d = (r["directory"] or "").replace(os.path.expanduser("~"), "~")
+        print(f"{when}  {r['id']}  [{r['schema']}] x{r['matches']}  "
+              f"{r['title'] or '(untitled)'}  ({d})")
+
+
+if __name__ == "__main__":
+    main()

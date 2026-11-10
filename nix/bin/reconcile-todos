@@ -24,8 +24,8 @@
 # Options:
 #   -o, --org        org name (imdidev) or full URL   [default: imdidev]
 #   -p, --project    project name                       [default: Bosettingsprosjekt]
-#       --db PATH    opencode DB path                   [default: $OPENCODE_DB or
-#                                                        ~/.local/share/opencode/opencode-stable.db]
+#       --db PATH    read/write only this DB            [default: every opencode
+#                                                        store, V2 + legacy V1; see oc_sessions.py]
 #       --apply      write changes (default is dry run)
 #       --json       emit JSON report instead of text
 #   -h, --help       show this help
@@ -40,7 +40,7 @@ die() { echo "reconcile-todos: error: $*" >&2; exit 1; }
 
 ORG="imdidev"
 PROJECT="Bosettingsprosjekt"
-DB="${OPENCODE_DB:-$HOME/.local/share/opencode/opencode-stable.db}"
+DB=""
 APPLY=0
 JSON=0
 
@@ -58,7 +58,7 @@ done
 
 [ -n "$ORG" ]     || die "missing org"
 [ -n "$PROJECT" ] || die "missing project"
-[ -f "$DB" ]      || die "opencode DB not found at $DB"
+[ -z "$DB" ] || [ -f "$DB" ] || die "opencode DB not found at $DB"
 
 command -v az      >/dev/null || die "az CLI not found"
 command -v python3 >/dev/null || die "python3 not found"
@@ -84,12 +84,15 @@ TOKEN="$(az account get-access-token --resource "$ADO_RES" --query accessToken -
 
 # --- reconcile (python: native sqlite + REST, no shell word-split traps) ------
 ORG_URL="$ORG_URL" PROJECT="$PROJECT" DB="$DB" TOKEN="$TOKEN" \
-APPLY="$APPLY" JSON="$JSON" python3 - <<'PY'
-import os, re, json, time, sqlite3, urllib.request, urllib.error
+APPLY="$APPLY" JSON="$JSON" OCS_DIR="$(dirname "$0")" python3 - <<'PY'
+import os, re, sys, json, time, urllib.request, urllib.error
+
+sys.path.insert(0, os.environ["OCS_DIR"])
+import oc_sessions as ocs
 
 ORG_URL = os.environ["ORG_URL"]
 PROJECT = os.environ["PROJECT"]
-DB      = os.environ["DB"]
+DB_OVERRIDE = os.environ["DB"]
 TOKEN   = os.environ["TOKEN"]
 APPLY   = os.environ["APPLY"] == "1"
 JSON    = os.environ["JSON"] == "1"
@@ -144,15 +147,15 @@ def state_of(typ, wid):
     _cache[key] = res
     return res
 
-# --- read sessions with open todos --------------------------------------------
-con = sqlite3.connect(DB, timeout=20)
-con.execute("PRAGMA busy_timeout=20000")
-rows = con.execute(
-    "SELECT s.id, s.title, count(*) "
-    "FROM todo t JOIN session s ON s.id = t.session_id "
-    "WHERE t.status IN ('pending','in_progress') "
-    "GROUP BY s.id, s.title"
-).fetchall()
+# --- read sessions with open todos (all stores: V2 + legacy V1) ---------------
+stores = ocs.open_stores(DB_OVERRIDE or None, writable=APPLY)
+if not stores:
+    raise SystemExit(f"reconcile-todos: no opencode session DB found in {ocs.DATA_DIR}")
+by_session = {}
+for t in ocs.open_todos(stores):
+    e = by_session.setdefault(t["session_id"], [t["session_title"], 0, t["store"]])
+    e[1] += 1
+rows = [(sid, title, n) for sid, (title, n, _) in by_session.items()]
 
 close_ids, close_report, kept, skipped = [], [], [], []
 for sid, title, n in rows:
@@ -177,12 +180,16 @@ closed_n = sum(c["open"] for c in close_report)
 
 if APPLY and close_ids:
     now = int(time.time() * 1000)
-    qs = ",".join("?" * len(close_ids))
-    con.execute(
-        f"UPDATE todo SET status='completed', time_updated={now} "
-        f"WHERE status IN ('pending','in_progress') AND session_id IN ({qs})",
-        close_ids)
-    con.commit()
+    for s in stores:
+        ids = [i for i in close_ids if by_session[i][2] == s.path]
+        if not ids:
+            continue
+        qs = ",".join("?" * len(ids))
+        s.con.execute(
+            f"UPDATE todo SET status='completed', time_updated={now} "
+            f"WHERE status IN ('pending','in_progress') AND session_id IN ({qs})",
+            ids)
+        s.con.commit()
 
 if JSON:
     print(json.dumps({
@@ -206,5 +213,6 @@ else:
           f"session(s) with no resolvable ADO reference (untouched).")
     if not APPLY:
         print("\nDry run. Re-run with --apply to write.")
-con.close()
+for s in stores:
+    s.close()
 PY

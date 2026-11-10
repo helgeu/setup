@@ -13,8 +13,9 @@
 > **Helper scripts:** Before hand-rolling `az`/`jq`/`git`/PR/backlog logic, check
 > `~/.claude/scripts-reference.md` — a task→script map for the custom tools on
 > this machine (`find-prs`, `azprs`, `pr-review`, `pr-review-post`, `ado-my-items`,
-> `ado-create-tasks`, `oc`, and the PowerShell ADO backlog toolkit). Prefer an
-> existing script over improvising.
+> `ado-create-tasks`, `oc`, `oc-session-search`, and the PowerShell ADO backlog toolkit). Prefer an
+> existing script over improvising. To find a past opencode session, run
+> `oc-session-search <text>`; never query one session DB by hand.
 
 - Be direct. Challenge bad ideas.
 - Ask, don't assume.

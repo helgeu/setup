@@ -2,7 +2,8 @@
 #
 # opencode-cost - Per-day cost of your local opencode usage.
 #
-# Reads the local opencode SQLite DB and reports cost + token totals grouped by
+# Reads every local opencode session store (V2 opencode.db + legacy V1
+# opencode-stable.db, via oc_sessions.py) and reports cost + token totals grouped by
 # day. This is opencode's OWN estimate: cost = tokens x opencode's built-in
 # model price table (list price). It is NOT what GitHub Copilot bills you - for
 # the authoritative Copilot credits/$ figure use `copilot-usage`. The two differ
@@ -24,13 +25,14 @@
 #   -h, --help       show this help
 #
 import argparse
+import collections
+import datetime as dt
 import json
 import os
-import sqlite3
 import sys
 
-DB = os.environ.get("OPENCODE_DB", os.path.expanduser(
-    "~/.local/share/opencode/opencode-stable.db"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oc_sessions as ocs  # noqa: E402
 
 
 def die(msg, code=1):
@@ -38,26 +40,32 @@ def die(msg, code=1):
     sys.exit(code)
 
 
-def query(where, group_expr, group_label):
-    sql = f"""
-        SELECT {group_expr} AS grp,
-               COUNT(*) AS sessions,
-               COALESCE(SUM(cost),0) AS cost,
-               COALESCE(SUM(tokens_input),0) AS tok_in,
-               COALESCE(SUM(tokens_output),0) AS tok_out
-        FROM session
-        WHERE parent_id IS NULL AND {where}
-        GROUP BY grp ORDER BY grp DESC
-    """
-    con = sqlite3.connect(DB)
+def ms(d):
+    return int(d.timestamp() * 1000)
+
+
+def query(since, until, by_model, group_label):
+    stores = ocs.open_stores()
+    if not stores:
+        die(f"no opencode session DB found in {ocs.DATA_DIR}")
     try:
-        rows = con.execute(sql).fetchall()
+        rows = ocs.sessions(stores, since, until)
     finally:
-        con.close()
+        for s in stores:
+            s.close()
+    agg = collections.defaultdict(lambda: [0, 0.0, 0, 0])
+    for s in rows:
+        key = s["model"] if by_model else \
+            dt.datetime.fromtimestamp(s["updated"] / 1000).strftime("%Y-%m-%d")
+        a = agg[key]
+        a[0] += 1
+        a[1] += s["cost"]
+        a[2] += s["tokens_in"]
+        a[3] += s["tokens_out"]
     return [
-        {group_label: r[0], "sessions": r[1], "cost": round(r[2], 2),
-         "tokens_in": r[3], "tokens_out": r[4]}
-        for r in rows
+        {group_label: k, "sessions": v[0], "cost": round(v[1], 2),
+         "tokens_in": v[2], "tokens_out": v[3]}
+        for k, v in sorted(agg.items(), key=lambda kv: str(kv[0]), reverse=True)
     ]
 
 
@@ -109,29 +117,19 @@ def main():
                     print(line.rstrip("\n").lstrip("#").lstrip())
         return
 
-    if not os.path.exists(DB):
-        die(f"opencode DB not found at {DB}")
-
-    local_date = "date(time_updated/1000,'unixepoch','localtime')"
     if args.month:
         try:
-            y, mo = args.month.split("-")
-            start = f"{int(y):04d}-{int(mo):02d}-01"
-            nxt = f"{int(y)+(int(mo)//12):04d}-{int(mo)%12+1:02d}-01"
+            y, mo = (int(x) for x in args.month.split("-"))
+            start = dt.datetime(y, mo, 1)
+            nxt = dt.datetime(y + mo // 12, mo % 12 + 1, 1)
         except ValueError:
             die("--month must be YYYY-MM")
-        where = f"{local_date} >= '{start}' AND {local_date} < '{nxt}'"
+        since, until = ms(start), ms(nxt)
     else:
-        where = f"time_updated >= strftime('%s','now','-{args.days} days')*1000"
+        since, until = ms(dt.datetime.now() - dt.timedelta(days=args.days)), None
 
-    if args.by_model:
-        group_expr = "json_extract(model,'$.id')"
-        label = "model"
-    else:
-        group_expr = local_date
-        label = "day"
-
-    rows = query(where, group_expr, label)
+    label = "model" if args.by_model else "day"
+    rows = query(since, until, args.by_model, label)
     if args.json:
         print(json.dumps(rows, indent=2))
     else:

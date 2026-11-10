@@ -24,7 +24,7 @@
 # Options:
 #   --since YYYY-MM-DD  only include parts created on/after this date
 #   -n, --examples N    example quotes per class            [default: 2]
-#   --db PATH           override DB path (default: $OPENCODE_DB or the stable db)
+#   --db PATH           read only this DB (default: every store; see oc_sessions.py)
 #   --json              emit JSON instead of a table
 #   -h, --help          show this help
 #
@@ -35,11 +35,10 @@ import datetime as dt
 import json
 import os
 import re
-import sqlite3
 import sys
 
-DB = os.environ.get("OPENCODE_DB", os.path.expanduser(
-    "~/.local/share/opencode/opencode-stable.db"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import oc_sessions as ocs  # noqa: E402
 
 # --- frustration / correction word lists (norsk + engelsk), three tiers -------
 # HARD: profanity/insults = strong, honest error markers.
@@ -105,20 +104,13 @@ def normalize_error(text):
     return t[:80]
 
 
-def scan(con, since, n_examples):
+def scan(stores, since, n_examples):
     tmin = since_ms(since)
-    time_clause = f" AND p.time_created >= {tmin}" if tmin else ""
+    calls = list(ocs.tool_calls(stores, tmin))
 
     # --- tool errors ---------------------------------------------------------
-    rows = con.execute(f"""
-        SELECT json_extract(p.data,'$.tool')        AS tool,
-               json_extract(p.data,'$.state.error') AS err,
-               json_extract(p.data,'$.state.input') AS inp,
-               p.session_id                         AS sid
-        FROM part p
-        WHERE json_extract(p.data,'$.type')='tool'
-          AND json_extract(p.data,'$.state.status')='error'{time_clause}
-    """).fetchall()
+    rows = [(c["tool"], c["error"], c["input"], c["session_id"])
+            for c in calls if c["status"] == "error"]
 
     by_tool = {}
     by_error = {}
@@ -153,24 +145,19 @@ def scan(con, since, n_examples):
             add_ex("user_abort", err, sid)
 
     # jq / ADO-auth / grep-include failures surface in the bash *output*, not in
-    # state.error. Restrict to the bash tool: otherwise a `read` of a doc that
+    # state.error. Restrict to the shell tool (`bash` in V1, `shell` in V2):
+    # otherwise a `read` of a doc that
     # *documents* these error strings (e.g. ado-cli-reference.md) is miscounted
     # as a real failure. Classify grep-include on the command input, not output.
-    out_rows = con.execute(f"""
-        SELECT p.session_id                              AS sid,
-               json_extract(p.data,'$.state.output')     AS out,
-               json_extract(p.data,'$.state.error')      AS err,
-               json_extract(p.data,'$.state.input')      AS inp
-        FROM part p
-        WHERE json_extract(p.data,'$.type')='tool'
-          AND json_extract(p.data,'$.tool')='bash'
-          AND ( p.data LIKE '%Invalid numeric literal%'
-             OR p.data LIKE '%jq: parse error%'
-             OR p.data LIKE '%run the login command%'
-             OR p.data LIKE '%TF400813%'
-             OR p.data LIKE '%unrecognized flag --include%'
-             OR p.data LIKE '%--include=%' ){time_clause}
-    """).fetchall()
+    needles = ("invalid numeric literal", "jq: parse error", "run the login command",
+               "tf400813", "unrecognized flag --include", "--include=")
+    out_rows = []
+    for c in calls:
+        if c["tool"] not in ("bash", "shell"):
+            continue
+        blob = " ".join(x for x in (c["output"], c["error"], c["input"]) if x).lower()
+        if any(n in blob for n in needles):
+            out_rows.append((c["session_id"], c["output"], c["error"], c["input"]))
 
     for sid, out, err, inp in out_rows:
         outerr = " ".join(x for x in (out, err) if x).lower()
@@ -187,12 +174,7 @@ def scan(con, since, n_examples):
 
     # --- frustration in user messages ---------------------------------------
     hard, frust, weak = compile_list(HARD), compile_list(FRUST), compile_list(WEAK)
-    urows = con.execute(f"""
-        SELECT lower(json_extract(p.data,'$.text')) AS t, p.session_id AS sid
-        FROM part p JOIN message m ON p.message_id = m.id
-        WHERE json_extract(p.data,'$.type')='text'
-          AND json_extract(m.data,'$.role')='user'{time_clause}
-    """).fetchall()
+    urows = ((t.lower(), sid) for t, sid in ocs.user_texts(stores, tmin))
 
     total_user = 0
     tiers = {"hard": 0, "frust": 0, "weak": 0, "any": 0}
@@ -278,15 +260,14 @@ def main():
         show_help()
         return
 
-    db = args.db or DB
-    if not os.path.exists(db):
-        die(f"opencode DB not found at {db}")
-
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    stores = ocs.open_stores(args.db)
+    if not stores:
+        die(f"no opencode session DB found ({args.db or ocs.DATA_DIR})")
     try:
-        result = scan(con, args.since, args.examples)
+        result = scan(stores, args.since, args.examples)
     finally:
-        con.close()
+        for s in stores:
+            s.close()
 
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))

@@ -15,7 +15,7 @@ step that follows the ship steps listed per proposal in the plan doc.
 When invoked by the `oc-error-reduce` script you receive, in the prompt:
 
 - An **error scan JSON file** — the pre-generated output of a sensor (default:
-  `oc-error-scan`, reading the opencode session DB). Trust it. **Read it; do
+  `oc-error-scan`, reading every opencode session store: V2 + legacy V1). Trust it. **Read it; do
   not re-run the sensor and do not touch session databases.**
 - The **sensor name** and the **time window**.
 - The **output path where you must create** the plan doc, typically
@@ -51,7 +51,7 @@ clients:
   `N`) so the same class groups.
 - Known patterns shipped by `oc-error-scan`: `path_guessing`, `url_404`,
   `jq_parse`, `ado_auth`, `grep_include`, `user_abort`.
-- Known sensors: `oc-error-scan` (opencode SQLite DB). A `claude-error-scan`
+- Known sensors: `oc-error-scan` (opencode SQLite stores, V2 + V1). A `claude-error-scan`
   (Claude Code JSONL sessions under `~/.claude/projects/`) does not exist yet
   — flag it as a coverage gap and propose it as a new script.
 - The runner names the sensor and window in the prompt. Tag every class with
