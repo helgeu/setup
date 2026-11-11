@@ -58,6 +58,7 @@ in
       nixpkgs-review # Test nixpkgs PRs locally before review/approval
       gitleaks
       shellcheck
+      trivy # Pre-push security scan in repos (bosetting-backend); native nixpkgs, not Homebrew
       beads.packages.${pkgs.stdenv.hostPlatform.system}.default # Yegge's beads (bd) - issue tracker for AI agents, latest from upstream flake
 
       # Git
