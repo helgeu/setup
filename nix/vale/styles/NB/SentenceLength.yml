@@ -1,0 +1,6 @@
+extends: metric
+message: "This sentence has %s words. Keep sentences under 20 words."
+level: warning
+scope: sentence
+formula: words
+condition: "> 20"

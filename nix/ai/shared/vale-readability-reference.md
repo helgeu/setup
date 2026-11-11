@@ -15,6 +15,7 @@
 | English config | `nix/vale/vale.ini` | `Vale`, `Microsoft` (v0.15.1, pinned), `Formatting`. Contractions and Quotes are off. |
 | Norwegian config | `nix/vale/vale-nb.ini` | `Formatting` and `NB`. |
 | `Formatting`, `NB` | `nix/vale/styles` | Copied from SuperOfficeDocs/docs at commit `9fb4e84` (MIT). Identical to the earlier OneDrive copy. |
+| Own `NB` rules | `nix/vale/styles/NB` | `AbbreviationHyphen` (error: `API-et`, not `APIet`). `Readability` (warning: a sentence with LIX 55 or more and 8 words or more). `SentenceLength` (warning: more than 20 words). Calibrated on the wiki ADRs, 2026-11. |
 | `nb_NO` dictionary | Downloaded by nix | npm `dictionary-nb` 3.0.0 (GPL-2.0), pinned by hash. Not stored in this repository. This closes the licence question below. |
 | IMDi vocabularies | Wiki repo, `.vale/vocabularies` | `IMDi-nb` (Norwegian spelling) and `IMDi-en` (English text). Not stored in this repository. |
 | Runner | `nix/bin/vale-check` | Picks the language, adds vocabularies, prints a summary. |

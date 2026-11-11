@@ -1,0 +1,6 @@
+extends: metric
+message: "Hard to read: LIX %s. Use shorter sentences and shorter words."
+level: warning
+scope: sentence
+formula: round(lix)
+condition: ">= 55 && words >= 8"
