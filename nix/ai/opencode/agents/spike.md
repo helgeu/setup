@@ -93,4 +93,8 @@ Write BOTH files into the output directory named in the prompt
 - **Never push, commit, hard-reset, clean, or remove worktrees.** You run inside a
   disposable worktree managed by the `spike-factfind` script.
 - All shell commands run under `bash`.
+- **Never run commands in the background.** You run headless: the run ends when
+  you end your turn, and nothing resumes you when a background command
+  finishes. Run slow commands in the foreground with a long `timeout`. Write
+  both output files before you end your turn.
 - If a step fails, stop and report; do not emit a partial draft as if complete.

@@ -46,5 +46,9 @@ Hard constraints (the runtime also enforces these):
 - Your only durable output is the findings JSON (and optionally the observation
   markdown), both under `~/.claude/pr-review/`.
 - All shell commands run under `bash`.
+- **Never run commands in the background.** You run headless: the run ends when
+  you end your turn, and nothing resumes you when a background command
+  finishes. Run slow builds and tests in the foreground with a long `timeout`.
+  Write the findings JSON before you end your turn.
 - If any step fails, stop and report. Do not emit partial findings as if the run
   succeeded.
