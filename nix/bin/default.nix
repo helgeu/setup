@@ -125,6 +125,10 @@
       source = ./opencode-fix-message-ids;
       executable = true;
     };
+    "bin/pr-analyzers" = {
+      source = ./pr-analyzers;
+      executable = true;
+    };
     "bin/pr-model-select" = {
       source = ./pr-model-select;
       executable = true;

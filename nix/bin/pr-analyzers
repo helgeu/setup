@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# pr-analyzers - Show analyzer findings on the lines a PR changes (offline, fast).
+#
+# Usage: pr-analyzers <repo-dir> <target-branch> [project...]
+#   e.g. pr-analyzers . main
+#
+# Reproduce SonarCloud's C# findings locally for the lines a PR changes.
+# SonarCloud imports every Roslyn diagnostic from the build (IDE*, CA*, RCS*,
+# SA*, S*), also info/suggestion ones that `dotnet build -warnaserror` hides.
+# This script builds each project with a SARIF 2.1 error log (all severities,
+# code style enforced, warnings not fatal) and prints the diagnostics whose
+# range touches a line added/changed since the merge base with origin/<target>
+# (uncommitted tracked changes included, so it works before a commit).
+#
+# Projects: given as args (paths relative to repo-dir or absolute), else the
+# nearest *.csproj of every changed .cs file.
+# Exit code: 0 = no diagnostics on changed lines, 1 = findings, 2 = build/usage error.
+# Env: CONFIG (default Release), KEEP_SARIF=1 keeps the temp dir,
+#      SONAR_ANALYZER=0 disables the temporary SonarAnalyzer.CSharp reference,
+#      SONAR_ANALYZER_VERSION (default: newest in ~/.nuget/packages).
+set -euo pipefail
+
+case "${1:-}" in
+  -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: pr-analyzers <repo-dir> <target-branch> [project...]  (-h for help)" >&2
+  exit 2
+fi
+
+repo=$(cd "$1" && pwd -P)
+target=$2
+shift 2
+config=${CONFIG:-Release}
+work=$(mktemp -d "${TMPDIR:-/tmp}/pr-analyzers.XXXXXX")
+[[ "${KEEP_SARIF:-0}" == 1 ]] || trap 'rm -rf "$work"' EXIT
+
+cd "$repo"
+git fetch -q origin "$target"
+# Diff the working tree (committed + uncommitted tracked changes) against the
+# merge base, the same base SonarCloud uses for a PR.
+base=$(git merge-base "origin/$target" HEAD)
+git diff -U0 --no-color "$base" >"$work/diff.patch"
+
+# Per-project SARIF file: a global -p:ErrorLog would be shared (and overwritten)
+# by every referenced project, so set it per project from an imported targets file.
+# The same file adds SonarAnalyzer.CSharp (csharpsquid S* rules) to projects that
+# do not reference it. Only the temp file and obj/ change; nothing to commit.
+# shellcheck disable=SC2012 # NuGet version dir names are plain
+sonar_ver=${SONAR_ANALYZER_VERSION:-$(ls "$HOME/.nuget/packages/sonaranalyzer.csharp" 2>/dev/null | sort -V | tail -n1)}
+sonar_ver=${sonar_ver:-10.36.0.15337}
+sonar_items=""
+if [[ "${SONAR_ANALYZER:-1}" == 1 ]]; then
+  sonar_items="  <ItemGroup Condition=\"'@(PackageReference->WithMetadataValue('Identity','SonarAnalyzer.CSharp'))' == ''\">
+    <PackageReference Include=\"SonarAnalyzer.CSharp\" Version=\"$sonar_ver\" PrivateAssets=\"all\" Condition=\"'\$(ManagePackageVersionsCentrally)' != 'true'\" />
+    <PackageReference Include=\"SonarAnalyzer.CSharp\" VersionOverride=\"$sonar_ver\" PrivateAssets=\"all\" Condition=\"'\$(ManagePackageVersionsCentrally)' == 'true'\" />
+  </ItemGroup>"
+fi
+cat >"$work/errorlog.targets" <<EOF
+<Project>
+  <PropertyGroup>
+    <ErrorLog>$work/sarif/\$(MSBuildProjectName)-\$(TargetFramework).sarif,version=2.1</ErrorLog>
+  </PropertyGroup>
+$sonar_items
+</Project>
+EOF
+mkdir -p "$work/sarif"
+
+projects=()
+if [[ $# -gt 0 ]]; then
+  projects=("$@")
+else
+  while IFS= read -r f; do
+    d=$(dirname "$f")
+    while [[ "$d" != "." && "$d" != "/" ]]; do
+      p=$(find "$d" -maxdepth 1 -name '*.csproj' | head -n1)
+      if [[ -n "$p" ]]; then projects+=("$p"); break; fi
+      d=$(dirname "$d")
+    done
+  done < <(git diff --name-only --diff-filter=d "$base" -- '*.cs' | sort -u)
+fi
+if [[ ${#projects[@]} -eq 0 ]]; then
+  echo "No C# projects to analyze (no changed .cs files)." >&2
+  exit 0
+fi
+mapfile_projects=$(printf '%s\n' "${projects[@]}" | sort -u)
+
+build_failed=0
+while IFS= read -r proj; do
+  echo "==> build $proj ($config)" >&2
+  if ! dotnet build "$proj" -c "$config" --no-incremental -nologo -v:q \
+      -p:CustomAfterMicrosoftCommonTargets="$work/errorlog.targets" \
+      -p:EnforceCodeStyleInBuild=true \
+      -p:RunAnalyzers=true -p:RunAnalyzersDuringBuild=true \
+      -p:TreatWarningsAsErrors=false -p:CodeAnalysisTreatWarningsAsErrors=false \
+      >"$work/build.log" 2>&1; then
+    # Analyzer errors (severity=error in .editorconfig) still land in the SARIF;
+    # only real compile failures matter here.
+    if rg -q 'error CS[0-9]+|error MSB[0-9]+|error NU[0-9]+|error NETSDK[0-9]+' "$work/build.log"; then
+      echo "!! build failed for $proj:" >&2
+      rg 'error (CS|MSB|NU|NETSDK)[0-9]+' "$work/build.log" | sort -u | head -20 >&2
+      build_failed=1
+    fi
+  fi
+  if ! dotnet msbuild "$proj" -nologo -getItem:PackageReference 2>/dev/null | rg -q '"Identity": "SonarAnalyzer\.CSharp"'; then
+    if [[ "${SONAR_ANALYZER:-1}" == 1 ]]; then
+      echo "   note: $proj does not reference SonarAnalyzer.CSharp; added $sonar_ver for this run only." >&2
+    else
+      echo "!! $proj does not reference SonarAnalyzer.CSharp: csharpsquid S* rules are NOT checked." >&2
+    fi
+  fi
+done <<<"$mapfile_projects"
+
+rc=0
+python3 - "$repo" "$work/diff.patch" "$work/sarif" <<'PY' || rc=$?
+import json, os, re, sys, glob
+from urllib.parse import urlparse, unquote
+
+repo, patch, sarif_dir = sys.argv[1:4]
+changed, cur = {}, None
+for line in open(patch, encoding="utf-8", errors="replace"):
+    if line.startswith("+++ "):
+        p = line[4:].strip()
+        cur = None if p == "/dev/null" else os.path.realpath(os.path.join(repo, p[2:] if p.startswith("b/") else p))
+        if cur: changed.setdefault(cur, set())
+    elif line.startswith("@@") and cur:
+        m = re.search(r"\+(\d+)(?:,(\d+))?", line)
+        start, count = int(m.group(1)), int(m.group(2) or 1)
+        changed[cur].update(range(start, start + count))
+
+seen, hits, total = set(), [], 0
+for f in sorted(glob.glob(os.path.join(sarif_dir, "*.sarif"))):
+    try:
+        data = json.load(open(f, encoding="utf-8-sig"))
+    except Exception as e:
+        print(f"!! cannot read {f}: {e}", file=sys.stderr); continue
+    for run in data.get("runs", []):
+        for r in run.get("results", []):
+            total += 1
+            for loc in r.get("locations", [])[:1]:
+                pl = loc.get("physicalLocation", {})
+                uri = pl.get("artifactLocation", {}).get("uri", "")
+                path = os.path.realpath(unquote(urlparse(uri).path) if uri.startswith("file:") else uri)
+                region = pl.get("region", {})
+                line = region.get("startLine", 0)
+                end = max(region.get("endLine", line), line)
+                # SonarCloud counts an issue as new when any line of its range is changed.
+                if not changed.get(path, set()).intersection(range(line, end + 1)):
+                    continue
+                key = (path, line, region.get("startColumn"), r.get("ruleId"), r.get("message", {}).get("text"))
+                if key in seen: continue
+                seen.add(key)
+                supp = "suppressed" if r.get("suppressions") else ""
+                hits.append((os.path.relpath(path, repo), line, r.get("level", "warning"), r.get("ruleId"), supp, r.get("message", {}).get("text", "")))
+
+active = [h for h in hits if not h[4]]
+for h in sorted(hits):
+    tag = f" [{h[4]}]" if h[4] else ""
+    print(f"{h[0]}:{h[1]}: {h[2]} {h[3]}{tag}: {h[5]}")
+print(f"\n{len(active)} diagnostic(s) on changed lines ({len(hits) - len(active)} suppressed); {total} in all SARIF results.", file=sys.stderr)
+sys.exit(1 if active else 0)
+PY
+[[ $build_failed -eq 0 ]] || exit 2
+exit $rc
