@@ -89,3 +89,18 @@ If the failure only happens in the Docker/CI build (e.g. a globber including or
 excluding the wrong projects), reproduce the *same* build locally rather than
 re-queuing the pipeline. Prefer building the full solution and selecting which
 project to publish over per-file globbing that drifts from local behaviour.
+
+## SDK in `global.json` is not installed locally
+
+nixpkgs can lag behind a .NET release (for example, `global.json` pins
+`11.0.100` GA, but nix only has `11.0.100-rc.3`). Do not edit `global.json`.
+Run the checks in the official SDK image, in a throwaway worktree (bin/obj from
+the container must not mix with the host tree):
+
+```bash
+docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:11.0 \
+  sh -c 'dotnet build && dotnet test --no-build && dotnet list package --include-transitive --vulnerable'
+```
+
+If a repo pre-commit hook then fails only because of the missing SDK, commit
+with `--no-verify` after the container run is green, and say so.
