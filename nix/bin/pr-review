@@ -253,6 +253,21 @@ done
 # .NET restore if a solution/project exists anywhere.
 if find "$WT" -maxdepth 3 \( -name '*.sln' -o -name '*.csproj' \) -print -quit 2>/dev/null | grep -q .; then
   command -v dotnet >/dev/null || die ".NET project present but dotnet not on PATH"
+  # Any installed SDK of the pinned major version is good enough for a review.
+  # A strict pin (for example 11.0.100) does not match a prerelease SDK
+  # (11.0.100-rc.3). Re-pin in the throwaway worktree and hide the change from git.
+  if [ -f "$WT/global.json" ]; then
+    PIN="$(jq -r '.sdk.version // empty' "$WT/global.json" 2>/dev/null || true)"
+    if [ -n "$PIN" ] && ! (cd "$WT" && dotnet --version >/dev/null 2>&1); then
+      PIN_MAJOR="${PIN%%.*}"
+      LOCAL_SDK="$(dotnet --list-sdks | awk '{print $1}' | grep "^${PIN_MAJOR}\." | sort -V | tail -1 || true)"
+      [ -n "$LOCAL_SDK" ] || die "global.json pins SDK $PIN and no installed SDK has major version $PIN_MAJOR"
+      log "global.json pins SDK $PIN (not installed); using $LOCAL_SDK in the worktree"
+      jq --arg v "$LOCAL_SDK" '.sdk.version=$v | .sdk.rollForward="latestFeature" | .sdk.allowPrerelease=true' \
+        "$WT/global.json" > "$WT/global.json.tmp" && mv "$WT/global.json.tmp" "$WT/global.json"
+      git -C "$WT" update-index --assume-unchanged global.json
+    fi
+  fi
   log "dotnet restore ($WT)"
   (cd "$WT" && dotnet restore) || die "dotnet restore failed"
 fi
