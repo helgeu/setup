@@ -28,6 +28,8 @@ source and rebuild.
 | Export every PR in a project/org to CSV | `ado-prs-export --organization <org> [--project <p>]` | Auth via `az` login or `--pat`. `--since YYYY-MM-DD` (default Oct 1 last year); omit `--project` for the whole org. Writes `ado_prs.csv`. |
 | Build a per-person weekly PR chart workbook | `ado-prs-chart --input ado_prs.csv` | Excel workbook: summary + one column-chart sheet per person (avg + 4-week moving avg). Feed it an `ado-prs-export` CSV. |
 | Export Bug work items to CSV (DORA Reliability feeder) | `ado-bugs-export --organization <org> --project <p> [--area-path <path>] [--severity <s>]` | REST WIQL (not `az boards query`, which returns empty on some orgs). `--area-path` scopes to a product area (bugs are filed per area, not per repo). Writes `ado_bugs.csv` with `created_at`/`resolved_at`/`state`/`severity`. Feeds `ado-dora --reliability-area-path`. |
+| Check the analyzer findings on the lines my PR changes (.NET, fast, offline) | `pr-analyzers <repo-dir> <target-branch> [project...]` | e.g. `pr-analyzers . main`. Builds the changed projects with a SARIF log and prints Roslyn + SonarAnalyzer diagnostics of **all** severities on changed lines. SonarCloud imports all of them (`external_roslyn`); `dotnet build -warnaserror` does not show suggestion/info. Exit 0 clean, 1 findings, 2 build error. See ".NET pre-push checks". |
+| Run the real SonarCloud scan locally before push (.NET repos) | `sonar-scan [-C <dir>]` | Key/org from `origin`. Token from `$SONAR_TOKEN` or keychain service `sonarcloud-token`. Uploads a branch analysis. See ".NET pre-push checks". |
 | Choose an opencode model + reasoning variant interactively | `pr-model-select` | Shared chooser used by `find-prs`/`pr-review`; rarely called directly. |
 | List open work items assigned to me (or someone) | `ado-my-items -o <org> -p <project>` | `-o`/`-p` **required** (no default); assignee defaults `@me`. `-a -f`. |
 | Create child Tasks under user stories from a JSON plan | `ado-create-tasks <tasks.json>` | Idempotent (skips existing titles); `--dry-run` / `--yes`. |
@@ -79,6 +81,27 @@ source and rebuild.
 - **`oc [model] [opencode args…]`** — opencode against local Ollama. Aliases:
   `oc`/`oc general` → qwen3.6, `oc coder` → qwen3-coder:30b. Requires
   `ollama serve` reachable on :11434.
+
+### .NET pre-push checks (`~/bin`, bash)
+
+Run `pr-analyzers` first (fast, offline). Run `sonar-scan` when you need the
+server-side rules (Security Hotspots, quality gate, coverage). Background and
+gotchas: `~/.claude/dotnet-reference.md` → "SonarCloud / analyzer parity locally".
+
+- **`pr-analyzers <repo-dir> <target-branch> [project...]`** — fetches
+  `origin/<target>` and diffs the working tree (uncommitted tracked changes
+  included) against the merge base. Builds each changed project (or the given
+  projects) with a per-project SARIF 2.1 log, `EnforceCodeStyleInBuild=true`
+  and warnings not fatal. Adds `SonarAnalyzer.CSharp` for the run when a project
+  does not reference it (nothing to commit). Prints the diagnostics whose range
+  touches a changed line. Env: `CONFIG`, `KEEP_SARIF=1`, `SONAR_ANALYZER=0`,
+  `SONAR_ANALYZER_VERSION`.
+- **`sonar-scan [-C <dir>]`** — full `dotnet-sonarscanner` begin → build → test
+  with coverage → end, uploaded as a branch analysis. Token: `$SONAR_TOKEN`, else
+  the macOS keychain (`security add-generic-password -U -s sonarcloud-token -a "$USER" -w '<token>'`).
+  Scanner: the repo tool manifest, else a global tool, else an automatic install
+  into `~/.cache/sonar-scan/tools`. Per-repo overrides in `.sonar-scan.conf`.
+  The exit code is the result of the build, tests and scan.
 
 ### opencode session stores (read this before you query session data)
 

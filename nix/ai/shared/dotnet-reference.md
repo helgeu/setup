@@ -36,11 +36,41 @@ build — fix that at the repo level, don't work around it.
   local `dotnet build` enforces the same rules CI does. This is the root-cause
   fix for "we're not catching SonarCloud stuff locally."
 - Build with `-warnaserror` (or `TreatWarningsAsErrors` in props) so an analyzer
-  warning fails the local build exactly as the gate does.
+  warning fails the local build exactly as the gate does. This does not catch
+  suggestion/info findings (see "Lessons").
 - To reproduce a specific reported rule, build and grep for the rule id:
   ```bash
   dotnet build 2>&1 | rg 'S[0-9]{3,4}|error|warning'
   ```
+
+### Tools: `pr-analyzers` and `sonar-scan`
+
+- **`pr-analyzers . main`** — fast offline check. It shows Roslyn and
+  SonarAnalyzer diagnostics of all severities on the lines changed against the
+  target branch. Run it before every push.
+- **`sonar-scan`** — the real SonarCloud scan, run locally before push. It
+  finds server-side rules (Security Hotspots, quality gate) that no local build
+  finds. The token is in the keychain, service `sonarcloud-token`.
+
+### Lessons
+
+- **`-warnaserror` is not enough.** SonarCloud imports every Roslyn diagnostic
+  of the build as `external_roslyn` issues, also `suggestion`/`info` ones.
+  `-warnaserror` only fails on warnings, so it misses IDE, RCS and SA rules at
+  suggestion/info severity. Use `pr-analyzers`; it reads all severities.
+- **IDE rules need `EnforceCodeStyleInBuild=true`.** Without it, `dotnet build`
+  does not run the IDExxxx code-style rules at all.
+
+### Coverage gotchas (SonarCloud shows 0 % or no new-code coverage)
+
+- **Coverlet `UseSourceLink=true`** writes source URLs, not file paths, into the
+  report. Sonar then matches no file. Do not set it for the Sonar test run.
+- **Coverlet without the `opencover` format** writes Cobertura only. Sonar's
+  `sonar.cs.opencover.reportsPaths` then finds no report. Set
+  `Format=opencover` (`sonar-scan` does this).
+- **Shallow clone** — the scanner logs `Could not find ref 'main'` and cannot
+  find new code. Fetch full history (`fetchDepth: 0` in the pipeline checkout)
+  and make sure `origin/main` exists.
 
 ### Common Sxxxx gotchas (extend as encountered)
 
