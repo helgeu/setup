@@ -17,8 +17,11 @@ set -euo pipefail
 #   - A SonarCloud token, resolved from $SONAR_TOKEN or the macOS keychain
 #     (see "Token resolution" below). Generate at
 #     https://sonarcloud.io/account/security. Never commit it.
-#   - A Java runtime (dotnet-sonarscanner dependency) and the `dotnet-sonarscanner`
-#     tool (from the repo's dotnet tool manifest, or installed globally).
+#   - A Java runtime (dotnet-sonarscanner dependency). The `dotnet-sonarscanner`
+#     tool comes from the repo's dotnet tool manifest, else a global tool, else
+#     the script installs it once into ~/.cache/sonar-scan/tools.
+#
+# Exit code: 0 when build, tests and the scan succeed; else the failing step's code.
 #
 # Usage:
 #   sonar-scan                     # key derived from origin, token from keychain
@@ -143,9 +146,15 @@ if [ -f "$fe_props" ]; then
   rm -f "$fe_props"
 fi
 
+# Keep the exit code of the scan: the trap must not replace it with the status
+# of its own last command (a false `[ -n ... ]` test would make it exit 1).
 cleanup() {
+  local rc=$?
   rm -rf "$results_dir"
-  [ -n "$fe_props_bak" ] && mv "$fe_props_bak" "$fe_props"
+  if [ -n "$fe_props_bak" ]; then
+    mv "$fe_props_bak" "$fe_props" || rc=1
+  fi
+  exit "$rc"
 }
 trap cleanup EXIT
 
@@ -154,11 +163,34 @@ log ">> SonarCloud project '$SONAR_PROJECT_KEY', branch '$branch'"
 log ">> exclusions:          $SONAR_EXCLUSIONS"
 log ">> coverage exclusions: $SONAR_COVERAGE_EXCLUSIONS"
 
-log ">> Restoring dotnet tools (dotnet-sonarscanner)..."
-dotnet tool restore
+# --- resolve dotnet-sonarscanner ---------------------------------------------
+#   1. The repo's dotnet tool manifest (pinned version).
+#   2. A global tool on PATH.
+#   3. Fallback: install it into a private tool path under ~/.cache (no
+#      manifest change in the repo, no global install).
+# `dotnet tool restore` exits 0 also when no manifest exists, so check the list.
+log ">> Resolving dotnet-sonarscanner..."
+scanner=()
+if dotnet tool restore >/dev/null 2>&1 \
+  && dotnet tool list --local 2>/dev/null | grep -qi '^dotnet-sonarscanner '; then
+  log "   using the repo tool manifest"
+  scanner=(dotnet sonarscanner)
+elif command -v dotnet-sonarscanner >/dev/null 2>&1; then
+  log "   using the global tool: $(command -v dotnet-sonarscanner)"
+  scanner=(dotnet-sonarscanner)
+else
+  tool_path="${XDG_CACHE_HOME:-$HOME/.cache}/sonar-scan/tools"
+  if [ ! -x "$tool_path/dotnet-sonarscanner" ]; then
+    log "   no manifest entry or global tool; installing into $tool_path"
+    dotnet tool install dotnet-sonarscanner --tool-path "$tool_path" >&2
+  else
+    log "   using the cached tool: $tool_path/dotnet-sonarscanner"
+  fi
+  scanner=("$tool_path/dotnet-sonarscanner")
+fi
 
 log ">> Beginning SonarCloud analysis..."
-dotnet sonarscanner begin \
+"${scanner[@]}" begin \
   /k:"$SONAR_PROJECT_KEY" \
   /o:"$SONAR_ORG" \
   /d:sonar.token="$SONAR_TOKEN" \
@@ -179,7 +211,7 @@ dotnet test -c Release --no-build \
   -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
 log ">> Ending SonarCloud analysis (uploading + waiting for quality gate)..."
-dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+"${scanner[@]}" end /d:sonar.token="$SONAR_TOKEN"
 
 log ">> Done. Review findings at:"
 log "   $HOST/project/issues?id=$SONAR_PROJECT_KEY&branch=$branch"
