@@ -63,8 +63,8 @@ Create at `docs/pr-<PR_NUMBER>-code-review-observations.md` in the target repo.
 
 ## Rules
 
-- Every comment MUST start with "AI:" prefix
-- LOW severity findings use "AI: Nitpick:" prefix
+- Write every comment in Norwegian (bokmål), in the user's own voice. No "AI:" prefix
+- LOW severity findings start with "Nitpick:"
 - Never commit secrets
 - Conventional commits for any fix branches
 - Use `az` CLI for all ADO operations — never use ADO MCP tools

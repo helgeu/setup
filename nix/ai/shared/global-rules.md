@@ -304,7 +304,7 @@ Scenario: [Scenario name]
 ### PR Reviews
 
 - Use `az` CLI for all ADO operations. Never use `mcp__u-ado-mcp__*` tools.
-- Prefix every PR review comment with `**AI: SEVERITY**` (e.g. `**AI: Warning**`, `**AI: Question**`, `**AI: Nitpick**`, `**AI: Suggestion**`, `**AI: Error**`).
+- Write PR review comments in Norwegian (bokmål), in the user's own voice: short, direct, with a concrete suggestion. Do NOT use an `AI:` prefix. Start LOW findings with `Nitpick:`.
 - Always fetch linked work items (from PR title, e.g. `#80145`) and verify the code matches requirements.
 - See `~/.claude/ado-cli-reference.md` for the correct PR thread API structure.
 

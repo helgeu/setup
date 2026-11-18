@@ -97,7 +97,7 @@ Write exactly this shape to the output path. This is the contract the
       "severity": "HIGH",
       "category": "Correctness",
       "title": "Null dereference on optional value",
-      "comment": "AI: `Bar.Value` is read without a null guard; ...",
+      "comment": "`Bar.Value` leses uten null-sjekk; ...",
       "changeTrackingId": 5,
       "replyToThreadId": null,
       "status": "active",
@@ -116,9 +116,11 @@ Field rules:
 - `severity` — `HIGH` | `MEDIUM` | `LOW`.
 - `category` — Code Quality, Naming, Dead Code, Readability, Correctness, Style,
   Performance, Security, Testing, Documentation.
-- `comment` — the full comment body. **Prefix every comment with `AI:`**; for
-  `LOW` severity use `AI: Nitpick:`. Never use backticks-as-command-substitution
-  concerns here — this is JSON, just plain text.
+- `comment` — the full comment body. **Write it in Norwegian (bokmål), as the
+  user would write it to a colleague: short, direct, concrete suggestion at the
+  end. Do NOT use an `AI:` prefix.** For `LOW` severity start with `Nitpick:`.
+  Never use backticks-as-command-substitution concerns here — this is JSON, just
+  plain text.
 - `changeTrackingId` — from the iteration-changes API for that file. Required
   for anchored comments; if you genuinely cannot resolve it, set it to `null`
   and the poster will create a floating thread.
