@@ -5,6 +5,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
+    # Pinned master, only for packages that unstable does not ship yet
+    # (see overlays/dotnet-sdk-11.nix). Remove when no overlay uses it.
+    nixpkgs-master.url = "github:NixOS/nixpkgs/master";
+
     nix-darwin = {
       url = "github:LnL7/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -71,6 +75,7 @@
         inputs.nix-vscode-extensions.overlays.default
         (import ./overlays/bicep-protoc.nix)
         (import ./overlays/fabric-invoke3.nix)
+        (import ./overlays/dotnet-sdk-11.nix inputs.nixpkgs-master)
       ];
 
       # Shared home-manager config for all platforms
