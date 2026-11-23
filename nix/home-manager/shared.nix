@@ -133,7 +133,8 @@ in
 
   programs.gh = {
     enable = true;
-    gitCredentialHelper.enable = false;
+    # GitHub uses the gh token; GCM (git.nix) still handles Azure DevOps.
+    gitCredentialHelper.enable = true;
     settings = {
       git_protocol = "ssh";
       editor = "nvim";
