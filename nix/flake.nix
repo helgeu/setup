@@ -74,7 +74,6 @@
       overlays = [
         inputs.nix-vscode-extensions.overlays.default
         (import ./overlays/bicep-protoc.nix)
-        (import ./overlays/fabric-invoke3.nix)
         (import ./overlays/dotnet-sdk-11.nix inputs.nixpkgs-master)
       ];
 
