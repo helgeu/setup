@@ -79,6 +79,10 @@
 
         credential.helper = "manager";
         credential.useHttpPath = true;
+        # GCM 3 uses OAuth for Azure Repos and writes these user bindings to the
+        # global config. That file is read-only here, so declare them.
+        credential."azrepos:org/imdidev".username = "c-heru@imdi.no";
+        credential."azrepos:org/urholm".username = "helge@urholm.no";
         core = {
           commentChar = ";";
           hooksPath = "${config.home.homeDirectory}/githooks";
