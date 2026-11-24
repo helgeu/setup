@@ -80,6 +80,21 @@
       "/tmp/**" = "allow";
       "/nix/store/**" = "allow";
     };
+    # Remote MCP servers. Config only: OAuth tokens are runtime state that
+    # `opencode mcp auth <name>` writes to ~/.local/share/opencode/mcp-auth.json
+    # (never in nix or git). Atlassian logs in through the IMDi Entra tenant.
+    mcp = {
+      atlassian = {
+        type = "remote";
+        url = "https://mcp.atlassian.com/v2/mcp";
+        enabled = true;
+      };
+      figma = {
+        type = "remote";
+        url = "https://mcp.figma.com/mcp";
+        enabled = true;
+      };
+    };
     provider.ollama = {
       npm = "@ai-sdk/openai-compatible";
       name = "Ollama (local)";
