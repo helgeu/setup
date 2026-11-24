@@ -90,7 +90,7 @@
         home-manager.users.${user} = { ... }: {
           imports = [
             homeModule
-            nvf.homeManagerModules.default
+            nvf.homeModules.default
             inputs.rtk.homeManagerModules.default
           ];
         };
