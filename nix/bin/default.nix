@@ -165,6 +165,10 @@
       source = ./vale-check;
       executable = true;
     };
+    "bin/vale-commit" = {
+      source = ./vale-commit;
+      executable = true;
+    };
   };
 
   # Ensure ~/bin is on PATH everywhere.

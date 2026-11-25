@@ -17,8 +17,10 @@
 | `Formatting`, `NB` | `nix/vale/styles` | Copied from SuperOfficeDocs/docs at commit `9fb4e84` (MIT). Identical to the earlier OneDrive copy. |
 | Own `NB` rules | `nix/vale/styles/NB` | `AbbreviationHyphen` (error: `API-et`, not `APIet`). `Readability` (warning: a sentence with LIX 55 or more and 8 words or more). `SentenceLength` (warning: more than 20 words). Calibrated on the wiki ADRs, 2026-11. |
 | `nb_NO` dictionary | Downloaded by nix | npm `dictionary-nb` 3.0.0 (GPL-2.0), pinned by hash. Not stored in this repository. This closes the licence question below. |
-| IMDi vocabularies | Wiki repo, `.vale/vocabularies` | `IMDi-nb` (Norwegian spelling) and `IMDi-en` (English text). Not stored in this repository. |
+| IMDi vocabularies | Wiki repo, unmerged branches | `IMDi-nb` (Norwegian spelling) on `docs/vale-vocabulary` and `docs/vale-setup`. No `IMDi-en` list exists yet (checked 2026-11). Not stored in this repository. |
 | Runner | `nix/bin/vale-check` | Picks the language, adds vocabularies, prints a summary. |
+| Commit config | `nix/vale/vale-commit.ini` | `Commits` and `Conventional` from jdkato/commits v0.2.0 (pinned, MIT), plus `Commitlint.HeaderLength` at 72. Added 2026-11. |
+| Commit runner | `nix/bin/vale-commit` | Checks HEAD, a revision range, or stdin. Skips merges, reverts and autosquash commits. On demand only, no hook. |
 
 The first setup lived in OneDrive (`IMDI - Bedre Bosetting-Bosetting - Analyser/helgeu`). That folder now has a note that points here.
 
@@ -29,6 +31,8 @@ The first setup lived in OneDrive (`IMDI - Bedre Bosetting-Bosetting - Analyser/
 | ST-ARK 06 (Norwegian), September version | `NB`, `Formatting`, IMDi vocabulary | 186 alerts without vocabulary, 5 with vocabulary. All 5 were real. Vale missed 3 real typos. |
 | ST-ARK 06, current text extract | Same | 27 alerts. The old OneDrive setup gives the same 27. |
 | Four ADR drafts (English) | `Microsoft`, `Formatting`, `IMDi-en` | 199 alerts before edits, 27 after. The rest are title-line and false alerts. |
+| Last 80 commits, bosetting-beslutningsstoette-backend (2026-11) | `Commits`, `Conventional` | 2 commits flagged, both real (`Fix ...`, `createa ...`). Adding `Vale` spelling gave 206 alerts, 168 with `TechTerms`, nearly all Norwegian domain words. Spelling stays off until a domain vocabulary exists. |
+| Code comments, same repo (2026-11) | `Comments`, `Vale` | `Comments`: 1 alert; SonarCloud already covers commented-out code and TODOs. `Vale` spelling: 271 alerts, mostly domain words. Not adopted. |
 
 Lessons:
 

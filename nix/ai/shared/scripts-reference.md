@@ -44,6 +44,7 @@ source and rebuild.
 | Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` (plain text, HTML-escaped, newlines → `<br>`), `--html <file>` (raw HTML), or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Check prose (English or Norwegian) with Vale | `vale-check [--lang en\|nb] [--vocab DIR] [--full] <files/dirs>` | Microsoft + Formatting for English, NB spelling (Hunspell nb_NO) + Formatting for Norwegian. Adds project vocabularies from `<repo>/.vale/vocabularies` or `--vocab`. A repo `.vale.ini` wins (`--global` ignores it). See "Prose checks" below. |
+| Check commit messages with Vale (Conventional Commits) | `vale-commit [REV\|RANGE\|-]...` | Default HEAD. `origin/main..HEAD` checks a range; `-` reads stdin (draft or PR description). Commits + Conventional + 72-char header. Skips merges, reverts, fixup!/squash!/amend!. Exit 1 on error-level alerts. No hook; run it on demand. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads every opencode session store (V2 + legacy V1, see "opencode session stores"). Pairs with the `standup` skill for ADO cross-ref. |
 | Find an opencode session by any text (title, messages, tool I/O) | `oc-session-search <text> [-n N] [--json]` | **Use this to find "the session that did X".** Searches V2 + legacy V1 stores. Never hand-roll `sqlite3` against one DB/table. Resume a hit with `opencode -s <id>`. |
 | Close stale opencode session todos whose PR/WI is done in ADO | `reconcile-todos [--apply]` | Dry-run by default. Closes a session's open todos iff every PR/WI its title references is terminal (PR completed/abandoned, WI Closed/Removed/Resolved/Ready for Production); keeps active PRs/open WIs; ignores bare numbers. `-o -p --db --json`. |
@@ -179,8 +180,19 @@ opencode keeps session data in more than one SQLite store under
 - **Vocabularies are not in the setup repo.** `vale-check` adds them from
   `<repo root>/.vale/vocabularies` and from `--vocab DIR` / `VALE_CHECK_VOCAB`.
   Folder names decide the language: `<Name>-en`, `<Name>-nb`, or `<Name>` for
-  both. The IMDi lists live in the wiki repo:
-  `~/ado/Bosettingsprosjekt.wiki/.vale/vocabularies` (`IMDi-en`, `IMDi-nb`).
+  both. No `IMDi-en` list exists yet (2026-11). The Norwegian `IMDi-nb` list
+  is only on unmerged wiki branches: `docs/vale-vocabulary`
+  (`.vale/vocabularies/IMDi-nb`) and `docs/vale-setup`
+  (`.vale/styles/config/vocabularies/IMDi-nb`) in
+  `~/ado/Bosettingsprosjekt.wiki`.
+- **`vale-commit [REV|RANGE|-]...`** — checks commit messages with the
+  `Commits` package (jdkato/commits v0.2.0, pinned in `nix/vale`) and
+  `nix/vale/vale-commit.ini`: `Commits` (imperative mood, blank line after the
+  subject, no edge whitespace) and `Conventional` (Conventional Commits 1.0.0),
+  plus `Commitlint.HeaderLength` at 72. Reads `git log --format=%B`, so Git has
+  already removed comment lines (our `core.commentChar` is `;`, which the
+  Commit View does not know). Spelling is off: without a domain vocabulary it
+  flags about 2 Norwegian domain words per commit body. Not wired into a hook.
 - **Gotcha:** keep English and Norwegian lists apart. Vale also enforces the
   exact case of every accepted term, so an English word such as `The` in an
   English-text list makes `Vale.Terms` flag every "the".

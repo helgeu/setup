@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# vale-commit - Check commit messages with Vale and the Commits package.
+#
+# The rules are Commits (the core: imperative mood, blank line after the
+# subject, no edge whitespace) and Conventional (Conventional Commits 1.0.0),
+# plus a 72-character header limit. The configuration is managed by nix
+# (nix/vale/vale-commit.ini) and lives in ~/.config/vale.
+#
+# Merge commits, reverts ('Revert "..."') and autosquash commits (fixup!,
+# squash!, amend!) are skipped, because Git writes those messages.
+#
+# Usage:
+#   vale-commit                       # check HEAD
+#   vale-commit REV...                # check one or more commits
+#   vale-commit origin/main..HEAD     # check every commit in a range
+#   vale-commit - < message.txt       # check a message from stdin
+#
+# Exit code: 1 when at least one message has an error-level alert, else 0.
+
+CONFIG="${VALE_COMMIT_CONFIG:-$HOME/.config/vale/vale-commit.ini}"
+
+die() { printf 'error: %s\n' "$*" >&2; exit 2; }
+
+case "${1:-}" in
+  -h|--help) sed -n '4,20p' "$0"; exit 0 ;;
+esac
+
+command -v vale >/dev/null || die "vale is not on PATH (it is installed by nix/vale)"
+[ -f "$CONFIG" ] || die "no Vale configuration at $CONFIG (run the nix switch)"
+
+STATUS=0
+CHECKED=0
+FLAGGED=0
+SKIPPED=0
+
+# lint LABEL: reads a message on stdin and prints its alerts under LABEL.
+# Vale exits 1 on an error-level alert and 2 when it fails to run.
+lint() {
+  local label="$1" out rc=0
+  out="$(vale --config="$CONFIG" --path=COMMIT_EDITMSG --output=line 2>&1)" || rc=$?
+  [ "$rc" -le 1 ] || die "vale failed on $label: $out"
+  [ "$rc" -eq 0 ] || STATUS=1
+  CHECKED=$((CHECKED + 1))
+  [ -n "$out" ] || return 0
+  FLAGGED=$((FLAGGED + 1))
+  printf '%s\n' "$label"
+  printf '%s\n' "$out" | awk -F: '{
+    pos = $2 ":" $3; rule = $4
+    msg = substr($0, length($1 $2 $3 $4) + 5)
+    printf "  %-6s %-28s %s\n", pos, rule, msg
+  }'
+}
+
+check_message() {
+  local label="$1" msg="$2"
+  lint "$label" <<< "$msg"
+}
+
+check_commit() {
+  local sha="$1" parents subject msg
+  parents="$(git rev-list --parents -n 1 "$sha" | wc -w)"
+  subject="$(git log -1 --format=%s "$sha")"
+  if [ "$parents" -gt 2 ]; then SKIPPED=$((SKIPPED + 1)); return 0; fi
+  case "$subject" in
+    'fixup! '*|'squash! '*|'amend! '*|'Revert "'*) SKIPPED=$((SKIPPED + 1)); return 0 ;;
+  esac
+  msg="$(git log -1 --format=%B "$sha")"
+  check_message "$(git log -1 --format='%h %s' "$sha")" "$msg"
+}
+
+[ $# -gt 0 ] || set -- HEAD
+
+for arg in "$@"; do
+  if [ "$arg" = "-" ]; then
+    check_message "(stdin)" "$(cat)"
+  elif [[ "$arg" == *..* ]]; then
+    shas="$(git rev-list --reverse "$arg")" || die "not a valid range: $arg"
+    while IFS= read -r sha; do
+      [ -n "$sha" ] && check_commit "$sha"
+    done <<< "$shas"
+  else
+    sha="$(git rev-parse --verify --quiet "$arg^{commit}")" || die "not a commit: $arg"
+    check_commit "$sha"
+  fi
+done
+
+[ "$FLAGGED" -eq 0 ] || echo
+printf '%d checked, %d with alerts, %d skipped.\n' "$CHECKED" "$FLAGGED" "$SKIPPED"
+exit "$STATUS"
