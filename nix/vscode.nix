@@ -39,10 +39,10 @@ in
             "approve" = true;
             "matchCommandLine" = true;
           };
-        };
-        "/^dotnet build$/" = {
-          "approve" = true;
-          "matchCommandLine" = true;
+          "/^dotnet build$/" = {
+            "approve" = true;
+            "matchCommandLine" = true;
+          };
         };
       }
       // lib.optionalAttrs isDarwin {
