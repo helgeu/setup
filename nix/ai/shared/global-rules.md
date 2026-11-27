@@ -150,6 +150,19 @@ Rules:
 - No period at end
 - Max 72 characters
 - Breaking changes: add `!` after type/scope → `feat(api)!: change response format`
+- **The subject says what changes in behaviour.** No reason in the subject (`because`, `so that`, `to avoid`), no vague subject (`PR fixes`, `fix bug`), no file or class names in a `fix`/`feat` subject.
+- **The body says why**: the problem, the cause, or the decision. At most 2 short paragraphs and 60 words. Never retell the diff (no lists of changed classes, signatures or files). A `fix`, `feat` or `perf` commit must have a body.
+- **The work item goes in a footer**: `Fixes #123` closes it on merge, `Refs: #123` only links it. `Related to #123` is not a valid footer.
+- **Check every commit message with `vale-commit` before you push** (`vale-commit origin/main..HEAD`). It runs the `WhatWhy` rules in this list. Fix all errors and warnings.
+
+Good:
+```
+fix(fordeling): check kommune ownership before accept, reject and settle
+
+A kommune could accept, reject or settle a fordeling that belongs to another kommune or bydel. The endpoints now return 404 and change nothing.
+
+Fixes #87418
+```
 
 Examples:
 - `feat: add multi-arch Docker build support`

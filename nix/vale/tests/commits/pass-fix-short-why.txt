@@ -1,0 +1,6 @@
+# expect: pass
+fix(fordeling): check kommune ownership before accept, reject and settle
+
+A kommune could accept, reject or settle a fordeling that belongs to another kommune or bydel. The endpoints now return 404 and change nothing.
+
+Fixes #87418

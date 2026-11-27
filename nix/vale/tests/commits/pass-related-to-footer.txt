@@ -1,0 +1,6 @@
+# expect: pass
+refactor(rules): move status rules into one module
+
+The same status rule was copied in six places, so the copies could drift apart.
+
+Related-to: #87300

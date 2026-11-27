@@ -1,0 +1,8 @@
+extends: existence
+message: "The subject is too vague. Say what changes in behaviour."
+level: error
+scope: subject
+ignorecase: true
+nonword: true
+raw:
+  - '^\s*(?:[\w-]+(?:\([^)]*\))?!?:\s*)?(?:pr fix(?:es)?|review fix(?:es)?|fix(?:es|ed)?(?: (?:a |the )?(?:bugs?|issues?|errors?|tests?|build|it|stuff|things))?|bug ?fix(?:es)?|updates?|changes?|adjustments?(?: to the \w+)?|clean ?up|wip|misc|minor(?: \w+)?|tweaks?|stuff|small (?:changes|fixes)|refactor(?:ing)?|improvements?)\s*\.?\s*$'

@@ -1,0 +1,9 @@
+extends: existence
+message: "The subject names code ('%s'). Say what changes in behaviour."
+level: warning
+scope: subject
+nonword: true
+# build, ci, chore, docs and style commits change files and packages, so a
+# file or package name is the "what" there.
+raw:
+  - '(?<=^(?!\s*(?:build|ci|chore|docs|style)(?:\([^)]*\))?!?:).*?)(?:\b[\w./-]+\.(?:cs|fs|fsx|fsproj|csproj|ts|tsx|js|jsx|json|ya?ml|xml|sql|sh|nix|py|ps1)\b|\b[A-Z][A-Za-z0-9]+\.[A-Z][A-Za-z0-9]+\b)'

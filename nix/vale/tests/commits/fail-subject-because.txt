@@ -1,0 +1,4 @@
+# expect: WhatWhy.SubjectWhy
+fix(auth): renew token because sessions expire
+
+Users had to log in again after one hour.

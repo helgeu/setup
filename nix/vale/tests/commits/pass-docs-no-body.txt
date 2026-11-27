@@ -1,0 +1,2 @@
+# expect: pass
+docs(readme): link SonarCloud setup to the wiki

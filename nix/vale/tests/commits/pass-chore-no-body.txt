@@ -1,0 +1,2 @@
+# expect: pass
+chore(deps): update dotnet monorepo to 11.0.1

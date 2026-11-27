@@ -1,0 +1,4 @@
+# expect: pass
+build: drop global.json rollForward while on the rc SDK
+
+The rc SDK failed to restore because rollForward picked a newer SDK. Pin the version in global.json until GA.

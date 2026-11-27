@@ -1,0 +1,2 @@
+# expect: pass
+docs: correct the System.Security.Cryptography.Xml pin comment

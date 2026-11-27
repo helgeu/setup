@@ -1,0 +1,7 @@
+# expect: pass
+fix(auth): handle expired tokens
+
+Users had to log in again after one hour because the token was not renewed.
+# Please enter the commit message for your changes.
+# ------------------------ >8 ------------------------
+diff --git a/Program.cs b/Program.cs

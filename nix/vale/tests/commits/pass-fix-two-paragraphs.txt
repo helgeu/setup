@@ -1,0 +1,8 @@
+# expect: pass
+fix(kapasitetstall): count each person once and only this year's bosatte
+
+A partly bosatt fordeling counted bosatte persons both as inngått avtale and as bosatt. Bosatte from earlier years also reduced this year's ledige plasser.
+
+Each person now counts once, and bosatt counts only the current year.
+
+Fixes #87420

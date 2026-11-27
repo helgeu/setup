@@ -1,0 +1,6 @@
+# expect: WhatWhy.WorkItemFooter
+fix: handle expired tokens
+
+Users had to log in again after one hour.
+
+Closes #123

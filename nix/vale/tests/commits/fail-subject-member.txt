@@ -1,0 +1,4 @@
+# expect: WhatWhy.SubjectCode
+fix: call Fordeling.BelongsTo before accept
+
+A kommune could accept a fordeling of another kommune.

@@ -1,0 +1,4 @@
+# expect: WhatWhy.BodyReason
+feat(document): send telemetry to Azure Monitor
+
+Send logs, traces and metrics from the Document app to Azure Monitor.

@@ -1,0 +1,4 @@
+# expect: WhatWhy.BodyDiff
+fix(core): log an error when the manager name is missing
+
+The letter failed without a clear error. See Program.cs and appsettings.json.

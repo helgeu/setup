@@ -1,0 +1,2 @@
+# expect: WhatWhy.SubjectVague WhatWhy.BodyRequired
+fix: fix bug

@@ -1,0 +1,6 @@
+# expect: pass
+feat(api)!: return 404 for a fordeling of another kommune
+
+A kommune could change a fordeling of another kommune, which was a security risk.
+
+BREAKING CHANGE: clients get 404 instead of 204 for such requests.

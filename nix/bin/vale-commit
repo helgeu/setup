@@ -5,7 +5,9 @@ set -euo pipefail
 #
 # The rules are Commits (the core: imperative mood, blank line after the
 # subject, no edge whitespace) and Conventional (Conventional Commits 1.0.0),
-# plus a 72-character header limit. The configuration is managed by nix
+# plus a 72-character header limit. WhatWhy (our own style) checks that the
+# subject says what changes, the body says why, and a work item reference is
+# a valid footer ('Fixes #123' or 'Refs: #123'). The configuration is managed by nix
 # (nix/vale/vale-commit.ini) and lives in ~/.config/vale.
 #
 # Merge commits, reverts ('Revert "..."') and autosquash commits (fixup!,

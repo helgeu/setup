@@ -1,0 +1,6 @@
+# expect: pass
+test(fordeling): prove kommune can change another kommune's fordeling
+
+The endpoints did not check that the fordeling belongs to the kommune in the route. These tests fail until the fix is in.
+
+Refs: #87418

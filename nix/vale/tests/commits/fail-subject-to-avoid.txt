@@ -1,0 +1,4 @@
+# expect: WhatWhy.SubjectWhy
+fix(cache): clear cache on save to avoid stale data
+
+Saved data did not show until the cache expired.

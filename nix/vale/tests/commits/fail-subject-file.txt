@@ -1,0 +1,4 @@
+# expect: WhatWhy.SubjectCode
+fix: change AksepterFordeling.cs
+
+A kommune could accept a fordeling of another kommune.

@@ -1,0 +1,10 @@
+# expect: WhatWhy.BodyLength
+fix(kapasitetstall): count each person once
+
+Ledige plasser subtracts both the inngått avtale count and the bosatt etter avtale count from the vedtak count for the kommune.
+
+An earlier change added accepted fordelinger to the bosatt count, but the inngått avtale count still included persons with a bosatt date, so these persons were counted two times in a partly bosatt fordeling.
+
+No existing test used the old behaviour, so no test changes.
+
+Fixes #87420

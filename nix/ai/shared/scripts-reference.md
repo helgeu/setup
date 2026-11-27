@@ -44,7 +44,7 @@ source and rebuild.
 | Create a meeting invite (calendar event + attendees) in Outlook | `outlook-meeting -s <subj> -a <attendee> --start "YYYY-MM-DD HH:MM" [--duration 30] [--location <x>] --agenda <file>` | macOS only. `-a`/`--optional` repeatable, comma/semicolon-sep, bare or `Name <addr>`. Agenda from `--agenda <file>` (plain text, HTML-escaped, newlines → `<br>`), `--html <file>` (raw HTML), or `--stdin`. Default start tomorrow 09:00; opens a draft event to review + Send. `--dry-run` to preview. |
 | Run opencode against a local Ollama model | `oc [model]` | `oc` = qwen3.6, `oc coder` = qwen3-coder:30b; extra args pass through. |
 | Check prose (English or Norwegian) with Vale | `vale-check [--lang en\|nb] [--vocab DIR] [--full] <files/dirs>` | Microsoft + Formatting for English, NB spelling (Hunspell nb_NO) + Formatting for Norwegian. Adds project vocabularies from `<repo>/.vale/vocabularies` or `--vocab`. A repo `.vale.ini` wins (`--global` ignores it). See "Prose checks" below. |
-| Check commit messages with Vale (Conventional Commits) | `vale-commit [REV\|RANGE\|-]...` | Default HEAD. `origin/main..HEAD` checks a range; `-` reads stdin (draft or PR description). Commits + Conventional + 72-char header. Skips merges, reverts, fixup!/squash!/amend!. Exit 1 on error-level alerts. No hook; run it on demand. |
+| Check commit messages with Vale (Conventional Commits) | `vale-commit [REV\|RANGE\|-]...` | Default HEAD. `origin/main..HEAD` checks a range; `-` reads stdin (draft or PR description). Commits + Conventional + WhatWhy (subject = what, body = why, work item in a footer) + 72-char header. Skips merges, reverts, fixup!/squash!/amend!. Exit 1 on error-level alerts. No hook; run it on demand. |
 | Recap activity for a standup (done / next / blockers) | `standup [today\|yesterday\|week\|--days N] [--json]` | Reads every opencode session store (V2 + legacy V1, see "opencode session stores"). Pairs with the `standup` skill for ADO cross-ref. |
 | Find an opencode session by any text (title, messages, tool I/O) | `oc-session-search <text> [-n N] [--json]` | **Use this to find "the session that did X".** Searches V2 + legacy V1 stores. Never hand-roll `sqlite3` against one DB/table. Resume a hit with `opencode -s <id>`. |
 | Close stale opencode session todos whose PR/WI is done in ADO | `reconcile-todos [--apply]` | Dry-run by default. Closes a session's open todos iff every PR/WI its title references is terminal (PR completed/abandoned, WI Closed/Removed/Resolved/Ready for Production); keeps active PRs/open WIs; ignores bare numbers. `-o -p --db --json`. |
@@ -189,7 +189,15 @@ opencode keeps session data in more than one SQLite store under
   `Commits` package (jdkato/commits v0.2.0, pinned in `nix/vale`) and
   `nix/vale/vale-commit.ini`: `Commits` (imperative mood, blank line after the
   subject, no edge whitespace) and `Conventional` (Conventional Commits 1.0.0),
-  plus `Commitlint.HeaderLength` at 72. Reads `git log --format=%B`, so Git has
+  plus `Commitlint.HeaderLength` at 72, and the `WhatWhy` style
+  (`nix/vale/styles/WhatWhy`, tests in `nix/vale/tests/test-commit-rules.sh`).
+  `WhatWhy` gives errors for a reason in the subject (`because`, `so that`,
+  `to avoid` …), a vague subject (`PR fixes`, `fix bug`, `updates`), a
+  `fix`/`feat`/`perf` commit with no body, and a work item reference that is
+  not a valid footer (`Related to #1` in the body, `Closes #1`). It gives
+  warnings for code names in the subject, a body that retells the diff, and a
+  body over 2 paragraphs or 60 words. It gives a suggestion when the body has
+  no reason word. Reads `git log --format=%B`, so Git has
   already removed comment lines (our `core.commentChar` is `;`, which the
   Commit View does not know). Spelling is off: without a domain vocabulary it
   flags about 2 Norwegian domain words per commit body. Not wired into a hook.

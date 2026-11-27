@@ -3,9 +3,9 @@
 # Installs vale and links a complete config directory to ~/.config/vale:
 #   .vale.ini     English: Vale + Microsoft + Formatting
 #   vale-nb.ini   Norwegian Bokmal: Formatting + NB (Hunspell nb_NO)
-#   vale-commit.ini  Commit messages: Commits + Conventional (vale-commit)
+#   vale-commit.ini  Commit messages: Commits + Conventional + WhatWhy (vale-commit)
 #   styles/       Microsoft and Commits (pinned releases), Formatting and NB
-#                 (SuperOffice, MIT) and the nb_NO dictionary.
+#                 (SuperOffice, MIT), WhatWhy (ours) and the nb_NO dictionary.
 #
 # No project vocabulary lives here. vale-check adds vocabularies from the
 # current repository (.vale/vocabularies) or from --vocab DIR.
@@ -44,6 +44,7 @@ let
     cp -r "$TMPDIR/commits/Commits/styles/." $out/styles/
     cp -r ${./styles/Formatting} $out/styles/Formatting
     cp -r ${./styles/NB} $out/styles/NB
+    cp -r ${./styles/WhatWhy} $out/styles/WhatWhy
     tar -xzf ${dictionaryNb} -C "$TMPDIR"
     cp "$TMPDIR/package/index.aff" $out/styles/config/dictionaries/nb_NO.aff
     # Vale cannot parse entries with an empty flag list ("og/"), and then

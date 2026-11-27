@@ -1,0 +1,6 @@
+# expect: WhatWhy.WorkItemFooter
+fix(fordeling): check kommune ownership before accept
+
+A kommune could accept a fordeling of another kommune.
+
+Related to #87418

@@ -1,0 +1,6 @@
+# expect: WhatWhy.WorkItemFooter
+feat: render and store ordinary letters
+
+Kommuner did not get a letter when they accepted a fordeling.
+
+US (#80887, #80888)

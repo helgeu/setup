@@ -1,0 +1,9 @@
+# expect: WhatWhy.BodyDiff
+fix(fordeling): check kommune ownership before accept
+
+A kommune could accept a fordeling of another kommune.
+
+Add `Fordeling.BelongsTo`, which compares the kommune with the route.
+`BosetterPersonerInFordeling.Execute` now takes the kommunenummer.
+
+Fixes #87418

@@ -1,0 +1,13 @@
+extends: existence
+message: "The subject says what changes. Move the reason ('%s') to the body."
+level: error
+scope: subject
+ignorecase: true
+tokens:
+  - because
+  - so that
+  - in order to
+  - due to
+  - since
+  - as a result
+  - to (?:avoid|prevent|ensure|make sure|stop|keep)
