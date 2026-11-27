@@ -40,6 +40,9 @@ in
 
       # .NET development
       combinedDotnet
+      # combinePackages links only host/packs/sdk/... into the merged root, so the SDK's
+      # dnx launcher is lost. Aspire 17 AppHosts run dnx to fetch the CLI bundle (ASPIRE009).
+      (writeShellScriptBin "dnx" ''exec ${combinedDotnet}/bin/dotnet dnx "$@"'')
       temurin-bin-21 # JDK 21 (LTS) for dotnet-sonarscanner; Java 17 is deprecated as a scanner runtime
       # Shell tools
       delta
